@@ -103,7 +103,23 @@ references
 - **Restart (live).** Paper `62324d9a-df43-47a5-8631-e2fd2631efcd` read back
   identically before (13:53:56Z) and after (13:54:13Z, 5 Oct UTC)
   `flyctl machine restart`.
+- **Redeploy (live).** The same paper read back identically after a redeploy
+  to release v3 (image `deployment-01M465M29FHP9R8CAZNT98P3DD`, 13:58:43Z),
+  which shipped
+  [`b926314`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/b926314).
+  The starter's invariants passed against the live URL.
 - **Without WebGL.** The papers fall back to plain buttons that still open.
+- **Screenshots** are in `docs/evidence/week9/`:
+  - the live empty state, writing, the throw after the save, and browser B
+    reading
+  - phone views of the space, writing, reading and `/readme/`
+  - `/readme/` on desktop
+  - a local space with papers
+  - the fallback without WebGL
+
+  The papers' exact positions differ from the references by design: they
+  land randomly. The models are the demo's own rather than the references'
+  rendered paper.
 - **Not verified:**
   - performance on real phone GPUs; screenshots came from software WebGL
   - a local `docker build`, since the Docker daemon wasn't running; Fly's
