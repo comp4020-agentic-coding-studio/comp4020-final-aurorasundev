@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Header } from "./components/Header.tsx";
-import { PaperField, type PaperFieldHandle } from "./components/PaperField.tsx";
+import { PaperField, type PaperFieldHandle, type SheetRect } from "./components/PaperField.tsx";
 import { ReadDialog } from "./components/ReadDialog.tsx";
 import { SpaceFooter } from "./components/SpaceFooter.tsx";
 import { WriteDialog } from "./components/WriteDialog.tsx";
 import { ensureSession, listPapers } from "./lib/api.ts";
 
-type Mode = { kind: "space" } | { kind: "writing" } | { kind: "reading"; id: string; revealed: boolean };
+type Mode = { kind: "space" } | { kind: "writing" } | { kind: "reading"; id: string; revealed: boolean; rect: SheetRect | null };
 type Space = { kind: "loading" } | { kind: "error" } | { kind: "ready"; ids: string[]; total: number };
 
 const visibleLimit = (): number => (window.matchMedia("(max-width: 600px)").matches ? 6 : 12);
@@ -34,10 +34,14 @@ export function App() {
 
   const openPaper = useCallback((id: string) => {
     returnFocus.current = document.activeElement as HTMLElement | null;
-    setMode({ kind: "reading", id, revealed: false });
-    field.current?.openPaper(id, () =>
-      setMode((m) => (m.kind === "reading" && m.id === id ? { ...m, revealed: true } : m)),
+    setMode({ kind: "reading", id, revealed: false, rect: null });
+    field.current?.openPaper(id, (rect) =>
+      setMode((m) => (m.kind === "reading" && m.id === id ? { ...m, revealed: true, rect } : m)),
     );
+  }, []);
+
+  const moveSheet = useCallback((rect: SheetRect) => {
+    setMode((m) => (m.kind === "reading" && m.revealed ? { ...m, rect } : m));
   }, []);
 
   const closePaper = useCallback(() => {
@@ -73,7 +77,7 @@ export function App() {
     <div className="app">
       <Header />
       {space.kind === "ready" && (
-        <PaperField ref={field} ids={space.ids} onOpen={openPaper} inert={busy} />
+        <PaperField ref={field} ids={space.ids} onOpen={openPaper} onOpenRect={moveSheet} inert={busy} />
       )}
       {space.kind === "loading" && <p className="space-status">Finding the space…</p>}
       {space.kind === "error" && (
@@ -86,7 +90,7 @@ export function App() {
       )}
       {space.kind === "ready" && <SpaceFooter total={space.total} onWrite={startWriting} hidden={busy} />}
       {mode.kind === "writing" && <WriteDialog onCancel={cancelWriting} onThrown={thrown} />}
-      {mode.kind === "reading" && <ReadDialog id={mode.id} revealed={mode.revealed} onClose={closePaper} />}
+      {mode.kind === "reading" && <ReadDialog id={mode.id} revealed={mode.revealed} rect={mode.rect} onClose={closePaper} />}
     </div>
   );
 }

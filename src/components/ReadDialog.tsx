@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getPaper } from "../lib/api.ts";
+import type { SheetRect } from "./PaperField.tsx";
 
 type Props = {
   id: string;
   // false while the paper is still unfolding: the words wait for a flat sheet
   revealed: boolean;
+  // where the unfolded 3D sheet sits on screen; null means no scene to sit on
+  rect: SheetRect | null;
   onClose: () => void;
 };
 
 type Load = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; content: string };
 
-export function ReadDialog({ id, revealed, onClose }: Props) {
+export function ReadDialog({ id, revealed, rect, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [load, setLoad] = useState<Load>({ kind: "loading" });
 
@@ -36,7 +39,8 @@ export function ReadDialog({ id, revealed, onClose }: Props) {
   return (
     <dialog
       ref={dialogRef}
-      className={`dialog read-dialog${revealed ? " is-revealed" : ""}`}
+      className={`dialog read-dialog${revealed ? " is-revealed" : ""}${rect ? " over-scene" : ""}`}
+      style={rect ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height, margin: 0 } : undefined}
       aria-label="A paper someone left"
       onCancel={(e) => {
         e.preventDefault();
