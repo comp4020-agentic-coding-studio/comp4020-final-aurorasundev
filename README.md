@@ -8,6 +8,12 @@ The project is not intended to be an anonymous social network, confession feed, 
 
 **write → crumple → throw → encounter → witness → possibly disappear**
 
+> This README describes the whole design. The version deployed now is the
+> Week 9 slice, which covers *write → crumple → throw → encounter*; see
+> [What works in this first version?](#what-works-in-this-first-version) for
+> exactly what exists today. Keep / Release, witnessing, real-time changes and
+> destruction are planned and do not exist yet.
+
 ## What does “good” mean here?
 
 A good Throwaway experience should make **leaving something behind feel meaningfully different from publishing content**.
@@ -43,3 +49,44 @@ Some claims can be enforced automatically: thrown papers are immutable; non-owne
 Other qualities require human judgement: whether throwing feels meaningfully different from posting, whether exploration feels like discovery rather than consumption, and whether burning feels reflective rather than rewarding.
 
 Those subjective qualities are not secondary to the system. They are part of what “good” means for Throwaway.
+
+## What works in this first version?
+
+This is the Week 9 slice: the first version that is alive.
+
+- You can write a paper of up to 2,000 characters, crumple and throw it into
+  the shared space, and open papers other people left. Any language works, and
+  line breaks are kept. The throw only plays after the server has saved it.
+- Papers are stored in SQLite on a persistent Fly volume. They remain after
+  you leave, and after the app restarts or is redeployed. Refresh the space to
+  see papers other people have added since you arrived.
+- The space shows up to twelve papers (six on a phone), chosen at random, and
+  the number of papers still here. A closed paper shows no words, author, date
+  or count.
+- Each visitor gets an anonymous session cookie so the server can tell a retry
+  of the same throw from a new paper. It is never shown or linked to a name.
+- Every paper can also be opened from the keyboard, and if the 3D papers can't
+  be drawn, plain buttons still open them.
+
+For now every paper is readable by strangers and stays: there is no Keep or
+Release choice yet, and nothing can be destroyed.
+
+## What comes later?
+
+Keep / Release, witnessing with "I saw it", burning, and real-time changes
+(new papers falling into an open space, a shared count that updates for
+everyone) are planned for later versions.
+
+## References
+
+- [Paper Crumple demo](https://github.com/item-develop/paper-crumple-demo) by
+  nagasawa (ITEM Inc.), MIT licence. The crumpled paper, its folding animation
+  and its physics are reused from it; `THIRD_PARTY_NOTICES.md` records what
+  changed.
+- [Project design notes](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/throwaway-week9-claude-package/throwaway-week9-plan.md):
+  the Week 9 plan and design references this version is built from.
+- [Crit 8: It's alive!](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/crits/08-its-alive/)
+  and the [final project brief](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/assessments/final-project/).
+- [Fly Volumes overview](https://fly.io/docs/volumes/overview/): why one
+  machine and one volume is enough for this version, and that a volume is
+  neither replicated nor shared between machines.

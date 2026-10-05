@@ -1,10 +1,27 @@
 import { readFileSync } from "node:fs";
-import { marked } from "marked";
+import { Marked } from "marked";
+
+// GitHub-style heading ids, so in-page links in README.md work here as well.
+const slug = (text: string): string =>
+  text
+    .toLowerCase()
+    .replace(/<[^>]+>/g, "")
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .trim()
+    .replace(/\s+/g, "-");
+
+const markdown = new Marked({
+  renderer: {
+    heading({ tokens, depth, text }) {
+      return `<h${depth} id="${slug(text)}">${this.parser.parseInline(tokens)}</h${depth}>\n`;
+    },
+  },
+});
 
 // Rendered server-side so the page carries the full README with no script:
 // spec/invariants.test.ts reads the headings straight from this HTML.
 export function renderReadmePage(readmePath: string): string {
-  const body = marked.parse(readFileSync(readmePath, "utf8"), { async: false });
+  const body = markdown.parse(readFileSync(readmePath, "utf8"), { async: false });
   return `<!doctype html>
 <html lang="en-AU">
   <head>
