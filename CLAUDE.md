@@ -31,6 +31,15 @@ changing behaviour. When an image and the plan disagree, the plan wins.
   in the scene, never in React state.
 - SQLite lives at `$DATABASE_PATH` (`/data/throwaway.sqlite` on Fly's volume).
 
+## Images
+
+When this project needs an image asset, generate it via the strproxy
+`images/generations` endpoint — see
+https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/generating-images/
+for the request format and auth. After generation, automatically fetch the
+returned URL and save the downloaded image into the repo; do not just print
+or reference the URL.
+
 ## Commands
 
 - `pnpm dev:server` (Express on :8080, `data/dev.sqlite`) + `pnpm dev` (Vite
