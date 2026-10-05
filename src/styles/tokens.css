@@ -1,0 +1,19 @@
+:root {
+  --bg: #e7e4de;
+  --paper: #f3f0e8;
+  --ink: #292927;
+  --muted: #5c5a55;
+  --line: #cfcbc2;
+  --error: #8a2f22;
+  --serif: Georgia, "Times New Roman", "Songti SC", serif;
+  --sans: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif;
+  --gutter: 48px;
+  --radius: 6px;
+  --button-h: 52px;
+}
+
+@media (max-width: 600px) {
+  :root {
+    --gutter: 20px;
+  }
+}

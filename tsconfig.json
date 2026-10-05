@@ -1,6 +1,7 @@
 {
-  // Covers the supplied harness (spec/, scripts/); widen `include` if your app
-  // is TypeScript and you want `pnpm typecheck` to cover it too.
+  // Covers the supplied harness (spec/, scripts/), the Express server (run
+  // directly by node's type stripping, hence erasableSyntaxOnly) and the
+  // React client that Vite bundles.
   "compilerOptions": {
     "target": "ES2023",
     "module": "ESNext",
@@ -9,12 +10,16 @@
     // node itself wants when it runs a .ts file directly.
     "allowImportingTsExtensions": true,
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": ["node"],
+    "types": ["node", "vite/client"],
+    "jsx": "react-jsx",
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
     "moduleDetection": "force",
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "allowJs": true,
+    "checkJs": false
   },
-  "include": ["*.ts", "spec", "scripts"]
+  "include": ["*.ts", "spec", "scripts", "server", "src"]
 }
