@@ -261,10 +261,10 @@ textarea {
 
 .paper-sheet {
   position: relative;
-  background:
-    radial-gradient(120% 80% at 20% 10%, rgb(255 255 255 / 0.55), transparent 60%),
-    radial-gradient(90% 70% at 85% 90%, rgb(0 0 0 / 0.035), transparent 70%),
-    var(--paper);
+  background-color: var(--paper);
+  background-image: url("/textures/paper-sheet.png");
+  background-size: cover;
+  background-position: center;
   box-shadow:
     0 1px 2px rgb(0 0 0 / 0.06),
     0 24px 60px rgb(40 36 30 / 0.16);
@@ -300,7 +300,7 @@ textarea {
   padding: 22px 22px 44px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgb(255 255 255 / 0.35);
+  background: rgb(255 255 255 / 0.8);
   font-size: 20px;
   line-height: 1.6;
   resize: none;
@@ -370,14 +370,13 @@ textarea {
   backdrop-filter: none;
 }
 
-/* laid exactly over the unfolded 3D sheet, so the paper seems to open into the words */
+/* sized and placed to match the unfolded 3D sheet: the WebGL unfold plays
+   underneath and finishes before this textured layer fades in (.is-revealed),
+   so the dynamic animation itself is untouched by this styling */
 .read-dialog.over-scene .read-sheet {
   height: 100%;
   padding: 6% 10% 7%;
-  background:
-    radial-gradient(120% 80% at 20% 10%, rgb(255 255 255 / 0.5), transparent 60%),
-    rgb(243 240 232 / 0.94);
-  box-shadow: 0 18px 48px rgb(40 36 30 / 0.12);
+  box-shadow: 0 10px 30px rgb(40 36 30 / 0.22);
 }
 
 .read-close {

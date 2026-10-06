@@ -16,6 +16,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { SSAOPass } from "three/examples/jsm/postprocessing/SSAOPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { createPaper, updatePaperFrame } from "./paper.js";
 import { loadVATData } from "./paper-vat.js";
 
@@ -87,23 +88,25 @@ export function createPaperScene(container, buttonLayer, options) {
   const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 100);
   let stageBounds = { minX: -2.4, maxX: 2.4, minZ: WALL_Z, maxZ: 1.7 };
 
-  // The demo framed a 16:9 stage. A portrait phone looks down more steeply
-  // and gets a narrower, deeper stage so papers stay clear of the controls.
+  // The demo framed a wide, distant 16:9 stage; the references are a much
+  // closer "hero shot" where each paper fills a good fraction of the frame.
+  // A portrait phone looks down more steeply and gets a narrower, deeper
+  // stage so papers stay clear of the controls.
   function applyCamera() {
     const { w, h } = size();
     camera.aspect = w / h;
     if (camera.aspect < 0.8) {
-      camera.fov = 50;
-      camera.position.set(0, 3.7, 2.3);
-      camera.lookAt(0, 0, 0.2);
-      const halfW = Math.min(1.1, 2.1 * camera.aspect);
-      stageBounds = { minX: -halfW, maxX: halfW, minZ: -1.2, maxZ: 1.25 };
+      camera.fov = 46;
+      camera.position.set(0, 2.55, 1.85);
+      camera.lookAt(0, 0.15, 0.1);
+      const halfW = Math.min(0.92, 1.45 * camera.aspect);
+      stageBounds = { minX: -halfW, maxX: halfW, minZ: -0.95, maxZ: 0.95 };
     } else {
-      camera.fov = 40;
-      camera.position.set(0, 2.5, 3.4);
-      camera.lookAt(0, 0.15, -0.15);
-      const halfW = Math.min(2.5, 1.2 * camera.aspect);
-      stageBounds = { minX: -halfW, maxX: halfW, minZ: -0.95, maxZ: 1.05 };
+      camera.fov = 38;
+      camera.position.set(0, 1.6, 2.5);
+      camera.lookAt(0, 0.2, -0.15);
+      const halfW = Math.min(1.5, 0.76 * camera.aspect);
+      stageBounds = { minX: -halfW, maxX: halfW, minZ: -0.95, maxZ: 0.7 };
     }
     camera.updateProjectionMatrix();
   }
@@ -113,15 +116,28 @@ export function createPaperScene(container, buttonLayer, options) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, compact ? 1.25 : 1.5));
   renderer.setSize(size().w, size().h);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // ACES rolls off the directional light's highlights instead of clipping
+  // them, which is what keeps the references' paper looking bright but
+  // never flat white.
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.08;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.domElement.className = "paper-canvas";
   container.appendChild(renderer.domElement);
 
+  // A procedural (no asset, no network) studio environment: soft, varied
+  // window-lit walls that give the paper the subtle sheen and ambient
+  // occlusion the references show in their crumple folds, without the flat
+  // single-colour look a bare directional light produces on its own.
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environmentIntensity = 0.5;
+
   // The floor only catches shadows over the flat background, so the scene
   // matches the page colour exactly instead of a lit grey.
   const floorGeometry = new THREE.PlaneGeometry(16, 12);
-  const floorMat = new THREE.ShadowMaterial({ color: 0x4a4236, opacity: 0.2 });
+  const floorMat = new THREE.ShadowMaterial({ color: 0x3c352a, opacity: 0.32 });
   const floor = new THREE.Mesh(floorGeometry, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, FLOOR_VISUAL_Y, 1);
@@ -129,17 +145,17 @@ export function createPaperScene(container, buttonLayer, options) {
   scene.add(floor);
 
   // ライト
-  const ambient = new THREE.AmbientLight(0xffffff, 1.2);
+  const ambient = new THREE.AmbientLight(0xffffff, 0.55);
   scene.add(ambient);
 
   // Throwaway: a soft light from the viewer keeps papers (and an opened
   // sheet, which faces the camera) close to white, as in the references.
-  const fillLight = new THREE.DirectionalLight(0xffffff, 0.75);
+  const fillLight = new THREE.DirectionalLight(0xffffff, 0.55);
   fillLight.position.set(0.4, 2.2, 4.2);
   scene.add(fillLight);
 
-  const dirLight = new THREE.DirectionalLight(0xfff8ee, 1.05);
-  dirLight.position.set(-2, 2.6, 1.4);
+  const dirLight = new THREE.DirectionalLight(0xfff6ea, 2.6);
+  dirLight.position.set(-2.2, 3.1, 1.8);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.set(compact ? 1024 : 2048, compact ? 1024 : 2048);
   dirLight.shadow.camera.left = -4;
@@ -149,24 +165,25 @@ export function createPaperScene(container, buttonLayer, options) {
   dirLight.shadow.camera.near = 0.1;
   dirLight.shadow.camera.far = 12;
   dirLight.shadow.bias = -0.001;
-  dirLight.shadow.radius = 6;
+  dirLight.shadow.radius = 5;
   scene.add(dirLight);
 
   // ポストプロセス — SSAO で折り目・凹みを暗くする (desktop only)
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
   const ssaoPass = new SSAOPass(scene, camera, size().w, size().h);
-  ssaoPass.kernelRadius = 0.01;
-  ssaoPass.minDistance = 0.0001;
-  ssaoPass.maxDistance = 0.08;
+  ssaoPass.kernelRadius = 0.025;
+  ssaoPass.minDistance = 0.0003;
+  ssaoPass.maxDistance = 0.12;
   ssaoPass.enabled = !compact;
   composer.addPass(ssaoPass);
   composer.addPass(new OutputPass());
 
   const paperMaterial3d = new THREE.MeshStandardMaterial({
     color: PAPER_COLOR,
-    roughness: 0.9,
+    roughness: 0.82,
     metalness: 0.0,
+    envMapIntensity: 0.5,
     side: THREE.DoubleSide,
   });
 
@@ -345,14 +362,14 @@ export function createPaperScene(container, buttonLayer, options) {
   function randomSpawnPosition() {
     const margin = collisionRadius * 1.3;
     const pos = new THREE.Vector3(0, restMeshY, 0);
-    for (let attempt = 0; attempt < 40; attempt++) {
+    for (let attempt = 0; attempt < 80; attempt++) {
       pos.x = randomRange(stageBounds.minX + margin, stageBounds.maxX - margin);
       pos.z = randomRange(stageBounds.minZ + margin, stageBounds.maxZ - margin);
       let clear = true;
       for (const p of livePapers()) {
         const dx = p.body.position.x - pos.x;
         const dz = p.body.position.z - pos.z;
-        if (dx * dx + dz * dz <= (collisionRadius * 2.6) ** 2) {
+        if (dx * dx + dz * dz <= (collisionRadius * 3.4) ** 2) {
           clear = false;
           break;
         }
@@ -848,6 +865,8 @@ export function createPaperScene(container, buttonLayer, options) {
       floorGeometry.dispose();
       floorMat.dispose();
       paperMaterial3d.dispose();
+      scene.environment?.dispose();
+      pmrem.dispose();
       ssaoPass.dispose();
       composer.dispose();
       dirLight.shadow.map?.dispose();

@@ -9,7 +9,10 @@ import { ensureSession, listPapers } from "./lib/api.ts";
 type Mode = { kind: "space" } | { kind: "writing" } | { kind: "reading"; id: string; revealed: boolean; rect: SheetRect | null };
 type Space = { kind: "loading" } | { kind: "error" } | { kind: "ready"; ids: string[]; total: number };
 
-const visibleLimit = (): number => (window.matchMedia("(max-width: 600px)").matches ? 6 : 12);
+// The references show generously spaced papers, closer to camera than the
+// demo's original wide 40-paper stage; a smaller visible window keeps that
+// negative space once the camera is framed to match.
+const visibleLimit = (): number => (window.matchMedia("(max-width: 600px)").matches ? 4 : 7);
 
 export function App() {
   const [space, setSpace] = useState<Space>({ kind: "loading" });
