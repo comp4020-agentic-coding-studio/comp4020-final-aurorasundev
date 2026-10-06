@@ -21,9 +21,9 @@ import { createPaper, updatePaperFrame } from "./paper.js";
 import { loadVATData } from "./paper-vat.js";
 
 const BACKGROUND = "#e7e4de";
-const WALL_COLOR = "#8ea3b0";
+const WALL_COLOR = "#d7d3ca";
 const FLOOR_COLOR = "#d3cdbc";
-const PAPER_COLOR = "#f3f1eb";
+const PAPER_COLOR = "#f1ece3";
 
 const FLOOR_VISUAL_Y = -0.1;
 const WALL_Z = -1.1;
@@ -122,9 +122,9 @@ export function createPaperScene(container, buttonLayer, options) {
   // them, which is what keeps the references' paper looking bright but
   // never flat white.
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.08;
+  renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.domElement.className = "paper-canvas";
   container.appendChild(renderer.domElement);
 
@@ -149,7 +149,7 @@ export function createPaperScene(container, buttonLayer, options) {
     color: FLOOR_COLOR,
     roughness: 1,
     metalness: 0,
-    envMapIntensity: 0.08,
+    envMapIntensity: 0.14,
   });
   const floor = new THREE.Mesh(floorGeometry, floorMat);
   floor.rotation.x = -Math.PI / 2;
@@ -169,17 +169,16 @@ export function createPaperScene(container, buttonLayer, options) {
   // a fifth or less of the floor's own brightness. Ambient and the fill
   // light reach shadowed ground the same as lit ground (neither is blocked
   // by the shadow map), so both stay low; the directional key light is
-  // raised to compensate so lit papers and the floor itself don't go dim.
+  // balanced with a softer key so paper highlights retain their texture.
   const ambient = new THREE.AmbientLight(0xffffff, 0.22);
   scene.add(ambient);
 
-  // Throwaway: a soft light from the viewer keeps papers (and an opened
-  // sheet, which faces the camera) close to white, as in the references.
+  // A gentle fill preserves detail on the shaded faces of matte paper.
   const fillLight = new THREE.DirectionalLight(0xffffff, 0.18);
   fillLight.position.set(0.4, 2.2, 4.2);
   scene.add(fillLight);
 
-  const dirLight = new THREE.DirectionalLight(0xfff6ea, 3.1);
+  const dirLight = new THREE.DirectionalLight(0xfff6ea, 2.5);
   dirLight.position.set(-2.2, 3.1, 1.8);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.set(compact ? 1024 : 2048, compact ? 1024 : 2048);
@@ -190,7 +189,7 @@ export function createPaperScene(container, buttonLayer, options) {
   dirLight.shadow.camera.near = 0.1;
   dirLight.shadow.camera.far = 12;
   dirLight.shadow.bias = -0.001;
-  dirLight.shadow.radius = 5;
+  dirLight.shadow.radius = 3;
   scene.add(dirLight);
 
   // Post-processing — SSAO darkens the creases and folds (desktop only)
@@ -204,11 +203,43 @@ export function createPaperScene(container, buttonLayer, options) {
   composer.addPass(ssaoPass);
   composer.addPass(new OutputPass());
 
+  // One shared, unprinted surface: fine grain and short fibres, never text.
+  const paperCanvas = document.createElement("canvas");
+  paperCanvas.width = paperCanvas.height = 512;
+  const paperContext = paperCanvas.getContext("2d");
+  const grain = paperContext.createImageData(512, 512);
+  for (let i = 0; i < grain.data.length; i += 4) {
+    const shade = 244 + Math.random() * 10 - 5;
+    grain.data[i] = grain.data[i + 1] = grain.data[i + 2] = shade;
+    grain.data[i + 3] = 255;
+  }
+  paperContext.putImageData(grain, 0, 0);
+  paperContext.lineWidth = 0.6;
+  paperContext.strokeStyle = "rgba(130, 122, 108, 0.09)";
+  for (let i = 0; i < 5000; i++) {
+    const x = Math.random() * 512;
+    const y = Math.random() * 512;
+    const angle = Math.random() * Math.PI * 2;
+    const length = 2 + Math.random() * 7;
+    paperContext.beginPath();
+    paperContext.moveTo(x, y);
+    paperContext.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+    paperContext.stroke();
+  }
+  const paperTexture = new THREE.CanvasTexture(paperCanvas);
+  paperTexture.colorSpace = THREE.SRGBColorSpace;
+  paperTexture.wrapS = paperTexture.wrapT = THREE.RepeatWrapping;
+  paperTexture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  const paperBump = paperTexture.clone();
+  paperBump.colorSpace = THREE.NoColorSpace;
   const paperMaterial3d = new THREE.MeshStandardMaterial({
     color: PAPER_COLOR,
-    roughness: 0.82,
-    metalness: 0.0,
-    envMapIntensity: 0.5,
+    map: paperTexture,
+    bumpMap: paperBump,
+    bumpScale: 0.012,
+    roughness: 1,
+    metalness: 0,
+    envMapIntensity: 0.16,
     side: THREE.DoubleSide,
   });
 
@@ -377,7 +408,7 @@ export function createPaperScene(container, buttonLayer, options) {
     // Leave room for the header above the sheet and fit the width on phones.
     const viewH = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)) * OPEN_DISTANCE;
     const viewW = viewH * camera.aspect;
-    const scale = Math.min((viewH * 0.74) / flatSize.depth, (viewW * 0.9) / flatSize.width);
+    const scale = Math.min((viewH * 0.8) / flatSize.depth, (viewW * 0.9) / flatSize.width);
     return { position, quaternion, scale };
   }
 
@@ -846,6 +877,7 @@ export function createPaperScene(container, buttonLayer, options) {
         return;
       }
       activePaper = paper;
+      paper.mesh.castShadow = false;
       paper.onUnfolded = onUnfolded;
       startOpen(paper);
     },
@@ -854,6 +886,7 @@ export function createPaperScene(container, buttonLayer, options) {
     closePaper() {
       if (!activePaper) return;
       activePaper.onUnfolded = null;
+      activePaper.mesh.castShadow = true;
       startDiscard(activePaper);
       activePaper = null;
     },
@@ -896,6 +929,8 @@ export function createPaperScene(container, buttonLayer, options) {
       wallGeometry.dispose();
       wallMat.dispose();
       paperMaterial3d.dispose();
+      paperTexture.dispose();
+      paperBump.dispose();
       scene.environment?.dispose();
       pmrem.dispose();
       ssaoPass.dispose();

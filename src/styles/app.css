@@ -255,43 +255,46 @@ textarea {
 }
 
 .dialog::backdrop {
-  background: rgb(231 228 222 / 0.55);
-  backdrop-filter: blur(3px);
+  background: rgb(231 228 222 / 0.7);
+  backdrop-filter: blur(2px);
 }
 
-/* The texture is a torn-edge paper cut out on a transparent background, not
-   a rectangle: no fallback colour here, or it would fill in that
-   transparency and hide the torn silhouette the image already has. The
-   shadow follows that silhouette too, via drop-shadow rather than box-shadow
-   (which would draw a rectangle around the transparent corners). */
+/* Keep the cut-out edge, but calm the folds beneath readable content. */
 .paper-sheet {
   position: relative;
-  background-color: transparent;
-  background-image: url("/textures/paper-sheet.png");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  filter:
-    drop-shadow(0 1px 2px rgb(0 0 0 / 0.06))
-    drop-shadow(0 24px 60px rgb(40 36 30 / 0.16));
+  isolation: isolate;
+  background: url("/textures/paper-sheet.png") center / 100% 100% no-repeat;
+  filter: drop-shadow(0 2px 3px rgb(40 36 30 / 0.06))
+    drop-shadow(10px 18px 28px rgb(40 36 30 / 0.13));
+}
+
+.paper-sheet::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: #faf8f2;
+  opacity: 0.72;
+  mask: url("/textures/paper-sheet.png") center / 100% 100% no-repeat;
+  pointer-events: none;
 }
 
 /* writing (D02/M02) */
 .write-dialog {
   width: min(820px, calc(100vw - 32px));
-  max-height: calc(100dvh - 32px);
+  max-height: calc(100dvh - 64px);
   overflow-y: auto;
 }
 
 .write-sheet {
-  padding: 88px 88px 72px;
+  padding: 64px 80px 60px;
 }
 
 .write-title {
   margin: 0 0 28px;
   font-family: var(--serif);
   font-weight: 400;
-  font-size: 40px;
+  font-size: clamp(30px, 2.6vw, 40px);
   line-height: 1.2;
 }
 
@@ -302,14 +305,20 @@ textarea {
 .write-field textarea {
   display: block;
   width: 100%;
-  height: clamp(220px, 40dvh, 400px);
+  height: clamp(180px, 32dvh, 360px);
   padding: 22px 22px 44px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgb(255 255 255 / 0.55);
+  background: rgb(250 248 244 / 0.78);
   font-size: 20px;
   line-height: 1.6;
   resize: none;
+}
+
+.write-field textarea:focus-visible {
+  outline: none;
+  border-color: #928b7e;
+  box-shadow: 0 0 0 2px rgb(146 139 126 / 0.12);
 }
 
 .write-field textarea::placeholder {
@@ -372,16 +381,15 @@ textarea {
 }
 
 .read-dialog::backdrop {
-  background: rgb(231 228 222 / 0.3);
-  backdrop-filter: none;
+  background: rgb(231 228 222 / 0.64);
+  backdrop-filter: blur(2px);
 }
 
-/* sized and placed to match the unfolded 3D sheet: the WebGL unfold plays
-   underneath and finishes before this textured layer fades in (.is-revealed),
-   so the dynamic animation itself is untouched by this styling */
+/* Center the wider reading surface over the unfolded sheet. Text appears
+   only after the WebGL unfold has finished. */
 .read-dialog.over-scene .read-sheet {
   height: 100%;
-  padding: 6% 10% 7%;
+  padding: 6% 12% 8%;
 }
 
 .read-close {
@@ -397,9 +405,16 @@ textarea {
 .read-body {
   flex: 1;
   min-height: 0;
-  margin: 56px 0 24px;
+  margin: clamp(28px, 5dvh, 56px) 0 24px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #bcb6ac transparent;
+}
+
+.read-body:focus-visible {
+  outline: 1px solid rgb(92 90 85 / 0.25);
+  outline-offset: 6px;
 }
 
 .read-text {
@@ -472,12 +487,12 @@ textarea {
   }
 
   .write-dialog {
-    width: calc(100vw - 16px);
-    max-height: calc(100dvh - 16px);
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 32px);
   }
 
   .write-sheet {
-    padding: 48px 28px 40px;
+    padding: 40px 28px 36px;
   }
 
   .write-title {
@@ -486,7 +501,7 @@ textarea {
   }
 
   .write-field textarea {
-    height: clamp(180px, 38dvh, 340px);
+    height: clamp(160px, 30dvh, 300px);
     font-size: 17px;
   }
 
@@ -500,8 +515,9 @@ textarea {
   }
 
   .write-actions .button {
-    padding: 0 12px;
-    font-size: 17px;
+    padding: 0 8px;
+    font-size: 16px;
+    white-space: nowrap;
   }
 
   .read-dialog {
@@ -520,4 +536,13 @@ textarea {
   .read-text {
     font-size: 17px;
   }
+}
+
+@media (max-height: 600px) {
+  .write-sheet { padding-top: 32px; padding-bottom: 32px; }
+  .write-field textarea { height: 160px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .read-sheet { transition: none; }
 }

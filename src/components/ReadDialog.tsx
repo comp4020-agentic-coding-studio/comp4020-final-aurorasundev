@@ -36,11 +36,13 @@ export function ReadDialog({ id, revealed, rect, onClose }: Props) {
     return () => dialog.close();
   }, []);
 
+  const sheetWidth = rect ? Math.min(rect.width * 1.2, window.innerWidth - 24) : 0;
+
   return (
     <dialog
       ref={dialogRef}
       className={`dialog read-dialog${revealed ? " is-revealed" : ""}${rect ? " over-scene" : ""}`}
-      style={rect ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height, margin: 0 } : undefined}
+      style={rect ? { left: rect.left - (sheetWidth - rect.width) / 2, top: rect.top, width: sheetWidth, height: rect.height, margin: 0 } : undefined}
       aria-label="A paper someone left"
       onCancel={(e) => {
         e.preventDefault();
