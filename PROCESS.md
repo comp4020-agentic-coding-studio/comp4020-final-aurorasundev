@@ -1,216 +1,185 @@
 # Process overview
 
-## From the brief to a plan
+## From brief to product direction
 
-Throwaway's design (what it is for, what "good" means, what is deliberately
-absent) is mine and lives in `README.md`
+I didn't start by asking an agent to build a full-stack app. I first used
+Codex as a brainstorming partner to weigh several ideas against the brief —
+in particular, whether multi-user, persistence and real-time behaviour would
+matter to the experience itself, rather than being bolted on just to satisfy
+the technical requirements.
+
+That led to **Throwaway**: a shared anonymous space where people write down
+something they've been carrying, crumple it, throw it away, and later come
+across what strangers left behind.
+
+I then used the `grillme` skill to pressure-test the idea decision by
+decision. That settled: the site opens directly into the shared space, not a
+personal archive; ownership exists for control, not retrieval; and future
+interactions (witnessing, burning) should feel deliberate, not like
+social-media engagement. It also named what to reject outright — likes,
+comments, profiles, search, popularity ranking.
+
+I wrote the first README myself to record these decisions and define what
+"good" means for the project
 ([`7d955b3`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/7d955b3)).
-Before any code I turned the C8 brief into a Week 9 contract for the agent: a
-plan with fixed scope, API, copy and acceptance gates, plus eight design
-references, one per screen and viewport
+
+## From decisions to a harness
+
+With the product direction settled, I used the Build Web Apps plugin to turn
+the concept into screen-level design references and a Week 9 plan — fixed
+scope, API, copy and acceptance gates
 ([`e1f8d44`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/e1f8d44)).
-The plan's main job is to say *no*. Keep / Release, witnessing, burning,
-real-time, recovery codes and social features are all out for this week, and
-the agent may not stub them or leave buttons for them.
+Concrete references to compare the implementation against, rather than an
+open-ended "make it look good."
 
-## Harness
+Those decisions became standing rules in `CLAUDE.md`
+([`90fa5fb`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/90fa5fb),
+image-generation rule added in
+[`8715209`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/8715209)):
+protect the human-written README, keep paper text out of WebGL textures,
+require the server to confirm persistence before the throw animation plays,
+never point the spec at the live app, never write my own reflection.
 
-`CLAUDE.md` turns that scope into standing rules
-([`90fa5fb`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/90fa5fb)):
-- only `/` and `/readme/`
-- the throw plays only after the server confirms the save
-- no paper text in WebGL textures
-- never point the spec at the live app
-- never write my reflection
+`spec/api.test.ts`
+([`df3bd71`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/df3bd71))
+is the main backpressure. It checks HTTP-level product promises, not
+implementation details: exact cross-session text persistence, input limits,
+no text or ownership leaking into list responses, idempotent retries, and
+persistence across a database reopen.
 
-An image-generation rule was added later
-([`8715209`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/8715209)).
+My loop: **judgement → update plan/harness → Claude implements a bounded
+change → automated checks → browser inspection → reference comparison →
+refine the harness**. Codex and `grillme` did the product judgement; Build
+Web Apps turned it into visual references; Claude was most useful once the
+intended behaviour had already become an explicit constraint.
 
-The backpressure is `spec/api.test.ts`, alongside the starter's invariants
-([`df3bd71`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/df3bd71)).
-It asserts the contract over HTTP, not the implementation:
-- text reads back exactly in another session
-- blank and over-2,000-code-point papers are refused
-- the list carries no words or owners
-- a retried submission is the same paper
-- a paper survives the database being reopened
+## Stack
 
-## Decision record: first stack
+A deliberately small stack: one Fly.io `shared-cpu-1x` machine (256 MB, one
+volume), so storage, client and server choices stay simple enough for both
+me and the agent to reason about and debug.
 
-**Context.** One shared-cpu-1x machine with 256 MB and one volume. The papers
-need a real shared store. The crumpled paper is a vanilla Three.js +
-cannon-es demo I wanted to reuse rather than re-create.
+- **Data:** SQLite via `better-sqlite3` at `/data/throwaway.sqlite` —
+  durable, single-machine state without a separate DB service. Trade-off: a
+  Fly volume isn't replicated, so a multi-machine future needs a new storage
+  decision.
+- **Client:** Vite + React — most states (write, read, overlays) are
+  conventional HTML UI; the 3D scene stays outside React's render loop.
+- **Server:** Express 5 under Node 24 type stripping — a small API, no
+  separate server build step.
+- **`/readme/`** renders straight from `README.md`, so the argument being
+  assessed is the same document that's versioned, not a second copy.
 
-**Decision.**
-- **Client:** Vite + React for the HTML states (space, writing, reading).
-- **Paper:** the demo's own Three.js code wrapped as an init/dispose module, not
-  React Three Fiber.
-- **Server:** Express 5, run directly by Node 24's type stripping, so the server
-  has no build step.
-- **Data:** SQLite through better-sqlite3 at `/data/throwaway.sqlite`.
-- **`/readme/`:** rendered on the server from `README.md`.
+This also leaves a clear extension point: a socket layer for Week 10's
+real-time behaviour can be added to this same server without replacing the
+persistence model.
 
-**Consequences.**
-- One process and one origin keep the deploy simple. Single-instance SQLite
-  means a short outage on deploy, and there is no replication: a Fly volume
-  is neither shared nor copied between machines.
-- Real-time (Week 10) will need a socket layer added to this same server.
-- If the app outgrows a single machine, the store has to change, and that will
-  get a new record.
+## Reusing the paper interaction demo
 
-## Reusing the paper demo
+The hardest part of the concept wasn't the CRUD interface — it was making
+paper convincingly crumple, unfold, fall and behave like a physical object.
+Building that from scratch would have cost project time disproportionate to
+the actual design problem.
 
-The paper is
-[paper-crumple-demo](https://github.com/item-develop/paper-crumple-demo) at
-commit `f84648b0` (MIT, nagasawa / ITEM Inc.). The assets and the VAT decoder
-came over unchanged except for debug flags. `paper.js` lost the fictional
-brand print, so every paper shares one plain material and no words can reach
-the GPU
-([`6d19813`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/6d19813)).
-`main-vat.js` became `createPaperScene()`, keyed by database ids, with a
-`dispose()`. The camera, colours and phone settings were retuned against the
-references
+I built on the MIT-licensed
+[paper-crumple-demo](https://github.com/item-develop/paper-crumple-demo)
+(Three.js + cannon-es + a Houdini Vellum simulation baked into Vertex
+Animation Textures), at commit `f84648b0`, which already had the physical
+behaviour I needed.
+
+It's a foundation, not the application. The VAT assets and decoder came over
+unchanged; the fictional branding was stripped so every paper shares one
+plain material and no words reach the GPU
+([`6d19813`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/6d19813)),
+and the scene became a reusable `createPaperScene()` module keyed by
+database paper ids, with its own `dispose()`
 ([`83c6fdc`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/83c6fdc)).
-`THIRD_PARTY_NOTICES.md` lists every change.
+Camera, lighting, colours and paper count were then retuned against
+Throwaway's own references over several passes: a generated torn-paper
+photograph now backs the write/read sheets instead of a flat card
+([`982d8ee`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/982d8ee)),
+a floor and wall replaced the flat backdrop
+([`42c79a4`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/42c79a4),
+[`31c45d6`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/31c45d6)),
+and the crumpled-paper material was redone as a matte, less reflective
+procedural surface
+([`facca8a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/facca8a)).
 
-A second comparison pass against D01/M01 retuned the camera, lighting and
-visible-paper count again, and a third pass fixed the write and reading
-sheets: the flat HTML card never read as paper, and making it transparent to
-show the bare unfolded mesh didn't either, so a generated photograph of a
-torn, creased sheet now backs both as a CSS `background-image`
-([`982d8ee`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/982d8ee)).
-It only changes how the already-finished unfold looks once revealed; the
-geometry, physics and the rule that paper text never reaches a WebGL texture
-are untouched. `README.md` was also cut down to the length the D04/M04
-references actually show
-([`2baa50c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/2baa50c)).
+Written text deliberately never reaches the WebGL texture — the 3D object
+is the physical paper, the content is HTML — which keeps it accessible,
+keeps private text off the GPU, and keeps the third-party rendering
+technique separate from the app's own data. Full attribution is in
+`THIRD_PARTY_NOTICES.md`.
 
-A fourth pass answered a direct comparison against the demo's own screenshot:
-its wall-and-floor corner reads as a real room, where the space had only a
-flat backdrop colour. A lit floor plane plus a flat wall plane were added
-behind it ([`42c79a4`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/42c79a4)),
-and the wall was given a colour of its own rather than the background's
-([`31c45d6`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/31c45d6)).
+## Corrections and feedback loops
 
-## Corrections along the way
+A few failures changed the process itself, not just the code:
 
-- **The README was overwritten.** The agent drafted a README from the D04 design
-  image, which replaced the one I had already written. It noticed my commit
-  while gathering hashes for this file. It restored my text and only added the
-  Week 9 scope, the future work and the references. The plan had said to use
-  my README; the fix was to check `git log` for my own commits before writing
-  any file I own.
-- **The reading layer didn't line up with the sheet.** The HTML words sat off
-  the unfolded 3D sheet, which the screenshot comparison against D03 showed.
-  The FBX contains dummy bounding-box vertices that the demo excludes from its
-  triangles but that still inflate the geometry's bounds. The sheet is now
-  measured from the vertices its triangles use.
-- **The scene crashed while papers were dropping in.** Papers waiting for their
-  staggered drop-in were iterated as if they existed. The browser console in a
-  Playwright run caught it.
-- **`/readme/` looped.** A `/readme` → `/readme/` redirect looped because
-  Express matches both paths with the same route. The starter's invariant
-  check caught it before the first commit.
-- **The paper's own torn edge was hidden by a rectangle.** The replacement
-  `paper-sheet.png` is alpha-matted to a torn-paper cutout, but the dialog's
-  CSS filled the transparent corners with a solid fallback colour, so a
-  rectangular edge showed past the texture's own silhouette. Swapping the
-  fallback for `transparent` and the shadow for a `filter: drop-shadow` that
-  follows the alpha channel fixed it
-  ([`e4b5916`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/e4b5916)).
-- **The depth fix undid itself.** The fog added for the wall/floor depth
-  pass was tuned against straight-line distance, not the camera's actual
-  distance to the floor at its angle (height and depth together), so almost
-  the entire visible floor was already past the fog's far end and rendered as
-  the wall's own colour — the two planes read as one flat backdrop again,
-  the opposite of the point of adding them. It was dropped rather than
-  retuned, since the reference's wall/floor shot has a crisp seam, not a
-  soft one
-  ([`31c45d6`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/31c45d6)).
-- **Only the physics step was guarding against a stalled frame.** Comparing
-  the open/discard animation against the demo's own source after a report
-  that it looked ugly found no difference in the constants, easing or VAT
-  playback — both only cap a single frame's elapsed time for the physics
-  step, not for the unfold/crumple timers next to it, so one long frame (a
-  paused tab, a slow phone) can jump those timers most of the way through
-  the animation and make it look like it snapped. The same cap was added
-  there too
+- **A human-authored file got overwritten.** The agent drafted a README from
+  a design image and replaced the one I'd already written. Fixed by
+  restoring my text and adding a rule: check an artefact's own commit
+  history before letting the agent touch something I own.
+- **Visual comparison caught what tests couldn't.** Unused FBX bounding-box
+  vertices had inflated the measured geometry, so on-screen text didn't line
+  up with the unfolded sheet; a staggered paper drop-in crashed the scene,
+  caught by the browser console in a Playwright run; `/readme` → `/readme/`
+  looped because Express matched both paths to the same route, caught by the
+  starter's own invariant check.
+- **Reference-driven passes on the scene itself:** the paper texture's torn
+  silhouette was hidden behind a solid CSS fallback
+  ([`e4b5916`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/e4b5916)),
+  then found to still have transparent padding baked into the PNG itself,
+  cropped out at the source
+  ([`c83fcfc`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/c83fcfc));
+  fog added for room depth was tuned against the wrong distance and washed
+  the floor back into the wall's own colour, so it was dropped rather than
+  retuned
+  ([`31c45d6`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/31c45d6));
+  contact shadows read far lighter than the references because the
+  environment-map lighting isn't blocked by the shadow map at all, fixed by
+  turning down the floor material's own `envMapIntensity`
+  ([`69089df`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/69089df));
+  and only the physics step was guarding against a stalled frame, so one
+  long frame could jump the open/close/throw timers most of the way through
+  the animation — the same clamp was added there too
   ([`6d96915`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/6d96915)).
-  Not confirmed as the cause of the specific report, since it only reproduces
-  under an artificially slow frame rate, not normal GPU playback.
-- **The paper texture still didn't reach the dialog's own edges.** After the
-  drop-shadow fix, the dialog still showed a gap past the texture's
-  silhouette. The PNG itself carried transparent padding baked into its
-  pixel canvas, which `background-size: cover` can't crop away when the
-  container's aspect ratio fits the image by the padded dimension. Cropped
-  the source PNG to its true alpha-content bounding box instead of touching
-  the CSS further
-  ([`c83fcfc`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/c83fcfc)).
-- **The contact shadows read far lighter than the references.** Pixel
-  sampling showed the shadows only ~5-13% darker than the floor, against the
-  references' ~50-80%. Turning the direct lights down and up barely moved
-  the ratio, because the scene's environment-map lighting isn't blocked by
-  the shadow map at all and was washing shadowed ground out regardless.
-  Turning down the floor material's own `envMapIntensity` instead brought
-  the ratio in line with the references
-  ([`69089df`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/69089df)).
-- **Leftover Japanese comments from the vendored source.** The demo's own
-  comments were still in Japanese in places despite the adaptation work; I
-  spotted some and flagged it. Translated every comment in the three
-  vendored scene files to English, keeping the technical detail intact
+- **Leftover Japanese comments from the vendored source** were translated to
+  English across the three scene files, technical detail preserved
   ([`1fd69f9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/1fd69f9)).
+
+The lesson that stuck: when an agent gets something wrong, don't just
+re-prompt "fix it" — find what constraint or information was actually
+missing, and turn it into a rule, a test, or a reference comparison.
 
 ## Evidence
 
-- **Two-browser checks.** Locally and on Fly, a scripted two-browser run
-  (Playwright, Chromium) has browser A write a paper. The count goes from
-  N to N+1, and an independent browser B opens the same paper by keyboard and
-  reads identical text, including Chinese and a line break. The run reported
-  no console errors and no horizontal overflow at 390×844.
+- **Two-browser checks.** A scripted Playwright run has browser A write a
+  paper; the count goes from N to N+1, and an independent browser B opens
+  the same paper by keyboard and reads identical text back, including
+  Chinese and a line break. No console errors, no horizontal overflow at
+  390×844.
 - **Restart (live).** Paper `62324d9a-df43-47a5-8631-e2fd2631efcd` read back
   identically before (13:53:56Z) and after (13:54:13Z, 5 Oct UTC)
   `flyctl machine restart`.
-- **Redeploy (live).** The same paper read back identically after a redeploy
-  to release v3 (image `deployment-01M465M29FHP9R8CAZNT98P3DD`, 13:58:43Z),
-  which shipped
+- **Redeploy (live).** The same paper read back identically after
+  redeploying release v3 (image `deployment-01M465M29FHP9R8CAZNT98P3DD`,
+  13:58:43Z), which shipped
   [`b926314`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/b926314).
   The starter's invariants passed against the live URL.
-- **Without WebGL.** The papers fall back to plain buttons that still open.
-- **Screenshots** are in `docs/evidence/week9/`:
-  - the live empty state, writing, the throw after the save, and browser B
-    reading
-  - phone views of the space, writing, reading and `/readme/`
-  - `/readme/` on desktop
-  - a local space with papers
-  - the fallback without WebGL
-
-  The papers' exact positions differ from the references by design: they
-  land randomly. The models are the demo's own rather than the references'
-  rendered paper.
-- **Not verified:**
-  - performance on real phone GPUs; screenshots came from software WebGL
-  - a local `docker build`, since the Docker daemon wasn't running; Fly's
-    remote builder is the image check
-  - the GitHub CI run, which only starts once the repo is public
-
-## Dialog layout and matte paper refinement
-
-A comparison with D02/D03 found that the HTML paper texture was cropped and
-its folds competed with the text. The reading column was also too narrow.
-The dialogs now preserve the texture's cut-out edge, soften its contrast,
-and use more balanced spacing. The reading surface is widened over the
-unfolded mesh, whose large ground shadow is disabled while reading.
-
-The user then asked for a less bright, matte paper ball. A shared procedural
-colour/bump texture adds fine grain and short fibres, with full roughness,
-less environment reflection and a gentler key light. It contains no words
-and is disposed with the scene. The wall remains in the warm grey palette.
-These changes are in
-[`facca8a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/facca8a).
-
-Validation used a temporary SQLite database: type checking and all 12 tests
-passed, as did the production build. Local browser checks covered desktop
-1440×900 and phone 390×844 for paper rendering, opening/closing and the write
-window; no browser errors were captured. The preceding dialog pass also
-checked long bilingual text and independent body scrolling at 1920×1080.
-Real phone GPU performance remains unverified.
+- **Without WebGL,** papers fall back to plain buttons that still open.
+- **Screenshots** are in `docs/evidence/week9/`: the live empty state,
+  writing, the throw after a save, browser B reading, phone views of the
+  space/writing/reading/`/readme/`, `/readme/` on desktop, a local space
+  with papers, and the no-WebGL fallback. Paper positions differ from the
+  references by design — they land randomly.
+- **Dialog and matte-paper pass.** `facca8a` widened the reading column,
+  preserved the texture's cut-out edge, and replaced the paper-ball material
+  with a matte procedural surface (no words, disposed with the scene).
+  Re-validated against a temporary SQLite database: typecheck and all 12
+  tests passed, as did the production build; manual checks covered desktop
+  1440×900 and phone 390×844 for rendering, open/close and the write window,
+  plus long bilingual text and independent scrolling at 1920×1080.
+- **Not verified:** performance on real phone GPUs (screenshots used
+  software WebGL); a local `docker build` (the daemon wasn't running — Fly's
+  remote builder is the image check); the GitHub CI run, which only starts
+  once the repo is public.
