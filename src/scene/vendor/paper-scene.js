@@ -141,7 +141,16 @@ export function createPaperScene(container, buttonLayer, options) {
   // distinct values meeting at a horizon), instead of papers sitting on an
   // undifferentiated flat background colour.
   const floorGeometry = new THREE.PlaneGeometry(16, 12);
-  const floorMat = new THREE.MeshStandardMaterial({ color: FLOOR_COLOR, roughness: 1, metalness: 0 });
+  // The environment map lights the floor the same everywhere, shadow or not
+  // (it isn't blocked by the shadow map), so it's turned down hard here —
+  // otherwise it alone keeps the contact shadows from ever reading as dark
+  // as the references', no matter how the direct lights are balanced.
+  const floorMat = new THREE.MeshStandardMaterial({
+    color: FLOOR_COLOR,
+    roughness: 1,
+    metalness: 0,
+    envMapIntensity: 0.08,
+  });
   const floor = new THREE.Mesh(floorGeometry, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, FLOOR_VISUAL_Y, 1);
@@ -156,16 +165,21 @@ export function createPaperScene(container, buttonLayer, options) {
   scene.add(wall);
 
   // ライト
-  const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+  // The references' contact shadows read as dense and dark at their core,
+  // a fifth or less of the floor's own brightness. Ambient and the fill
+  // light reach shadowed ground the same as lit ground (neither is blocked
+  // by the shadow map), so both stay low; the directional key light is
+  // raised to compensate so lit papers and the floor itself don't go dim.
+  const ambient = new THREE.AmbientLight(0xffffff, 0.22);
   scene.add(ambient);
 
   // Throwaway: a soft light from the viewer keeps papers (and an opened
   // sheet, which faces the camera) close to white, as in the references.
-  const fillLight = new THREE.DirectionalLight(0xffffff, 0.55);
+  const fillLight = new THREE.DirectionalLight(0xffffff, 0.18);
   fillLight.position.set(0.4, 2.2, 4.2);
   scene.add(fillLight);
 
-  const dirLight = new THREE.DirectionalLight(0xfff6ea, 2.6);
+  const dirLight = new THREE.DirectionalLight(0xfff6ea, 3.1);
   dirLight.position.set(-2.2, 3.1, 1.8);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.set(compact ? 1024 : 2048, compact ? 1024 : 2048);
