@@ -13,8 +13,8 @@ const DECODE_MODE = "correct";
 const NORMALS_MODE = "smooth";
 
 /**
- * VAT ファイル (FBX メッシュ + EXR ポジションテクスチャ) を読み込み、
- * animation.json と同じ形式の animData を返す。
+ * Loads the VAT files (FBX mesh + EXR position texture) and returns
+ * animData in the same shape as animation.json.
  *
  * animData: { vertexCount, frameCount, indices, uvs, positions, normals }
  */
@@ -34,29 +34,30 @@ async function decodeVATData(basePath) {
   const exrLoader = new EXRLoader();
   exrLoader.setDataType(THREE.FloatType);
 
-  // FBX と Position EXR を並列ロード
+  // Load the FBX and the position EXR in parallel
   const [fbxGroup, posTex] = await Promise.all([
     fbxLoader.loadAsync(basePath + "geo/vertex_animation_textures1_mesh.fbx"),
     exrLoader.loadAsync(basePath + "tex/vertex_animation_textures1_pos.exr"),
   ]);
 
-  // FBX からメッシュを取得
+  // Get the mesh out of the FBX
   let fbxMesh = null;
   fbxGroup.traverse((child) => {
     if (child.isMesh && !fbxMesh) fbxMesh = child;
   });
-  if (!fbxMesh) throw new Error("FBX にメッシュが見つかりません");
+  if (!fbxMesh) throw new Error("No mesh found in the FBX");
 
   const geo = fbxMesh.geometry;
   const posAttr = geo.getAttribute("position");
   const uvAttr = geo.getAttribute("uv");
   const indexAttr = geo.getIndex();
   const vertexCount = posAttr.count;
-  // VAT ルックアップ UV: FBXLoader は 2番目の UV を "uv1" として格納する
+  // VAT lookup UV: FBXLoader stores the second UV set as "uv1"
   const vatUvAttr = geo.getAttribute("uv2") || geo.getAttribute("uv1");
 
-  // インデックス配列
-  // FBX末尾にVAT用ではないbboxダミーらしき2三角形(uv1 = 0,0)が入るので除外する。
+  // Index array
+  // The FBX's tail has 2 triangles that look like a non-VAT bbox dummy
+  // (uv1 = 0,0); exclude them.
   const indices = [];
   if (indexAttr) {
     for (let i = 0; i < indexAttr.count; i++) indices.push(indexAttr.getX(i));
@@ -75,7 +76,7 @@ async function decodeVATData(basePath) {
     }
   }
 
-  // UV 配列（紙テクスチャマッピング用）
+  // UV array (for paper texture mapping)
   const uvs = [];
   if (uvAttr) {
     for (let i = 0; i < uvAttr.count; i++) {
@@ -83,11 +84,11 @@ async function decodeVATData(basePath) {
     }
   }
 
-  // ===== EXR Position テクスチャからフレームデータを読み出す =====
+  // ===== Read frame data out of the EXR position texture =====
   const posData = posTex.image.data; // Float32Array
   const texW = posTex.image.width;
   const texH = posTex.image.height;
-  const channels = posData.length / (texW * texH); // 通常 4 (RGBA)
+  const channels = posData.length / (texW * texH); // usually 4 (RGBA)
 
   const rawFrameCount = FRAME_COUNT;
   let pointCount = vertexCount;
@@ -103,13 +104,15 @@ async function decodeVATData(basePath) {
     }
   }
 
-  // 1フレームが占める行数 (このアセットでは 3500ポイント ÷ 幅1024 → 4行)
+  // Rows occupied by one frame (for this asset: 3500 points ÷ width 1024 →
+  // 4 rows)
   const rowsPerFrame = Math.ceil(pointCount / texW);
 
 //  console.log("[VAT] pointCount:", pointCount, "rowsPerFrame:", rowsPerFrame, "rawFrameCount:", rawFrameCount);
 
-  // 各頂点の VAT ポイント ID — 三角形スープ上で位置を共有する頂点は同じ ID になる。
-  // デコードとスムーズ法線の計算の両方で使う。
+  // Each vertex's VAT point ID — vertices that share a position in the
+  // triangle soup get the same ID. Used both for decoding and for
+  // computing smooth normals.
   const vertexPointIds = new Int32Array(vertexCount);
   for (let v = 0; v < vertexCount; v++) {
     let pointId;
@@ -127,36 +130,46 @@ async function decodeVATData(basePath) {
     vertexPointIds[v] = Math.max(0, Math.min(pointId, pointCount - 1));
   }
 
-  // 全フレームぶんの頂点の実座標 (レスト位置 + 変位を足し込み済み)。
-  // [フレーム0の全頂点xyz][フレーム1の全頂点xyz]... と並ぶ1本の配列。
-  // "raw" は静止フレームカット前の意で、カット後が positions になる。
+  // Actual vertex coordinates for every frame (rest position plus the
+  // displacement already added in). One flat array laid out as
+  // [frame 0's xyz for every vertex][frame 1's xyz for every vertex]...
+  // "raw" means before the still frames are cut; after cutting, it
+  // becomes `positions`.
   const rawPositions = new Float32Array(vertexCount * 3 * rawFrameCount);
 
-  // アニメーションが使う総行数 (このアセットでは 4行 × 50フレーム = 200 = テクスチャ高さ)
+  // Total rows the animation uses (for this asset: 4 rows × 50 frames =
+  // 200 = texture height)
   const totalRows = rawFrameCount * rowsPerFrame;
 
   for (let frame = 0; frame < rawFrameCount; frame++) {
     for (let v = 0; v < vertexCount; v++) {
       const pointId = vertexPointIds[v];
 
-      // ポイント数がテクスチャ幅より多いので、1フレームは複数行に折り返して
-      // 格納されている (このアセットでは 3500 ポイント → 1024×4行)。
-      // ファイル自体はフレーム順に上から自然に並んでいるが、three.js の
-      // EXRLoader が WebGL の UV 規約 (V=0 が下) に合わせてスキャンラインを
-      // 上下反転して配列に格納するため、配列を画像のつもりで読むと全体が
-      // ひっくり返っている。反転1回で戻す。
+      // There are more points than the texture is wide, so one frame
+      // wraps across several rows (for this asset: 3500 points →
+      // 1024 × 4 rows). The file itself naturally lists frames
+      // top-to-bottom, but three.js's EXRLoader flips the scanlines
+      // top-to-bottom when storing them in the array, to match WebGL's
+      // UV convention (V=0 is the bottom) — so reading the array as if
+      // it were the image gives you the whole thing upside down. One
+      // flip undoes that.
       const col = pointId % texW;
       const blockRow = Math.floor(pointId / texW);
       let row;
       if (DECODE_MODE === "naive") {
-        // 記事用: 補正なしで論理行をそのまま読む (全部の癖が混ざった最初の破綻)
+        // For the article: reads the logical rows as-is with no
+        // correction (the first, worst-case breakage, with every quirk
+        // mixed together)
         row = frame * rowsPerFrame + blockRow;
       } else if (DECODE_MODE === "reversed") {
-        // 記事用: 行順は直したがフレーム順が逆のまま
-        // (症状①: フレーム0がきれいなくしゃ玉 / 最終フレームが平ら = 時間が逆さま)
+        // For the article: row order fixed but frame order is still
+        // reversed (symptom ①: frame 0 is a neat crumpled ball / the
+        // last frame is flat — time runs backwards)
         row = frame * rowsPerFrame + (rowsPerFrame - 1 - blockRow);
       } else if (DECODE_MODE === "noflip") {
-        // 記事用: フレーム順だけ反転し、ブロック内の行順を直さない (症状②: 行ズレの裂け)
+        // For the article: only the frame order is reversed, without
+        // fixing the row order within each block (symptom ②: a tear
+        // from misaligned rows)
         row = (rawFrameCount - 1 - frame) * rowsPerFrame + blockRow;
       } else {
         row = totalRows - 1 - (frame * rowsPerFrame + blockRow);
@@ -164,11 +177,13 @@ async function decodeVATData(basePath) {
       const pixelIdx = (row * texW + col) * channels;
       const off = (frame * vertexCount + v) * 3;
 
-      // ピクセルの値はレスト位置からの変位。X だけ符号が逆なので引き算で戻す。
-      // FBX は無変換で届く (生ファイルの頂点値とロード後の値は一致する) のに対し、
-      // EXR の変位は X 成分だけ反転した状態で書き出されている。左手系ターゲット
-      // (Unity は FBX インポート時に X を反転する) に合わせた焼き込みと思われる。
-      // (?decode=nomirror はこの補正を外して症状③を再現する)
+      // The pixel value is the displacement from the rest position.
+      // Only X has its sign flipped, so it's subtracted back out. The
+      // FBX arrives unconverted (the raw file's vertex values match
+      // what's loaded), but the EXR's displacement was baked out with
+      // just its X component mirrored — apparently to match a
+      // left-handed target (Unity flips X on FBX import).
+      // (?decode=nomirror removes this correction to reproduce symptom ③.)
       const xSign = DECODE_MODE === "nomirror" ? 1 : -1;
       rawPositions[off + 0] = posAttr.getX(v) + xSign * posData[pixelIdx + 0];
       rawPositions[off + 1] = posAttr.getY(v) + posData[pixelIdx + 1];
@@ -176,8 +191,9 @@ async function decodeVATData(basePath) {
     }
   }
 
-  // ===== 動きのない先頭・末尾フレームをカット =====
-  // 隣接フレーム間の最大頂点移動量を測り、静止している区間を除去する。
+  // ===== Cut the motionless leading/trailing frames =====
+  // Measures the largest vertex movement between adjacent frames and
+  // removes the stretches where nothing is moving.
   const frameStride = vertexCount * 3;
   const frameDeltas = [];
   for (let frame = 0; frame < rawFrameCount - 1; frame++) {
@@ -200,13 +216,13 @@ async function decodeVATData(basePath) {
 
   let frameCount = rawFrameCount;
   let positions = rawPositions;
-  // 症状再現モードでは deltas が意味を持たないのでカットしない
+  // In a symptom-reproduction mode the deltas aren't meaningful, so don't cut
   if (
     DECODE_MODE === "correct" &&
     (firstMoving > 0 || lastMoving < frameDeltas.length - 1)
   ) {
     if (firstMoving === -1) firstMoving = 0;
-    // frameDeltas[i] は frame i → i+1 の移動量なので、i+1 まで残す
+    // frameDeltas[i] is the movement from frame i to i+1, so keep through i+1
     frameCount = lastMoving + 2 - firstMoving;
     positions = rawPositions.slice(
       firstMoving * frameStride,
@@ -215,15 +231,15 @@ async function decodeVATData(basePath) {
   } else {
   }
 
-  // ===== 計測対象の頂点 (FBX 末尾の bbox ダミー頂点を除外) =====
+  // ===== Vertices to measure (excluding the FBX's trailing bbox dummy vertices) =====
   const validVerts = [];
   for (let v = 0; v < vertexCount; v++) {
     if (vatUvAttr && vatUvAttr.getX(v) === 0 && vatUvAttr.getY(v) === 0) continue;
     validVerts.push(v);
   }
 
-  // ===== 開いた状態(フレーム0)の XZ サイズを計測 =====
-  // 開いた時に画面に対する大きさを合わせるのに使う
+  // ===== Measure the open state's (frame 0) XZ size =====
+  // Used to size it against the screen once it's open.
   let minFX = Infinity;
   let maxFX = -Infinity;
   let minFZ = Infinity;
@@ -238,9 +254,10 @@ async function decodeVATData(basePath) {
   }
   const flat = { width: maxFX - minFX, depth: maxFZ - minFZ };
 
-  // ===== くしゃくしゃ状態(最終フレーム)の中心と半径を計測 =====
-  // 物理の衝突球と回転中心に使う。飛び出た角(外れ値)の影響を抑えるため
-  // 半径は重心からの距離の90パーセンタイルを採用する。
+  // ===== Measure the crumpled state's (last frame) center and radius =====
+  // Used for the physics collision sphere and the rotation center. To
+  // keep a stray protruding corner (an outlier) from skewing it, the
+  // radius is the 90th percentile of distances from the centroid.
   const lastOff = (frameCount - 1) * frameStride;
   let cx = 0;
   let cy = 0;
@@ -268,25 +285,32 @@ async function decodeVATData(basePath) {
     radius: dists[Math.floor(validVerts.length * 0.9)],
   };
 
-  // ===== スムーズ法線を計算 =====
-  // メッシュは頂点を共有しない三角形スープなので、computeVertexNormals では
-  // 面法線のフラットシェーディングになり三角形の形が見えてしまう。
+  // ===== Compute smooth normals =====
+  // The mesh is a triangle soup that doesn't share vertices, so
+  // computeVertexNormals would give flat-shaded face normals and the
+  // triangle edges would show.
   //
-  // そこでポイント単位で法線を作る:
-  //   ① 三角形 (スープの並び順で決まっている) ごとに面法線を計算
-  //   ② その面法線を、3つの角の頂点が所属するポイントの欄にそれぞれ加算
-  //      (グリッド内部のポイントには周囲の約6三角形ぶんの票が集まる)
-  //   ③ ポイントごとに平均 (正規化) したものが、そのポイントの法線になる
-  //   ④ それを同じポイントに所属する全コピー頂点に配る
-  // 同じ場所のコピー頂点が全員同じ法線を持つので、三角形の境目が陰影に出なくなる。
+  // So normals are built per point instead:
+  //   ① Compute each triangle's (soup order) face normal.
+  //   ② Add that face normal into the slot for the point each of its
+  //      three corner vertices belongs to (an interior grid point
+  //      collects votes from its roughly 6 surrounding triangles).
+  //   ③ Averaging (normalizing) each point's total gives that point's
+  //      normal.
+  //   ④ Hand that back out to every copy-vertex belonging to the same
+  //      point.
+  // Every copy-vertex at the same spot ends up with the same normal, so
+  // the triangle seams stop showing up in the shading.
   const normals = new Float32Array(vertexCount * 3 * frameCount);
   const pointNormals = new Float32Array(pointCount * 3);
 
   for (let frame = 0; frame < frameCount; frame++) {
     const srcOff = frame * vertexCount * 3;
 
-    // 記事用 (?normals=flat): ポイント平均をせず、面法線をそのまま3頂点に置く
-    // = スープでの computeVertexNormals 相当。三角形が見える状態を再現する
+    // For the article (?normals=flat): skips the per-point averaging and
+    // puts the face normal straight onto its three vertices — equivalent
+    // to computeVertexNormals on the soup. Reproduces the state where
+    // the triangles show.
     if (NORMALS_MODE === "flat") {
       for (let i = 0; i < indices.length; i += 3) {
         const a = indices[i] * 3;
@@ -320,7 +344,7 @@ async function decodeVATData(basePath) {
 
     pointNormals.fill(0);
 
-    // 面法線 (面積重み付き) をポイントごとに加算
+    // Add the (area-weighted) face normal into each point
     for (let i = 0; i < indices.length; i += 3) {
       const a = indices[i] * 3;
       const b = indices[i + 1] * 3;
@@ -348,7 +372,7 @@ async function decodeVATData(basePath) {
       }
     }
 
-    // 正規化
+    // Normalize
     for (let p = 0; p < pointCount; p++) {
       const o = p * 3;
       const len = Math.hypot(
@@ -367,7 +391,7 @@ async function decodeVATData(basePath) {
       }
     }
 
-    // 各頂点に配布
+    // Hand it back out to each vertex
     for (let v = 0; v < vertexCount; v++) {
       const pid = vertexPointIds[v] * 3;
       const o = srcOff + v * 3;
@@ -376,8 +400,6 @@ async function decodeVATData(basePath) {
       normals[o + 2] = pointNormals[pid + 2];
     }
   }
-
-  // デコード結果のサンプル表示
 
   return { vertexCount, frameCount, indices, uvs, positions, normals, crumple, flat };
 }

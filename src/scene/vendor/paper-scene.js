@@ -82,7 +82,7 @@ export function createPaperScene(container, buttonLayer, options) {
   });
 
   // ==================================================
-  // シーン基本セットアップ
+  // Basic scene setup
   // ==================================================
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(BACKGROUND);
@@ -164,7 +164,7 @@ export function createPaperScene(container, buttonLayer, options) {
   wall.position.set(0, FLOOR_VISUAL_Y + wallHeight / 2, WALL_Z);
   scene.add(wall);
 
-  // ライト
+  // Lights
   // The references' contact shadows read as dense and dark at their core,
   // a fifth or less of the floor's own brightness. Ambient and the fill
   // light reach shadowed ground the same as lit ground (neither is blocked
@@ -193,7 +193,7 @@ export function createPaperScene(container, buttonLayer, options) {
   dirLight.shadow.radius = 5;
   scene.add(dirLight);
 
-  // ポストプロセス — SSAO で折り目・凹みを暗くする (desktop only)
+  // Post-processing — SSAO darkens the creases and folds (desktop only)
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
   const ssaoPass = new SSAOPass(scene, camera, size().w, size().h);
@@ -231,7 +231,7 @@ export function createPaperScene(container, buttonLayer, options) {
   const crumpleCenter = new THREE.Vector3(0, 0.2, 0);
 
   // ==================================================
-  // 簡易物理 — 丸まった紙だけ球体剛体として扱う
+  // Simplified physics — only crumpled paper is treated as a rigid sphere
   // ==================================================
   const physicsWorld = new CANNON.World({ gravity: new CANNON.Vec3(0, -7.0, 0) });
   physicsWorld.allowSleep = false;
@@ -382,7 +382,7 @@ export function createPaperScene(container, buttonLayer, options) {
   }
 
   // ==================================================
-  // 紙の生成と削除
+  // Creating and removing paper
   // ==================================================
   function randomSpawnPosition() {
     const margin = collisionRadius * 1.3;
@@ -480,7 +480,7 @@ export function createPaperScene(container, buttonLayer, options) {
   }
 
   // ==================================================
-  // ポインタ操作 — クリックで開く / ドラッグで掴んで投げる
+  // Pointer handling — click to open / drag to grab and throw
   // ==================================================
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
@@ -628,7 +628,8 @@ export function createPaperScene(container, buttonLayer, options) {
 
   function startDiscard(paper) {
     if (paper.state === "discarding" || paper.state === "rolling") return;
-    // 開いた紙はカメラ手前にあるので、必ず奥(ステージ側)へ向けて捨てる
+    // The open paper sits in front of the camera, so always discard it
+    // toward the back, into the stage.
     const dir = new THREE.Vector3(randomRange(-1, 1), 0, randomRange(-1.3, -0.45)).normalize();
     paper.state = "discarding";
     paper.time = 0;
@@ -641,7 +642,7 @@ export function createPaperScene(container, buttonLayer, options) {
   }
 
   // ==================================================
-  // アニメーション再生
+  // Animation playback
   // ==================================================
   let prevTime = performance.now() / 1000;
   const _project = new THREE.Vector3();

@@ -6,25 +6,25 @@
 import * as THREE from "three";
 
 /**
- * animData のデータから Three.js のメッシュを作る
- * 戻り値: { mesh, positionAttr, normalAttr }
+ * Builds a Three.js mesh from the animData.
+ * Returns: { mesh, positionAttr, normalAttr }
  */
 export function createPaper(animData, material) {
   const { vertexCount, indices, uvs, positions, normals } = animData;
 
   const geometry = new THREE.BufferGeometry();
 
-  // ===== 頂点位置（最初のフレームで初期化）=====
-  // 毎フレーム書き換える前提なので Float32Array を直接持つ
+  // ===== Vertex positions (initialized to frame 0) =====
+  // Rewritten every frame, so it holds a Float32Array directly.
   const positionArray = new Float32Array(vertexCount * 3);
   for (let i = 0; i < vertexCount * 3; i++) {
-    positionArray[i] = positions[i]; // フレーム0
+    positionArray[i] = positions[i]; // frame 0
   }
   const positionAttr = new THREE.BufferAttribute(positionArray, 3);
-  positionAttr.setUsage(THREE.DynamicDrawUsage); // 頻繁に更新される
+  positionAttr.setUsage(THREE.DynamicDrawUsage); // updated frequently
   geometry.setAttribute("position", positionAttr);
 
-  // ===== 法線 =====
+  // ===== Normals =====
   const normalArray = new Float32Array(vertexCount * 3);
   for (let i = 0; i < vertexCount * 3; i++) {
     normalArray[i] = normals[i];
@@ -40,7 +40,7 @@ export function createPaper(animData, material) {
   }
   geometry.setAttribute("uv", new THREE.BufferAttribute(uvArray, 2));
 
-  // ===== インデックス =====
+  // ===== Indices =====
   const indexArray = new Uint16Array(indices);
   geometry.setIndex(new THREE.BufferAttribute(indexArray, 1));
 
@@ -54,8 +54,9 @@ export function createPaper(animData, material) {
 }
 
 /**
- * 指定フレーム（小数可）の positions と normals でジオメトリを更新する。
- * 小数の場合は隣接フレーム間を線形補間する。
+ * Updates the geometry's positions and normals for the given frame
+ * (fractional allowed). A fractional frame linearly interpolates between
+ * the two adjacent frames.
  */
 export function updatePaperFrame(paper, animData, frameIdx) {
   const { vertexCount, frameCount, positions, normals } = animData;
@@ -71,13 +72,13 @@ export function updatePaperFrame(paper, animData, frameIdx) {
   const nrmArray = normalAttr.array;
 
   if (t < 1e-6) {
-    // 整数フレーム — コピーだけ
+    // Integer frame — just copy
     for (let i = 0; i < len; i++) {
       posArray[i] = positions[off0 + i];
       nrmArray[i] = normals[off0 + i];
     }
   } else {
-    // 小数フレーム — lerp
+    // Fractional frame — lerp
     const f1 = (f0 + 1) % frameCount;
     const off1 = f1 * len;
     const s = 1 - t;
