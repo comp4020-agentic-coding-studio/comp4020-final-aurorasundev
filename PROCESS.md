@@ -73,6 +73,18 @@ references
 ([`83c6fdc`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/83c6fdc)).
 `THIRD_PARTY_NOTICES.md` lists every change.
 
+A second comparison pass against D01/M01 retuned the camera, lighting and
+visible-paper count again, and a third pass fixed the write and reading
+sheets: the flat HTML card never read as paper, and making it transparent to
+show the bare unfolded mesh didn't either, so a generated photograph of a
+torn, creased sheet now backs both as a CSS `background-image`
+([`982d8ee`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/982d8ee)).
+It only changes how the already-finished unfold looks once revealed; the
+geometry, physics and the rule that paper text never reaches a WebGL texture
+are untouched. `README.md` was also cut down to the length the D04/M04
+references actually show
+([`2baa50c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/2baa50c)).
+
 ## Corrections along the way
 
 - **The README was overwritten.** The agent drafted a README from the D04 design
