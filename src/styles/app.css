@@ -259,15 +259,21 @@ textarea {
   backdrop-filter: blur(3px);
 }
 
+/* The texture is a torn-edge paper cut out on a transparent background, not
+   a rectangle: no fallback colour here, or it would fill in that
+   transparency and hide the torn silhouette the image already has. The
+   shadow follows that silhouette too, via drop-shadow rather than box-shadow
+   (which would draw a rectangle around the transparent corners). */
 .paper-sheet {
   position: relative;
-  background-color: var(--paper);
+  background-color: transparent;
   background-image: url("/textures/paper-sheet.png");
   background-size: cover;
   background-position: center;
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.06),
-    0 24px 60px rgb(40 36 30 / 0.16);
+  background-repeat: no-repeat;
+  filter:
+    drop-shadow(0 1px 2px rgb(0 0 0 / 0.06))
+    drop-shadow(0 24px 60px rgb(40 36 30 / 0.16));
 }
 
 /* writing (D02/M02) */
@@ -376,7 +382,6 @@ textarea {
 .read-dialog.over-scene .read-sheet {
   height: 100%;
   padding: 6% 10% 7%;
-  box-shadow: 0 10px 30px rgb(40 36 30 / 0.22);
 }
 
 .read-close {
