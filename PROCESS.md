@@ -85,6 +85,13 @@ are untouched. `README.md` was also cut down to the length the D04/M04
 references actually show
 ([`2baa50c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/2baa50c)).
 
+A fourth pass answered a direct comparison against the demo's own screenshot:
+its wall-and-floor corner reads as a real room, where the space had only a
+flat backdrop colour. A lit floor plane plus a flat wall plane were added
+behind it ([`42c79a4`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/42c79a4)),
+and the wall was given a colour of its own rather than the background's
+([`31c45d6`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/31c45d6)).
+
 ## Corrections along the way
 
 - **The README was overwritten.** The agent drafted a README from the D04 design
@@ -104,6 +111,33 @@ references actually show
 - **`/readme/` looped.** A `/readme` → `/readme/` redirect looped because
   Express matches both paths with the same route. The starter's invariant
   check caught it before the first commit.
+- **The paper's own torn edge was hidden by a rectangle.** The replacement
+  `paper-sheet.png` is alpha-matted to a torn-paper cutout, but the dialog's
+  CSS filled the transparent corners with a solid fallback colour, so a
+  rectangular edge showed past the texture's own silhouette. Swapping the
+  fallback for `transparent` and the shadow for a `filter: drop-shadow` that
+  follows the alpha channel fixed it
+  ([`e4b5916`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/e4b5916)).
+- **The depth fix undid itself.** The fog added for the wall/floor depth
+  pass was tuned against straight-line distance, not the camera's actual
+  distance to the floor at its angle (height and depth together), so almost
+  the entire visible floor was already past the fog's far end and rendered as
+  the wall's own colour — the two planes read as one flat backdrop again,
+  the opposite of the point of adding them. It was dropped rather than
+  retuned, since the reference's wall/floor shot has a crisp seam, not a
+  soft one
+  ([`31c45d6`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/31c45d6)).
+- **Only the physics step was guarding against a stalled frame.** Comparing
+  the open/discard animation against the demo's own source after a report
+  that it looked ugly found no difference in the constants, easing or VAT
+  playback — both only cap a single frame's elapsed time for the physics
+  step, not for the unfold/crumple timers next to it, so one long frame (a
+  paused tab, a slow phone) can jump those timers most of the way through
+  the animation and make it look like it snapped. The same cap was added
+  there too
+  ([`6d96915`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/6d96915)).
+  Not confirmed as the cause of the specific report, since it only reproduces
+  under an artificially slow frame rate, not normal GPU playback.
 
 ## Evidence
 
