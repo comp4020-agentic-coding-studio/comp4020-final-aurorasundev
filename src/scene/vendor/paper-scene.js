@@ -21,6 +21,8 @@ import { createPaper, updatePaperFrame } from "./paper.js";
 import { loadVATData } from "./paper-vat.js";
 
 const BACKGROUND = "#e7e4de";
+const WALL_COLOR = "#e7e4de";
+const FLOOR_COLOR = "#d3cdbc";
 const PAPER_COLOR = "#f3f1eb";
 
 const FLOOR_VISUAL_Y = -0.1;
@@ -134,15 +136,28 @@ export function createPaperScene(container, buttonLayer, options) {
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = 0.5;
 
-  // The floor only catches shadows over the flat background, so the scene
-  // matches the page colour exactly instead of a lit grey.
+  // A lit floor plus a flat, unlit wall behind it give the room the two-plane
+  // depth the references' "studio corner" shot has (wall and floor as two
+  // distinct values meeting at a horizon), instead of papers sitting on an
+  // undifferentiated flat background colour.
   const floorGeometry = new THREE.PlaneGeometry(16, 12);
-  const floorMat = new THREE.ShadowMaterial({ color: 0x3c352a, opacity: 0.32 });
+  const floorMat = new THREE.MeshStandardMaterial({ color: FLOOR_COLOR, roughness: 1, metalness: 0 });
   const floor = new THREE.Mesh(floorGeometry, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, FLOOR_VISUAL_Y, 1);
   floor.receiveShadow = true;
   scene.add(floor);
+
+  const wallHeight = 12;
+  const wallGeometry = new THREE.PlaneGeometry(24, wallHeight);
+  const wallMat = new THREE.MeshBasicMaterial({ color: WALL_COLOR });
+  const wall = new THREE.Mesh(wallGeometry, wallMat);
+  wall.position.set(0, FLOOR_VISUAL_Y + wallHeight / 2, WALL_Z);
+  scene.add(wall);
+
+  // A gentle matching-colour fog softens the floor's far edge into the wall
+  // instead of a hard seam, reinforcing the sense of distance.
+  scene.fog = new THREE.Fog(new THREE.Color(WALL_COLOR), 2.0, 3.8);
 
   // ライト
   const ambient = new THREE.AmbientLight(0xffffff, 0.55);
@@ -186,6 +201,10 @@ export function createPaperScene(container, buttonLayer, options) {
     envMapIntensity: 0.5,
     side: THREE.DoubleSide,
   });
+  // The fog is tuned to soften the floor into the wall at the horizon; at the
+  // stage's own near-white tone it would wash the papers out at the same
+  // distance, so the papers themselves stay outside it.
+  paperMaterial3d.fog = false;
 
   // ==================================================
   // 状態
@@ -864,6 +883,8 @@ export function createPaperScene(container, buttonLayer, options) {
       papers.clear();
       floorGeometry.dispose();
       floorMat.dispose();
+      wallGeometry.dispose();
+      wallMat.dispose();
       paperMaterial3d.dispose();
       scene.environment?.dispose();
       pmrem.dispose();
