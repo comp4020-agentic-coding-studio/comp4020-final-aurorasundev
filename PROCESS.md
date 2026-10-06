@@ -138,6 +138,27 @@ and the wall was given a colour of its own rather than the background's
   ([`6d96915`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/6d96915)).
   Not confirmed as the cause of the specific report, since it only reproduces
   under an artificially slow frame rate, not normal GPU playback.
+- **The paper texture still didn't reach the dialog's own edges.** After the
+  drop-shadow fix, the dialog still showed a gap past the texture's
+  silhouette. The PNG itself carried transparent padding baked into its
+  pixel canvas, which `background-size: cover` can't crop away when the
+  container's aspect ratio fits the image by the padded dimension. Cropped
+  the source PNG to its true alpha-content bounding box instead of touching
+  the CSS further
+  ([`c83fcfc`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/c83fcfc)).
+- **The contact shadows read far lighter than the references.** Pixel
+  sampling showed the shadows only ~5-13% darker than the floor, against the
+  references' ~50-80%. Turning the direct lights down and up barely moved
+  the ratio, because the scene's environment-map lighting isn't blocked by
+  the shadow map at all and was washing shadowed ground out regardless.
+  Turning down the floor material's own `envMapIntensity` instead brought
+  the ratio in line with the references
+  ([`69089df`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/69089df)).
+- **Leftover Japanese comments from the vendored source.** The demo's own
+  comments were still in Japanese in places despite the adaptation work; I
+  spotted some and flagged it. Translated every comment in the three
+  vendored scene files to English, keeping the technical detail intact
+  ([`1fd69f9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/1fd69f9)).
 
 ## Evidence
 
