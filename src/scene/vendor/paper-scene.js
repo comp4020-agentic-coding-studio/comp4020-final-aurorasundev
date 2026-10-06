@@ -21,7 +21,7 @@ import { createPaper, updatePaperFrame } from "./paper.js";
 import { loadVATData } from "./paper-vat.js";
 
 const BACKGROUND = "#e7e4de";
-const WALL_COLOR = "#e7e4de";
+const WALL_COLOR = "#8ea3b0";
 const FLOOR_COLOR = "#d3cdbc";
 const PAPER_COLOR = "#f3f1eb";
 
@@ -155,10 +155,6 @@ export function createPaperScene(container, buttonLayer, options) {
   wall.position.set(0, FLOOR_VISUAL_Y + wallHeight / 2, WALL_Z);
   scene.add(wall);
 
-  // A gentle matching-colour fog softens the floor's far edge into the wall
-  // instead of a hard seam, reinforcing the sense of distance.
-  scene.fog = new THREE.Fog(new THREE.Color(WALL_COLOR), 2.0, 3.8);
-
   // ライト
   const ambient = new THREE.AmbientLight(0xffffff, 0.55);
   scene.add(ambient);
@@ -201,10 +197,6 @@ export function createPaperScene(container, buttonLayer, options) {
     envMapIntensity: 0.5,
     side: THREE.DoubleSide,
   });
-  // The fog is tuned to soften the floor into the wall at the horizon; at the
-  // stage's own near-white tone it would wash the papers out at the same
-  // distance, so the papers themselves stay outside it.
-  paperMaterial3d.fog = false;
 
   // ==================================================
   // 状態
