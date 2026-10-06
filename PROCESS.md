@@ -192,3 +192,25 @@ and the wall was given a colour of its own rather than the background's
   - a local `docker build`, since the Docker daemon wasn't running; Fly's
     remote builder is the image check
   - the GitHub CI run, which only starts once the repo is public
+
+## Dialog layout and matte paper refinement
+
+A comparison with D02/D03 found that the HTML paper texture was cropped and
+its folds competed with the text. The reading column was also too narrow.
+The dialogs now preserve the texture's cut-out edge, soften its contrast,
+and use more balanced spacing. The reading surface is widened over the
+unfolded mesh, whose large ground shadow is disabled while reading.
+
+The user then asked for a less bright, matte paper ball. A shared procedural
+colour/bump texture adds fine grain and short fibres, with full roughness,
+less environment reflection and a gentler key light. It contains no words
+and is disposed with the scene. The wall remains in the warm grey palette.
+These changes are in
+[`facca8a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/facca8a).
+
+Validation used a temporary SQLite database: type checking and all 12 tests
+passed, as did the production build. Local browser checks covered desktop
+1440×900 and phone 390×844 for paper rendering, opening/closing and the write
+window; no browser errors were captured. The preceding dialog pass also
+checked long bilingual text and independent body scrolling at 1920×1080.
+Real phone GPU performance remains unverified.
