@@ -636,11 +636,14 @@ export function createPaperScene(container, buttonLayer, options) {
 
   function tick() {
     const now = performance.now() / 1000;
-    const dt = now - prevTime;
+    // A stalled tab or a slow device can produce one huge dt; without a cap
+    // that single step would jump the open/close/throw timers straight past
+    // their animation, so it would look like it had snapped instead of moved.
+    const dt = Math.min(now - prevTime, 0.05);
     prevTime = now;
 
     if (animData) {
-      physicsWorld.step(PHYSICS_STEP, Math.min(dt, 0.05), 3);
+      physicsWorld.step(PHYSICS_STEP, dt, 3);
       applyPhysicsBounds(dt);
       for (const p of papers.values()) if (p) updatePaperMotion(p, dt);
       placeButtons();
