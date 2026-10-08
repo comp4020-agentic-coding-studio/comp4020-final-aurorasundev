@@ -20,10 +20,14 @@ A kept paper can be let go only by the person who left it; a released paper
 by anyone who has witnessed it. If a paper is let go while you are reading
 it, you may finish before it is gone.
 
+After you keep a paper you are offered a return key, shown once. Entered in
+another browser, it restores your rights, not your history: you still have
+to come across your papers in the space.
+
 ## What comes later?
 
-Return keys to restore your rights on another device, automated checks
-before a paper enters the space, and reporting are planned next.
+Automated checks before a paper enters the space, and a way to report a
+paper, are planned next.
 
 ## References
 

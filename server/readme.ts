@@ -46,9 +46,11 @@ export function renderReadmePage(readmePath: string): string {
       .wordmark { font-family: var(--serif); font-size: 32px; color: var(--ink); text-decoration: none; }
       .back { color: var(--ink); text-decoration: none; font-size: 17px; }
       .back:hover, .back:focus-visible { text-decoration: underline; }
-      main { max-width: 760px; margin: 0 auto; padding: 56px 24px 96px; }
+      main { max-width: 860px; margin: 0 auto; padding: 56px 24px 96px; }
       main h1 { font-family: var(--serif); font-weight: 400; font-size: 64px; line-height: 1.1; margin: 0 0 8px; }
-      main h2 { font-size: 26px; font-weight: 600; line-height: 1.3; margin: 48px 0 12px; }
+      /* D06: the opening line reads as a lead, section headings in the serif */
+      main h1 + p { font-size: 23px; line-height: 1.45; margin: 0 0 8px; }
+      main h2 { font-family: var(--serif); font-size: 34px; font-weight: 400; line-height: 1.2; margin: 48px 0 12px; }
       main h3 { font-size: 20px; font-weight: 600; margin: 32px 0 8px; }
       main p, main li { color: var(--ink); }
       main a { color: var(--ink); text-underline-offset: 3px; }
@@ -62,7 +64,8 @@ export function renderReadmePage(readmePath: string): string {
         .wordmark { font-size: 26px; }
         main { padding: 40px 22px 72px; }
         main h1 { font-size: 46px; }
-        main h2 { font-size: 23px; }
+        main h1 + p { font-size: 20px; }
+        main h2 { font-size: 26px; }
       }
     </style>
   </head>
