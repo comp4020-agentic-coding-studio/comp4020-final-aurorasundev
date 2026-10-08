@@ -21,9 +21,12 @@ import { createPaper, updatePaperFrame } from "./paper.js";
 import { loadVATData } from "./paper-vat.js";
 
 const BACKGROUND = "#e7e4de";
-const WALL_COLOR = "#ddd6c7";
-const FLOOR_COLOR = "#d3cdbc";
-const PAPER_COLOR = "#ece6da";
+// Wall and floor render to D01's one warm grey (about 209,203,196) under
+// ACES and the exposure below; the values are what lands there, not the
+// target itself.
+const WALL_COLOR = "#d0c3b6";
+const FLOOR_COLOR = "#cfc6bd";
+const PAPER_COLOR = "#f0e6d6";
 
 const FLOOR_VISUAL_Y = -0.1;
 const WALL_Z = -1.1;
@@ -143,7 +146,7 @@ export function createPaperScene(container, buttonLayer, options) {
   // them, which is what keeps the references' paper looking bright but
   // never flat white.
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
+  renderer.toneMappingExposure = 1.08;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.domElement.className = "paper-canvas";
@@ -212,7 +215,10 @@ export function createPaperScene(container, buttonLayer, options) {
   // set how light the shadows stay; the key stays soft-edged and moderate.
   // Broad soft light from above, warm from the ground: D01's papers are lit
   // all round, with gentle shade in the folds rather than black creases.
-  const ambient = new THREE.HemisphereLight(0xfffaf2, 0xd8cfbf, 0.75);
+  // Measured against D01: its folds fall to a warm brown (about 150,135,120),
+  // never grey, and contact shadows sit only ~15 levels under the floor, so
+  // the warm bounce from the ground is stronger and the key gentler.
+  const ambient = new THREE.HemisphereLight(0xfff8ee, 0xd9c4a8, 1.0);
   scene.add(ambient);
 
   // A gentle fill preserves detail on the shaded faces of matte paper.
@@ -220,7 +226,7 @@ export function createPaperScene(container, buttonLayer, options) {
   fillLight.position.set(0.4, 2.2, 4.2);
   scene.add(fillLight);
 
-  const dirLight = new THREE.DirectionalLight(0xfff6ea, 1.75);
+  const dirLight = new THREE.DirectionalLight(0xfff1de, 1.45);
   dirLight.position.set(-2.2, 3.1, 1.8);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.set(compact ? 1024 : 2048, compact ? 1024 : 2048);
@@ -245,40 +251,20 @@ export function createPaperScene(container, buttonLayer, options) {
   composer.addPass(ssaoPass);
   composer.addPass(new OutputPass());
 
-  // One shared, unprinted surface: fine grain and short fibres, never text.
-  const paperCanvas = document.createElement("canvas");
-  paperCanvas.width = paperCanvas.height = 512;
-  const paperContext = paperCanvas.getContext("2d");
-  const grain = paperContext.createImageData(512, 512);
-  for (let i = 0; i < grain.data.length; i += 4) {
-    const shade = 244 + Math.random() * 10 - 5;
-    grain.data[i] = grain.data[i + 1] = grain.data[i + 2] = shade;
-    grain.data[i + 3] = 255;
-  }
-  paperContext.putImageData(grain, 0, 0);
-  paperContext.lineWidth = 0.6;
-  paperContext.strokeStyle = "rgba(130, 122, 108, 0.09)";
-  for (let i = 0; i < 5000; i++) {
-    const x = Math.random() * 512;
-    const y = Math.random() * 512;
-    const angle = Math.random() * Math.PI * 2;
-    const length = 2 + Math.random() * 7;
-    paperContext.beginPath();
-    paperContext.moveTo(x, y);
-    paperContext.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
-    paperContext.stroke();
-  }
-  const paperTexture = new THREE.CanvasTexture(paperCanvas);
-  paperTexture.colorSpace = THREE.SRGBColorSpace;
-  paperTexture.wrapS = paperTexture.wrapT = THREE.RepeatWrapping;
-  paperTexture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-  const paperBump = paperTexture.clone();
+  // One shared, unprinted surface, never text. Its tooth is the same
+  // generated paper-fibre tile the HTML sheets use (docs/generated-assets.md),
+  // here as a bump map only: the fibres catch the light in the folds without
+  // speckling the albedo. It loads after first render; until then the paper
+  // is simply smooth.
+  const paperBump = new THREE.TextureLoader().load(`${options.textureBase ?? "/textures/"}paper-fibre.jpg`);
   paperBump.colorSpace = THREE.NoColorSpace;
+  paperBump.wrapS = paperBump.wrapT = THREE.RepeatWrapping;
+  paperBump.repeat.set(2, 2);
+  paperBump.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
   const paperMaterial3d = new THREE.MeshStandardMaterial({
     color: PAPER_COLOR,
-    map: paperTexture,
     bumpMap: paperBump,
-    bumpScale: 0.012,
+    bumpScale: 0.6,
     roughness: 1,
     metalness: 0,
     envMapIntensity: 0.16,
@@ -1078,7 +1064,6 @@ export function createPaperScene(container, buttonLayer, options) {
       wallGeometry.dispose();
       wallMat.dispose();
       paperMaterial3d.dispose();
-      paperTexture.dispose();
       paperBump.dispose();
       scene.environment?.dispose();
       pmrem.dispose();
