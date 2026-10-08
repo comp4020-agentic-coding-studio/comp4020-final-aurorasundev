@@ -27,5 +27,7 @@ planned for later versions.
 - [Paper Crumple demo](https://github.com/item-develop/paper-crumple-demo) —
   the crumpled paper, its folding animation and its physics, reused under MIT
   from nagasawa (ITEM Inc.); `THIRD_PARTY_NOTICES.md` records what changed.
-- [Project design notes](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/throwaway-week9-claude-package/throwaway-week9-plan.md) —
-  the Week 9 plan and design references this version is built from.
+- [Project design notes](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/plan.md) —
+  the implementation plan and design references the app is built from (the
+  [Week 9 plan](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/crit-8/throwaway-week9-claude-package/throwaway-week9-plan.md)
+  is kept at the `crit-8` tag).
