@@ -4,12 +4,14 @@
 // watching (mode "remote", B04). It only presents: it never changes what
 // the space knows, and nothing in it is shared with other visitors.
 //
-// Ordinary motion (durationMs = 4800 by default):
+// Ordinary motion (durationMs = 5400 by default):
 //   0.0–0.4 s   settle onto the hearth, lower edge darkens, small flames start
-//   0.4–3.8 s   the front climbs; charred paper below it shrivels and falls
-//               away as flakes; the powder gathers
-//   ~2.3–3.8 s  what is left loses its structure and collapses into the ash
-//   3.8–4.8 s   flames die, embers and a thread of smoke, then only ash
+//   0.4–4.4 s   the front climbs, slowly at first, so the upper paper stays
+//               ivory through the middle; charred paper below it curls,
+//               tears and falls away as flakes; the powder gathers
+//   ~3.0–4.4 s  what is left loses its structure and crumples into the ash
+//   4.4–5.4 s   flames die, embers and a thread of smoke, then only ash with
+//               a few embers dying in it over the next seconds
 // The furnace's ash then stays until the caller disposes the effect (the
 // ritual holds it for at least three seconds); a remote burn's ash stays
 // about five seconds more and fades over one, then `finished` is true.
@@ -19,6 +21,7 @@ import * as THREE from "three";
 import { createAsh } from "./ash.js";
 import { createBurnMaterial, fixBurnFrame } from "./burn-material.js";
 import { createFlames } from "./flames.js";
+import { skipOverridePasses } from "./override-skip.js";
 import { createParticles } from "./particles.js";
 
 const smooth = (a, b, x) => {
@@ -29,6 +32,9 @@ const lerp = (a, b, t) => a + (b - a) * t;
 
 const REMOTE_HOLD = 5;
 const REMOTE_FADE = 1;
+// where the front stands when the flames start to die: just past the top,
+// with the charred lower paper still there to crumble in the embers
+const TOP = 1.08;
 
 /**
  * @param {{
@@ -38,7 +44,7 @@ const REMOTE_FADE = 1;
  *   textures: Awaited<ReturnType<typeof import("./assets.js").loadFireTextures>>,
  *   mode: "furnace" | "remote",
  *   seed?: number,                    any number; the same seed gives the same burn pattern
- *   durationMs?: number,              flames to last ember, default 4800
+ *   durationMs?: number,              flames to last ember, default 5400
  *   reducedMotion?: boolean,
  *   surfaceY: number,                 world y of the hearth (furnace) or floor (remote) under the paper
  *   settleTo?: THREE.Vector3,         furnace: world point on the hearth the paper comes to rest on (its lowest point lands there, centred above it)
@@ -49,7 +55,7 @@ const REMOTE_FADE = 1;
 export function createBurnEffect(options) {
   const { scene, camera, mesh, textures, mode, surfaceY, furnace } = options;
   const seed = Math.abs(Math.floor(options.seed ?? Math.random() * 1e6)) || 1;
-  const total = Math.max(2.5, (options.durationMs ?? 4800) / 1000);
+  const total = Math.max(2.5, (options.durationMs ?? 5400) / 1000);
   const reduced = !!options.reducedMotion;
   const IGNITE = 0.4;
   const EMBER = 1.0;
@@ -63,12 +69,18 @@ export function createBurnEffect(options) {
   // remote papers keep a wider band of charcoal before it falls away (B04)
   burn.uniforms.uConsume.value = mode === "remote" ? 0.42 : 0.34;
   const frame = fixBurnFrame(mesh, burn.uniforms);
-  // the fire takes one side first, so the front leans as in B02/B04: the
-  // side roughly facing the viewer, turned by up to ±45° per seed
+  const slantDir = new THREE.Vector2();
+  const slant = new THREE.Vector2();
+  // the fire takes one side first, so the front runs on a slant as in
+  // B02/B04: the side to the viewer's left or right (per seed), turned
+  // partly towards them so the slant reads across the screen
   {
     const span = Math.max(frame.max - frame.min, 1e-4);
     const toViewer = camera.getWorldPosition(new THREE.Vector3()).sub(mesh.getWorldPosition(new THREE.Vector3()));
-    const angle = Math.atan2(toViewer.z, toViewer.x) + (((seed * 0.6180339887) % 1) - 0.5) * (Math.PI / 2);
+    const r = (seed * 0.6180339887) % 1;
+    const turn = (Math.PI / 180) * (50 + 30 * ((r * 7.31) % 1));
+    const angle = Math.atan2(toViewer.z, toViewer.x) + (r < 0.5 ? turn : -turn);
+    slantDir.set(Math.cos(angle), Math.sin(angle));
     const side = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
     side.applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()).invert());
     side.addScaledVector(frame.axis, -side.dot(frame.axis)).normalize();
@@ -87,31 +99,40 @@ export function createBurnEffect(options) {
     local.fromArray(frame.snapshot, k * 3);
     radiusLocal = Math.max(radiusLocal, local.distanceTo(centreLocal));
     const tilt = local.clone().sub(centreLocal).dot(burn.uniforms.uTilt.value);
-    order.push({ k, h: (local.dot(frame.axis) - frame.min) / Math.max(frame.max - frame.min, 1e-4) - tilt });
+    const raw = (local.dot(frame.axis) - frame.min) / Math.max(frame.max - frame.min, 1e-4);
+    order.push({ k, raw, h: raw - tilt });
   }
   order.sort((a, b) => a.h - b.h);
+  // lowestLeft[i]: the lowest (0..1) of what remains once order[0..i-1] has
+  // burnt away, so what is left can rest on the surface instead of hovering
+  const lowestLeft = new Float32Array(order.length + 1);
+  lowestLeft[order.length] = 1;
+  for (let i = order.length - 1; i >= 0; i--) lowestLeft[i] = Math.min(order[i].raw, lowestLeft[i + 1]);
+  let consumedPtr = 0;
   const scale = mesh.getWorldScale(new THREE.Vector3()).x;
   const diameter = radiusLocal * 2 * scale * 0.86;
   const height = (frame.max - frame.min) * scale;
   const worldCentre = () => mesh.localToWorld(local.copy(centreLocal));
 
-  // furnace: the paper drops the last few centimetres onto the hearth, its
-  // lowest point landing on the surface
-  let settleFrom = null;
+  // the paper's lowest point comes to rest on the surface: in the furnace it
+  // drops the last few centimetres onto the hearth; a remote paper only
+  // settles the little it may hover above the floor
+  let lowest = Infinity;
+  for (let k = 0; k < frame.used.length; k++) {
+    if (!frame.used[k]) continue;
+    lowest = Math.min(lowest, mesh.localToWorld(local.fromArray(frame.snapshot, k * 3)).y);
+  }
+  const settleFrom = mesh.position.clone();
   let restPosition = original.position.clone();
   if (options.settleTo) {
-    settleFrom = mesh.position.clone();
-    let lowest = Infinity;
-    for (let k = 0; k < frame.used.length; k++) {
-      if (!frame.used[k]) continue;
-      lowest = Math.min(lowest, mesh.localToWorld(local.fromArray(frame.snapshot, k * 3)).y);
-    }
     const c = worldCentre();
     restPosition = new THREE.Vector3(
       mesh.position.x + options.settleTo.x - c.x,
       mesh.position.y + options.settleTo.y - lowest,
       mesh.position.z + options.settleTo.z - c.z,
     );
+  } else if (lowest > surfaceY && lowest - surfaceY < height * 0.3) {
+    restPosition.y -= lowest - surfaceY;
   }
 
   const flames = createFlames(camera, { seed });
@@ -120,6 +141,13 @@ export function createBurnEffect(options) {
   const ash = createAsh(textures, { count: flakeCount, seed, flakeSize: diameter * 0.085 });
   const bed = new THREE.Vector3();
   scene.add(flames.mesh, particles.group, ash.group);
+  // none of it, nor the burning paper, may leave a ghost in the space's SSAO
+  const unskip = [skipOverridePasses(mesh)];
+  for (const root of [flames.mesh, particles.group, ash.group]) {
+    root.traverse((o) => {
+      if (o.isMesh || o.isSprite) unskip.push(skipOverridePasses(o));
+    });
+  }
   if (options.viewportHeight && camera.isPerspectiveCamera) {
     particles.setPixelScale(options.viewportHeight / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)));
   }
@@ -174,33 +202,35 @@ export function createBurnEffect(options) {
       strength = 0.45 * e;
       smoke = 0.2 * e;
       phase = "igniting";
-      if (settleFrom) {
+      {
         const k = 1 - (1 - e) * (1 - e);
         mesh.position.copy(settleFrom).lerp(restPosition, k);
       }
     } else if (time < IGNITE + FRONT) {
       const v = (time - IGNITE) / FRONT;
-      // slow to take hold, steady, then quick through the last of it
-      progress = lerp(-0.02, end, Math.pow(v, 0.92));
+      // slow to take hold, so the front is near the middle halfway through
+      // (B02), quicker as what is left gives way
+      progress = lerp(-0.02, TOP, Math.pow(v, 1.45));
       // biggest while there is most paper to burn, then shrinking with it
-      strength = Math.min(1, 0.45 + v * 2.2) * (1 - smooth(0.45, 0.95, v) * 0.75);
-      collapse = smooth(0.68, 1.0, v);
-      smoke = 0.25 + 0.75 * Math.min(1, v * 2);
+      strength = Math.min(1, 0.45 + v * 2.2) * (1 - smooth(0.55, 1.0, v) * 0.75);
+      collapse = smooth(0.64, 1.0, v);
+      smoke = 0.3 + 0.7 * Math.sin(Math.PI * Math.min(1, 0.15 + v * 0.95));
       phase = "burning";
     } else if (time < total) {
       const v = (time - IGNITE - FRONT) / EMBER;
-      progress = end + v * 0.2;
+      // the last charred remnant crumbles away while the flames die
+      progress = lerp(TOP, end, smooth(0, 1, v));
       strength = 0.45 * (1 - smooth(0.0, 0.7, v));
       collapse = 1;
       glow = 1 - v;
-      smoke = 0.9 * (1 - v);
+      smoke = 0.45 * (1 - v * 0.6);
       phase = "embers";
     } else {
       progress = end + 0.2;
       strength = 0;
       collapse = 1;
       glow = 0;
-      smoke = Math.max(0, 0.3 - (time - total) * 0.3);
+      smoke = Math.max(0, 0.18 - (time - total) * 0.12);
       if (phase !== "ashes" && phase !== "fading" && phase !== "gone") phase = "ashes";
     }
     u.uProgress.value = progress;
@@ -210,13 +240,16 @@ export function createBurnEffect(options) {
     // what is left rests on the surface as its underside burns away, then
     // slumps into the ash
     const consumed = progress - consume;
-    const sink = Math.min(Math.max(consumed, 0), 1) * 0.9 + collapse * 0.08;
-    if (!settleFrom || time >= IGNITE) {
+    while (consumedPtr < order.length && order[consumedPtr].h < consumed) consumedPtr++;
+    const sink = lowestLeft[consumedPtr] * 0.96 + collapse * 0.05;
+    if (time >= IGNITE) {
       mesh.position.set(restPosition.x, restPosition.y - sink * height, restPosition.z);
     }
-    mesh.visible = progress < end + 0.05;
+    mesh.visible = progress < end - 0.005;
 
     releaseFlakes(consumed, false);
+    // a few embers stay alive in the ash a while after the flames (B03)
+    ash.setEmbers(time < IGNITE + FRONT * 0.5 ? 0 : Math.min(1, (time - IGNITE - FRONT * 0.5) / 1.5) * Math.exp(-Math.max(0, time - total) / 3.5));
     ash.setGrowth(smooth(-0.05, 1.05, consumed) * 0.85 + (time >= total ? 0.15 : smooth(IGNITE + FRONT, total, time) * 0.15));
 
     // tongues stand around the burning front, lean in over the paper and
@@ -233,7 +266,10 @@ export function createBurnEffect(options) {
     const p = Math.min(Math.max(progress, 0), 1);
     const across = Math.sqrt(Math.max(0.15, 1 - (2 * p - 1) * (2 * p - 1)));
     const ring = (across * (1 - 0.35 * collapse)) / 1.5;
-    flames.update(base, diameter * 1.5, flameBox, strength * (0.4 + 0.6 * (1 - Math.min(Math.max(consumed, 0), 1))), time, front, ring);
+    // the front's slant: 0.45 of the paper's height per span along the side,
+    // so about ±0.45·radius/span at the paper's edge, in box heights
+    slant.copy(slantDir).multiplyScalar(((0.45 * diameter) / 2 / Math.max(height, 1e-4)) * (height / flameBox) * (1 - collapse));
+    flames.update(base, diameter * 1.5, flameBox, strength * (0.4 + 0.6 * (1 - Math.min(Math.max(consumed, 0), 1))), time, front, ring, slant);
     const reach = flameBox;
     source.set(c.x, frontY, c.z);
     particles.update(dt, {
@@ -252,7 +288,7 @@ export function createBurnEffect(options) {
     const end = 1 + consume + 0.12;
     u.uTime.value = 0;
     u.uGlow.value = 0;
-    if (settleFrom) mesh.position.copy(restPosition);
+    mesh.position.copy(restPosition);
     // chars from the bottom up, then falls to ash
     const progress = time < 0.6 ? lerp(-0.2, 1.0, time / 0.6) : lerp(1.0, end + 0.2, Math.min(1, (time - 0.6) / 0.8));
     u.uConsume.value = time < 0.6 ? 0.9 : consume;
@@ -260,6 +296,7 @@ export function createBurnEffect(options) {
     mesh.visible = time < 1.4;
     releaseFlakes(time < 0.6 ? -1 : progress - consume, true);
     ash.setGrowth(smooth(0.6, 1.4, time));
+    ash.setEmbers(0);
     flames.update(base.copy(worldCentre()), diameter, diameter, 0, 0);
     particles.update(dt, { source: base, top: base.y, fire: 0, smoke: 0, surfaceY });
     phase = time < 1.4 ? "burning" : phase === "burning" || phase === "igniting" ? "ashes" : phase;
@@ -305,6 +342,7 @@ export function createBurnEffect(options) {
     dispose() {
       if (disposed) return;
       disposed = true;
+      for (const restore of unskip) restore();
       flames.dispose();
       particles.dispose();
       ash.dispose();

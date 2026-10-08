@@ -88,7 +88,7 @@ void main() {
     vec2 d = loc.xz - c;
     d += vec2(turb, -turb) * B.x * 0.55 * (0.25 + tc);
     // teardrop: round foot, widest low down, drawn to a point
-    float w = B.x * (smoothstep(-0.12, 0.12, t) * 0.6 + 0.4) * pow(1.0 - tc, 0.75);
+    float w = B.x * (smoothstep(-0.1, 0.12, t) * 0.65 + 0.2) * pow(1.0 - tc, 0.65);
     float r = length(d) / max(w, 1e-4);
     float k = exp(-r * r * 2.4) * (1.0 - smoothstep(0.62, 1.0, t + turb * 0.12));
     density += k;
@@ -99,15 +99,15 @@ void main() {
 
   // over-range on purpose: the room's ACES tone mapping pulls these back to
   // a saturated orange and a pale yellow core instead of a washed peach
-  vec3 deep = vec3(1.1, 0.13, 0.01);
-  vec3 orange = vec3(2.3, 0.48, 0.03);
-  vec3 yellow = vec3(2.6, 1.05, 0.18);
-  vec3 core = vec3(2.6, 1.8, 0.8);
+  vec3 deep = vec3(0.75, 0.07, 0.005);
+  vec3 orange = vec3(1.55, 0.3, 0.015);
+  vec3 yellow = vec3(1.9, 0.75, 0.1);
+  vec3 core = vec3(2.2, 1.4, 0.55);
   vec3 col = mix(deep, orange, smoothstep(0.04, 0.3, heat));
   col = mix(col, yellow, smoothstep(0.35, 0.7, heat));
   col = mix(col, core, smoothstep(0.75, 0.95, heat));
 
-  float a = clamp(density * (0.35 + heat) * uOpacity * 4.0 / ${SLICES.toFixed(1)}, 0.0, 1.0);
+  float a = clamp(density * (0.22 + heat * 0.95) * uOpacity * 4.0 / ${SLICES.toFixed(1)}, 0.0, 1.0);
   // premultiplied
   gl_FragColor = vec4(col * a, a);
   #include <tonemapping_fragment>
@@ -131,7 +131,7 @@ export function createFlames(camera, { seed = 1 } = {}) {
     uToBox: { value: new THREE.Matrix4() },
     uTime: { value: 0 },
     uSeed: { value: (seed % 997) * 0.31 },
-    uOpacity: { value: 3.2 },
+    uOpacity: { value: 5.0 },
     uTongueA: { value: tongueA },
     uTongueB: { value: tongueB },
   };
@@ -162,14 +162,20 @@ export function createFlames(camera, { seed = 1 } = {}) {
   const tongues = Array.from({ length: TONGUES }, (_, i) => ({
     angle: ((i + random() * 0.6) / TONGUES) * Math.PI * 2,
     // mostly small licks along the edge
-    tall: 0.3 + Math.pow(random(), 2) * 0.6,
+    tall: 0.38 + random() * 0.34,
+    surge: 0,
+    surgeRate: 1.3 + random() * 0.8,
     rate: 2.2 + random() * 2.6,
     phase: random() * 100,
     width: 0.75 + random() * 0.5,
     out: 0.85 + random() * 0.25,
   }));
-  // one of them is the tall lick B02 shows above the paper
-  tongues[Math.floor(random() * TONGUES)].tall = 1;
+  // now and then one of two tongues stretches up well clear of the paper
+  // (B02's tall lick, B04's tongue), flickering, then sinks back
+  const tallOne = Math.floor(random() * TONGUES);
+  tongues[tallOne].tall = 0.45;
+  tongues[tallOne].surge = 1.3;
+  tongues[(tallOne + 3) % TONGUES].surge = 0.9;
 
   const box = new THREE.Matrix4();
   const boxPos = new THREE.Vector3();
@@ -188,11 +194,14 @@ export function createFlames(camera, { seed = 1 } = {}) {
      * @param {number} time seconds
      * @param {number} [front] 0..1 of the box height: where the tongues stand (the burning front)
      * @param {number} [ring] 0..1 of the box half-width: how far from the axis they stand
+     * @param {THREE.Vector2} [slant] box-space x/z: a slanted front stands this much
+     *   higher (in box heights) on that side, and its tongues there surge tallest
      */
-    update(base, width, height, strength, time, front = 0, ring = 0.6) {
+    update(base, width, height, strength, time, front = 0, ring = 0.6, slant = null) {
       mesh.visible = strength > 0.01;
       uniforms.uTime.value = time;
       const half = 0.5 * ring;
+      const slantLen = slant ? slant.length() : 0;
       for (let i = 0; i < TONGUES; i++) {
         const g = tongues[i];
         // flicker: two incommensurate waves plus a slow swell
@@ -205,9 +214,15 @@ export function createFlames(camera, { seed = 1 } = {}) {
         const alive = Math.min(1, Math.max(0, strength * 1.6 - (i / TONGUES) * 0.6));
         const x = Math.cos(g.angle) * half * g.out;
         const z = Math.sin(g.angle) * half * g.out;
-        const h = Math.max(0, (1 - front) * g.tall * f * alive);
-        tongueA[i].set(x, front * 0.85, z, h);
-        tongueB[i].set(0.105 * g.width * (0.6 + 0.4 * alive), -x * 0.7, -z * 0.7, g.phase);
+        // where the front runs higher, the tongue stands higher, and the
+        // burning side is where the tall ones rise
+        const along = slantLen > 1e-5 ? (Math.cos(g.angle) * slant.x + Math.sin(g.angle) * slant.y) / slantLen : 0;
+        const baseY = Math.min(0.75, Math.max(0, front + along * slantLen));
+        const surge = slantLen > 1e-5 ? 1.5 * Math.pow(Math.max(0, along), 2) : g.surge;
+        const env = surge * Math.pow(Math.max(0, Math.sin(time * g.surgeRate + g.phase)), 3);
+        const h = Math.min(1 - baseY, Math.max(0, (1 - baseY) * g.tall * f * alive * (1 + env)));
+        tongueA[i].set(x, baseY * 0.85, z, h);
+        tongueB[i].set(0.1 * g.width * (0.6 + 0.4 * alive) * (1 + 0.25 * env), -x * 0.7, -z * 0.7, g.phase);
       }
       boxPos.copy(base);
       boxScale.set(width, height, width);

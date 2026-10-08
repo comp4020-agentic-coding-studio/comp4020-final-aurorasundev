@@ -4,7 +4,7 @@
 // a soft additive disc on the surface below. Buffers are allocated once.
 import * as THREE from "three";
 
-const WISPS = 5;
+const WISPS = 6;
 const EMBERS = 28;
 
 /**
@@ -26,7 +26,7 @@ export function createParticles(textures, { seed, size }) {
   const wisps = [];
   for (let i = 0; i < WISPS; i++) {
     const material = new THREE.SpriteMaterial({
-      color: new THREE.Color("#7f7a74"),
+      color: new THREE.Color("#7a736c"),
       alphaMap: textures.smoke,
       transparent: true,
       depthWrite: false,
@@ -117,16 +117,17 @@ export function createParticles(textures, { seed, size }) {
         const t = w.age / w.life;
         const sprite = w.sprite;
         sprite.visible = smoke > 0.01;
-        const height = size * (1.1 + 1.6 * t);
-        sprite.scale.set(size * (0.35 + 0.5 * t), height, 1);
+        const height = size * (1.3 + 1.8 * t);
+        sprite.scale.set(size * (0.7 + 0.8 * t), height, 1);
         sprite.position.set(
-          source.x + w.x + Math.sin(w.sway + w.age * 1.3) * size * 0.12 * t,
+          source.x + w.x + Math.sin(w.sway + w.age * 1.3) * size * 0.2 * t,
           // the wisp's foot starts among the flame tips (B02), not above them
           source.y + (top - source.y) * 0.2 + height * 0.5 + w.age * size * 0.25,
           source.z + w.z,
         );
-        sprite.material.rotation = Math.sin(w.sway + w.age * 0.7) * 0.18;
-        sprite.material.opacity = smoke * 0.45 * Math.sin(Math.PI * t);
+        sprite.material.rotation = Math.sin(w.sway + w.age * 0.7) * 0.3;
+        // soft in, thinning as it rises and spreads
+        sprite.material.opacity = smoke * 0.6 * Math.sin(Math.PI * Math.min(1, t * 1.25)) * (1 - 0.45 * t);
       }
 
       // embers: born at the burning region, drift up, flicker out

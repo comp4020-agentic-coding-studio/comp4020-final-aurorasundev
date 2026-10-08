@@ -40,23 +40,32 @@ const VERTEX_PARS = /* glsl */ `
 attribute vec3 aBurnPos;
 `;
 
-// Paper behind the front shrivels towards the axis and, once collapse
-// begins, everything sags into what is left below it.
+// Just behind the front the glowing lip curls up and inwards; further back
+// the charred paper shrinks unevenly and crumples along its normals (so it
+// keeps its creases instead of turning into smooth walls). Once collapse
+// begins, the higher parts fall furthest and fold in, crumpling down into
+// the hearth rather than sinking as a block.
 const VERTEX_MAIN = /* glsl */ `
   vBurnPos = aBurnPos;
   {
     float span = uHMax - uHMin;
     float h = (dot(aBurnPos, uAxis) - uHMin) / max(span, 1e-4) - dot(aBurnPos - uCenter, uTilt) + snoise(aBurnPos * uNoiseScale + uSeed) * 0.14;
     float d = h - uProgress;
-    float burnt = smoothstep(0.02, -0.22, d);
+    float burnt = smoothstep(0.0, -0.3, d);
+    float lip = smoothstep(0.01, -0.05, d) * smoothstep(-0.22, -0.07, d);
     vec3 fromAxis = transformed - uCenter;
     vec3 radial = fromAxis - uAxis * dot(fromAxis, uAxis);
-    float wobble = snoise(aBurnPos * uNoiseScale * 2.1 + uSeed * 1.7);
-    transformed -= radial * burnt * (0.28 + 0.16 * wobble);
-    transformed += normal * burnt * wobble * 0.018 * span;
-    float sag = uCollapse * (0.12 + 0.55 * clamp(h, 0.0, 1.0)) + burnt * 0.08;
-    transformed -= uAxis * sag * span;
-    transformed -= radial * uCollapse * 0.22;
+    float w1 = snoise(aBurnPos * uNoiseScale * 2.1 + uSeed * 1.7);
+    float w2 = snoise(aBurnPos * uNoiseScale * 5.3 - uSeed * 0.9);
+    transformed -= radial * burnt * (0.14 + 0.12 * w1);
+    transformed -= uAxis * dot(fromAxis, uAxis) * burnt * 0.04;
+    transformed += normal * burnt * (w2 * 0.045 + w1 * 0.02) * span;
+    transformed += uAxis * lip * (0.035 + 0.03 * w1) * span;
+    transformed -= radial * lip * (0.07 + 0.05 * w2);
+    float hc = clamp(h, 0.0, 1.0);
+    transformed -= uAxis * uCollapse * (0.06 + 0.4 * hc * hc) * span;
+    transformed -= radial * uCollapse * (0.16 + 0.14 * w1);
+    transformed += normal * uCollapse * w2 * 0.07 * span;
   }
 `;
 
@@ -65,8 +74,12 @@ const FRAGMENT_MAIN = /* glsl */ `
   {
     float h = burnHeight(vBurnPos);
     bD = h - uProgress;
-    float lag = uConsume + snoise(vBurnPos * uNoiseScale * 1.7 + uSeed * 3.1) * 0.06;
+    float lag = uConsume + snoise(vBurnPos * uNoiseScale * 1.7 + uSeed * 3.1) * 0.09
+              + snoise(vBurnPos * uNoiseScale * 6.1 - uSeed) * 0.035;
     if (bD < -lag) discard;
+    // torn holes open in the charcoal before the rest falls away
+    float tear = snoise(vBurnPos * uNoiseScale * 3.3 - uSeed * 2.3) * 0.5 + 0.5;
+    if (bD < -0.07 && tear > 1.02 + (bD + 0.07) * 2.4) discard;
     bChar = smoothstep(0.0, -0.045, bD);
     bEdge = smoothstep(-0.055, -0.008, bD) * (1.0 - smoothstep(-0.004, 0.014, bD));
     bScorch = smoothstep(0.16, 0.0, bD) * (1.0 - bChar);
@@ -79,7 +92,8 @@ const FRAGMENT_MAIN = /* glsl */ `
 const FRAGMENT_COLOR = /* glsl */ `
   {
     vec3 charred = texture2D(uCharMap, vBurnUv * 2.3 + uSeed).rgb;
-    charred = charred * vec3(1.05, 0.98, 0.92) * 0.85 + vec3(0.012, 0.01, 0.008);
+    // not pure black: the room's light must still find the creases
+    charred = charred * vec3(1.05, 0.98, 0.92) * 0.95 + vec3(0.022, 0.02, 0.018);
     float brittle = smoothstep(0.35, 0.8, snoise(vBurnPos * uNoiseScale * 9.0 + uSeed) * 0.5 + 0.5);
     charred = mix(charred, charred * 0.6, brittle * 0.5);
     vec3 dryBrown = vec3(0.80, 0.62, 0.40);
@@ -93,7 +107,7 @@ const FRAGMENT_COLOR = /* glsl */ `
 `;
 
 const FRAGMENT_ROUGHNESS = /* glsl */ `
-  roughnessFactor = mix(roughnessFactor, 1.0, bChar);
+  roughnessFactor = mix(roughnessFactor, 0.8, bChar);
 `;
 
 const FRAGMENT_EMISSIVE = /* glsl */ `
@@ -145,7 +159,7 @@ export function createBurnMaterial(source, { charMap, seed }) {
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>\n${FRAGMENT_ROUGHNESS}`)
       .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>\n${FRAGMENT_EMISSIVE}`);
   };
-  material.customProgramCacheKey = () => "throwaway-burn-v2";
+  material.customProgramCacheKey = () => "throwaway-burn-v3";
 
   const depthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide });
   depthMaterial.onBeforeCompile = (shader) => {
@@ -157,7 +171,7 @@ export function createBurnMaterial(source, { charMap, seed }) {
       .replace("#include <common>", `#include <common>\n${COMMON}`)
       .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>\n${FRAGMENT_MAIN}`);
   };
-  depthMaterial.customProgramCacheKey = () => "throwaway-burn-depth-v2";
+  depthMaterial.customProgramCacheKey = () => "throwaway-burn-depth-v3";
 
   return {
     material,

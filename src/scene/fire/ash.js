@@ -2,10 +2,18 @@
 // front passes and fall (a few lift on the heat first), and a shallow mound
 // of powder that grows under the paper. Flakes are one InstancedMesh using a
 // 4×4 atlas of generated flake photographs; the mound is a low displaced
-// disc using a generated ash-bed photograph. No physics bodies.
+// disc using a generated ash-bed photograph, with a few embers that die in
+// it slowly after the flames. No physics bodies.
 import * as THREE from "three";
 
 const ATLAS_CELLS = 4;
+const EMBERS = 14;
+// flakes are mostly charcoal, some mid grey, a few pale paper ash that kept its shape
+const FLAKE_TONES = [
+  [0.55, new THREE.Color("#4a4542")],
+  [0.85, new THREE.Color("#8e8a85")],
+  [1.0, new THREE.Color("#cbc6be")],
+];
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
@@ -45,7 +53,7 @@ export function createAsh(textures, { count, seed, flakeSize }) {
   plane.setAttribute("aCell", new THREE.InstancedBufferAttribute(cell, 2));
   const flakeMaterial = new THREE.MeshStandardMaterial({
     map: textures.flakes,
-    color: new THREE.Color("#8e8a85"),
+    color: new THREE.Color("#ffffff"),
     roughness: 1,
     metalness: 0,
     alphaTest: 0.45,
@@ -65,6 +73,10 @@ export function createAsh(textures, { count, seed, flakeSize }) {
   flakeMaterial.customProgramCacheKey = () => "throwaway-ash-flakes-v1";
   const flakes = new THREE.InstancedMesh(plane, flakeMaterial, count);
   flakes.frustumCulled = false;
+  for (let i = 0; i < count; i++) {
+    const r = random();
+    flakes.setColorAt(i, FLAKE_TONES.find(([p]) => r <= p)[1]);
+  }
   flakes.count = 0;
   group.add(flakes);
 
@@ -123,10 +135,13 @@ export function createAsh(textures, { count, seed, flakeSize }) {
         float edge = length(c) * 2.0 + lobes + (0.5 - diffuseColor.g) * 0.5;
         diffuseColor.a *= smoothstep(1.0, 0.62, edge);
       }
-      diffuseColor.rgb = diffuseColor.rgb * 0.55 + vec3(0.07, 0.066, 0.062);`,
+      diffuseColor.rgb = diffuseColor.rgb * 0.55 + vec3(0.07, 0.066, 0.062);
+      // drifts of paler powder between the flakes, so it is not one grey
+      float drift = sin(vMapUv.x * 17.0 + uSeed) * sin(vMapUv.y * 13.0 - uSeed * 0.7) * 0.5 + 0.5;
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.6, 0.58, 0.55), drift * drift * 0.35);`,
     );
   };
-  moundMaterial.customProgramCacheKey = () => "throwaway-ash-mound-v3";
+  moundMaterial.customProgramCacheKey = () => "throwaway-ash-mound-v4";
   const mound = new THREE.Mesh(moundGeo, moundMaterial);
   mound.rotation.x = -Math.PI / 2;
   mound.receiveShadow = true;
@@ -147,6 +162,52 @@ export function createAsh(textures, { count, seed, flakeSize }) {
   shade.rotation.x = -Math.PI / 2;
   shade.renderOrder = 1;
   group.add(shade);
+
+  // ---- embers lingering in the ash: dull points, each going out at its own time
+  const emberPos = new Float32Array(EMBERS * 3);
+  const emberGlow = new Float32Array(EMBERS);
+  const emberSpots = Array.from({ length: EMBERS }, () => ({
+    a: random() * Math.PI * 2,
+    r: Math.sqrt(random()) * 0.6,
+    out: 0.15 + random() * 0.85,
+    phase: random() * 50,
+    size: 0.6 + random() * 0.8,
+  }));
+  const emberSize = new Float32Array(emberSpots.map((e) => e.size));
+  const emberGeo = new THREE.BufferGeometry();
+  emberGeo.setAttribute("position", new THREE.BufferAttribute(emberPos, 3).setUsage(THREE.DynamicDrawUsage));
+  emberGeo.setAttribute("aGlow", new THREE.BufferAttribute(emberGlow, 1).setUsage(THREE.DynamicDrawUsage));
+  emberGeo.setAttribute("aSize", new THREE.BufferAttribute(emberSize, 1));
+  const emberMaterial = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: { uPx: { value: 7 } },
+    vertexShader: /* glsl */ `
+      attribute float aGlow;
+      attribute float aSize;
+      uniform float uPx;
+      varying float vGlow;
+      void main() {
+        vGlow = aGlow;
+        gl_PointSize = uPx * aSize * (0.5 + 0.5 * aGlow);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      varying float vGlow;
+      void main() {
+        float d = length(gl_PointCoord - 0.5) * 2.0;
+        float a = smoothstep(1.0, 0.0, d) * vGlow;
+        if (a < 0.01) discard;
+        gl_FragColor = vec4(mix(vec3(0.9, 0.16, 0.03), vec3(1.0, 0.5, 0.14), vGlow) * a * 1.4, a);
+      }`,
+  });
+  const emberPoints = new THREE.Points(emberGeo, emberMaterial);
+  emberPoints.frustumCulled = false;
+  emberPoints.renderOrder = 3;
+  emberPoints.visible = false;
+  group.add(emberPoints);
+  let emberLevel = 0;
 
   let moundRadius = flakeSize * 3;
   // how far the powder's surface stands above the bed at a world point (without the lumps)
@@ -245,6 +306,33 @@ export function createAsh(textures, { count, seed, flakeSize }) {
         flakes.setMatrixAt(i, _m);
       }
       flakes.instanceMatrix.needsUpdate = true;
+
+      emberPoints.visible = emberLevel * opacity > 0.01;
+      if (emberPoints.visible) {
+        const spread = mound.scale.x;
+        for (let i = 0; i < EMBERS; i++) {
+          const e = emberSpots[i];
+          const x = mound.position.x + Math.cos(e.a) * e.r * spread;
+          const z = mound.position.z + Math.sin(e.a) * e.r * spread;
+          emberPos[i * 3] = x;
+          emberPos[i * 3 + 1] = mound.position.y + moundRise(x, z) + flakeSize * 0.15;
+          emberPos[i * 3 + 2] = z;
+          // each goes out once the level falls below its own threshold
+          const alive = Math.min(1, Math.max(0, (emberLevel - (1 - e.out)) / 0.25));
+          const breathe = 0.6 + 0.25 * Math.sin(time * 2.1 + e.phase) + 0.15 * Math.sin(time * 5.3 + e.phase * 1.7);
+          emberGlow[i] = alive * breathe * opacity;
+        }
+        emberGeo.attributes.position.needsUpdate = true;
+        emberGeo.attributes.aGlow.needsUpdate = true;
+      }
+    },
+    /** 0..1 how many embers still glow in the ash */
+    setEmbers(level) {
+      emberLevel = Math.min(Math.max(level, 0), 1);
+    },
+    /** device pixels for a full ember point */
+    setEmberPixels(px) {
+      emberMaterial.uniforms.uPx.value = px;
     },
     /** 0..1 fade for the remote ending: flakes shrink, the powder settles flat */
     setOpacity(o) {
@@ -258,6 +346,8 @@ export function createAsh(textures, { count, seed, flakeSize }) {
       moundMaterial.dispose();
       shade.geometry.dispose();
       shadeMaterial.dispose();
+      emberGeo.dispose();
+      emberMaterial.dispose();
       group.removeFromParent();
     },
   };
