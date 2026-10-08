@@ -183,3 +183,49 @@ missing, and turn it into a rule, a test, or a reference comparison.
   software WebGL); a local `docker build` (the daemon wasn't running — Fly's
   remote builder is the image check); the GitHub CI run, which only starts
   once the repo is public.
+
+### Week 10 (C9) evidence
+
+Facts only; the account of how the week went is mine to write.
+
+- **Scope.** `plan.md` and its twelve references replaced the Week 9
+  package, and `CLAUDE.md` was rescoped to it
+  ([`d1e6b8c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/d1e6b8c)).
+- **Built.** Versioned migrations, a shared revision and SSE
+  ([`2a9f943`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/2a9f943),
+  [`594b830`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/594b830));
+  Keep/Release and witnessing
+  ([`b35b8ee`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/b35b8ee),
+  [`60b7613`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/60b7613));
+  letting go and final reading
+  ([`db19918`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/db19918),
+  [`947450f`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/947450f)).
+  The decisions are in `docs/adr/001-sse-snapshots.md` and
+  `docs/adr/002-active-reader-final-read.md`
+  ([`06e2edd`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/06e2edd)).
+- **Migration.** The live database was backed up on its volume
+  (`/data/backup-pre-c9-2026-10-08.sqlite`, plus a local copy) and the
+  migration was rehearsed on a copy first: its 4 papers kept their text and
+  became KEEP, 9 identities and sessions kept. On deploy the app logged
+  versions 1–4, and paper `62324d9a…` from Week 9 still reads back.
+- **Live, three sessions (8 Oct, after `06e2edd` deployed by CI).** Two
+  browsers on the deployed app, a third client saving over HTTP: both
+  browsers showed the new count 509 ms and 377 ms after the save was sent
+  (network included), with no dialog opened; letting it go reached them in
+  380 ms and 519 ms; the paper then answered 404. The event stream is served
+  over HTTP/2 and its snapshot arrives unbuffered.
+- **Checks.** 32 HTTP specs, run by CI against the Docker image on every
+  push: live arrival within a second to three streams, no broadcast for
+  refused or retried saves, reconnect reconciliation, witnessing counted
+  once per identity, author acknowledged but not counted, receipts required,
+  rights checked server-side, simultaneous let-go happening once, idempotent
+  retries.
+- **Corrections found by looking.** The torn HTML sheet showed the flat 3D
+  sheet as a grey rectangle around it once the backdrop was made clear; it
+  now hides once covered. The write dialog's scroll box clipped the sheet's
+  shadow into a visible rectangle. The first let-go ending faded a flat
+  grey card; it now crumples, darkens and fades. Several count assertions
+  raced between spec files; the files now run one at a time.
+- **Not verified for C9:** real phone GPUs; behaviour behind networks that
+  buffer streams; cold-start latency after Fly stops the machine (measured
+  above only with the machine already running).
