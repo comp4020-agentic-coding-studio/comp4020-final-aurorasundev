@@ -486,6 +486,27 @@ export function createPaperScene(container, buttonLayer, options) {
     return best;
   }
 
+  // Papers arriving from the stream (someone else's throw, the first
+  // snapshot, a refill) drop from inside the upper part of the frame, a
+  // quarter of the way down, so they're seen at once and land within about
+  // half a second. The demo's fixed drop height started them above the top
+  // edge on desktop, where they fell unseen for most of a second.
+  const ARRIVAL_SCREEN_Y = 0.5; // NDC; 1 is the top edge
+  const ARRIVAL_DROP = { min: 0.25, max: 0.9 };
+  function arrivalDropHeight(position) {
+    const v = new THREE.Vector3();
+    const screenY = (lift) => v.set(position.x, position.y + lift, position.z).project(camera).y;
+    if (screenY(ARRIVAL_DROP.max) <= ARRIVAL_SCREEN_Y) return ARRIVAL_DROP.max;
+    let low = 0;
+    let high = ARRIVAL_DROP.max;
+    for (let i = 0; i < 16; i++) {
+      const mid = (low + high) / 2;
+      if (screenY(mid) > ARRIVAL_SCREEN_Y) high = mid;
+      else low = mid;
+    }
+    return Math.max(low, ARRIVAL_DROP.min);
+  }
+
   function spawnPaper(id, position, dropIn, dropHeight = randomRange(0.8, 1.2)) {
     const maxFrame = animData.frameCount - 1;
     const base = createPaper(animData, paperMaterial3d);
@@ -523,7 +544,8 @@ export function createPaperScene(container, buttonLayer, options) {
       paper.state = "rolling";
       paper.throw = { settleTimer: 0 };
       body.position.y += dropHeight;
-      body.angularVelocity.set(randomRange(-1.5, 1.5), randomRange(-0.5, 0.5), randomRange(-1.5, 1.5));
+      // a little tumble, not enough to send it rolling on after it lands
+      body.angularVelocity.set(randomRange(-0.7, 0.7), randomRange(-0.4, 0.4), randomRange(-0.7, 0.7));
       syncMeshToBody(paper);
     }
     return paper;
@@ -557,7 +579,11 @@ export function createPaperScene(container, buttonLayer, options) {
       later(() => {
         if (papers.get(id) !== null) return;
         papers.delete(id);
-        if (wantedIds.includes(id)) spawnPaper(id, randomSpawnPosition(), true, randomRange(1.2, 2.2));
+        if (!wantedIds.includes(id)) return;
+        const position = randomSpawnPosition();
+        // with reduced motion it is simply there, without the drop
+        if (reduceMotion()) spawnPaper(id, position, false);
+        else spawnPaper(id, position, true, arrivalDropHeight(position));
       }, delay);
     }
   }
