@@ -261,6 +261,18 @@ Facts only, added as the work lands.
   because earlier runs had used up its in-memory failure allowance. CI starts
   a fresh container each time, so only local reruns are affected; locally
   the specs are now run against a freshly started server.
+- **Parallel tracks (P6).** Two sub-agents worked in separate worktrees on
+  disjoint files, without pushing; each change was reviewed, merged and
+  re-checked together before one push. Papers arriving from other visitors
+  now drop from inside the top quarter of the frame and settle in about a
+  second instead of falling unseen above it
+  ([`50974ba`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/50974ba)). The
+  phone reading sheet grows from about six visible lines to ten (M03), and
+  the write, key, confirm and final-reading sheets were brought closer to
+  D02/M02, D04, D05 and D07
+  ([`b9c290f`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/b9c290f),
+  [`15da446`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/15da446)). Deployed by CI
+  at `a2d606b`; the Week 9 paper still reads back.
 - **Checked in a browser (local, fresh database):** a 2,000-code-point
   Chinese/emoji/newline paper reads back exactly and scrolls inside the
   sheet at 1672 and 390 wide with no sideways page scroll; without WebGL the
