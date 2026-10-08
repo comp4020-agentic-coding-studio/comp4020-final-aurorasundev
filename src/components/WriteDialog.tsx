@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, countCodePoints, createPaper, MAX_CODE_POINTS } from "../lib/api.ts";
+import { ApiError, countCodePoints, createPaper, MAX_CODE_POINTS, type Created } from "../lib/api.ts";
 
 type Props = {
   onCancel: () => void;
-  onThrown: (id: string, total: number) => void;
+  onThrown: (created: Created) => void;
+  // keys being saved here, so the page knows its own paper's SSE echo
+  pendingOps: Set<string>;
+  // no live connection: saving waits rather than pretending
+  offline: boolean;
 };
 
 const formatCount = (n: number): string => n.toLocaleString("en-AU");
 
-export function WriteDialog({ onCancel, onThrown }: Props) {
+export function WriteDialog({ onCancel, onThrown, pendingOps, offline }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
@@ -29,13 +33,15 @@ export function WriteDialog({ onCancel, onThrown }: Props) {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (saving || blank || tooLong) return;
+    if (saving || blank || tooLong || offline) return;
     if (submission.current?.text !== text) submission.current = { text, key: crypto.randomUUID() };
+    const key = submission.current.key;
     setSaving(true);
     setError(null);
+    pendingOps.add(key);
     try {
-      const result = await createPaper(text, submission.current.key);
-      onThrown(result.paper.id, result.total);
+      const result = await createPaper(text, key);
+      onThrown(result);
     } catch (err) {
       setSaving(false);
       setError(
@@ -43,6 +49,8 @@ export function WriteDialog({ onCancel, onThrown }: Props) {
           ? err.message
           : "We couldn't confirm it was saved. Try again: it won't be left twice.",
       );
+    } finally {
+      pendingOps.delete(key);
     }
   }
 
@@ -91,8 +99,8 @@ export function WriteDialog({ onCancel, onThrown }: Props) {
           <button type="button" className="button button-secondary" onClick={onCancel} disabled={saving}>
             Cancel
           </button>
-          <button type="submit" className="button button-primary" disabled={saving || blank || tooLong}>
-            {saving ? "Saving…" : "Crumple & throw"}
+          <button type="submit" className="button button-primary" disabled={saving || blank || tooLong || offline}>
+            {saving ? "Saving…" : offline ? "Reconnecting…" : "Crumple & throw"}
           </button>
         </div>
       </form>

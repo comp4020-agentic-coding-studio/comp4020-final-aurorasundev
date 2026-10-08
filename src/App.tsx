@@ -1,39 +1,33 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Header } from "./components/Header.tsx";
 import { PaperField, type PaperFieldHandle, type SheetRect } from "./components/PaperField.tsx";
 import { ReadDialog } from "./components/ReadDialog.tsx";
 import { SpaceFooter } from "./components/SpaceFooter.tsx";
 import { WriteDialog } from "./components/WriteDialog.tsx";
-import { ensureSession, listPapers } from "./lib/api.ts";
+import type { Created } from "./lib/api.ts";
+import { useLiveSpace } from "./lib/useLiveSpace.ts";
 
 type Mode = { kind: "space" } | { kind: "writing" } | { kind: "reading"; id: string; revealed: boolean; rect: SheetRect | null };
-type Space = { kind: "loading" } | { kind: "error" } | { kind: "ready"; ids: string[]; total: number };
 
-// The references show generously spaced papers, closer to camera than the
-// demo's original wide 40-paper stage; a smaller visible window keeps that
-// negative space once the camera is framed to match.
-const visibleLimit = (): number => (window.matchMedia("(max-width: 600px)").matches ? 4 : 7);
+// The references show generously spaced papers rather than the demo's crowded
+// 40-paper stage; the window stays small enough to keep that negative space.
+const visibleLimit = (): number => (window.matchMedia("(max-width: 600px)").matches ? 5 : 8);
 
 export function App() {
-  const [space, setSpace] = useState<Space>({ kind: "loading" });
   const [mode, setMode] = useState<Mode>({ kind: "space" });
   const field = useRef<PaperFieldHandle>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const pendingOps = useMemo(() => new Set<string>(), []);
+  const limit = useMemo(visibleLimit, []);
 
-  const load = useCallback(async () => {
-    setSpace({ kind: "loading" });
-    try {
-      await ensureSession();
-      const { papers, total } = await listPapers();
-      setSpace({ kind: "ready", ids: papers.slice(0, visibleLimit()).map((p) => p.id), total });
-    } catch {
-      setSpace({ kind: "error" });
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { space, dispatch, retry } = useLiveSpace({
+    limit,
+    reading: () => (modeRef.current.kind === "reading" ? modeRef.current.id : null),
+    pendingOps,
+    onGone: () => {},
+  });
 
   const openPaper = useCallback((id: string) => {
     returnFocus.current = document.activeElement as HTMLElement | null;
@@ -63,36 +57,44 @@ export function App() {
     returnFocus.current?.focus();
   }, []);
 
-  const thrown = useCallback((id: string, total: number) => {
-    setMode({ kind: "space" });
-    setSpace((s) => {
-      if (s.kind !== "ready") return { kind: "ready", ids: [id], total };
-      const ids = [...s.ids.filter((x) => x !== id), id];
-      if (ids.length > visibleLimit()) ids.shift();
-      return { kind: "ready", ids, total };
-    });
-    field.current?.throwCreatedPaper(id);
-  }, []);
+  // The server confirmed the save: only now does the paper crumple and fly.
+  // Its own SSE echo (matched by submission key) only moved the count.
+  const thrown = useCallback(
+    (created: Created) => {
+      setMode({ kind: "space" });
+      dispatch({ type: "arrived", id: created.paper.id, revision: created.revision, total: created.total, limit, reading: null });
+      field.current?.throwCreatedPaper(created.paper.id);
+    },
+    [dispatch, limit],
+  );
 
   const busy = mode.kind !== "space";
+  const ready = space.status === "ready";
 
   return (
     <div className="app">
       <Header />
-      {space.kind === "ready" && (
-        <PaperField ref={field} ids={space.ids} onOpen={openPaper} onOpenRect={moveSheet} inert={busy} />
-      )}
-      {space.kind === "loading" && <p className="space-status">Finding the space…</p>}
-      {space.kind === "error" && (
+      {ready && <PaperField ref={field} ids={space.ids} onOpen={openPaper} onOpenRect={moveSheet} inert={busy} />}
+      {space.status === "loading" && <p className="space-status">Finding the space…</p>}
+      {space.status === "error" && (
         <div className="space-status" role="alert">
           <p>The space couldn't be reached.</p>
-          <button type="button" className="button button-secondary" onClick={load}>
+          <button type="button" className="button button-secondary" onClick={retry}>
             Try again
           </button>
         </div>
       )}
-      {space.kind === "ready" && <SpaceFooter total={space.total} onWrite={startWriting} hidden={busy} />}
-      {mode.kind === "writing" && <WriteDialog onCancel={cancelWriting} onThrown={thrown} />}
+      {ready && (
+        <SpaceFooter total={space.total} onWrite={startWriting} busy={busy} reconnecting={space.connection === "reconnecting"} />
+      )}
+      {mode.kind === "writing" && (
+        <WriteDialog
+          onCancel={cancelWriting}
+          onThrown={thrown}
+          pendingOps={pendingOps}
+          offline={space.connection === "reconnecting"}
+        />
+      )}
       {mode.kind === "reading" && <ReadDialog id={mode.id} revealed={mode.revealed} rect={mode.rect} onClose={closePaper} />}
     </div>
   );
