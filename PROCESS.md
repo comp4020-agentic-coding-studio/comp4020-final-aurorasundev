@@ -229,3 +229,40 @@ Facts only; the account of how the week went is mine to write.
 - **Not verified for C9:** real phone GPUs; behaviour behind networks that
   buffer streams; cold-start latency after Fly stops the machine (measured
   above only with the machine already running).
+
+### Final MVP evidence (in progress)
+
+Facts only, added as the work lands.
+
+- **Return keys (P4).** Issued once after a Keep, stored only as a digest,
+  never shown again once confirmed saved; restoring one maps a new browser
+  to the identity's rights and witness record, and returns no history
+  ([`68db6b4`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/68db6b4),
+  [`a36c8df`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/a36c8df)). The live
+  database was backed up first (`/data/backup-pre-p4-2026-10-08.sqlite`) and
+  migrated to version 5 on deploy. Six more HTTP specs (38 in all) cover
+  issuing, replacement, restore, wrong keys and rate limiting.
+- **Moderation and reporting (P5): not built.** The course image proxy did
+  not answer from the Fly machine, so no automated check is configured, and
+  the report action stays hidden rather than promising a check that does not
+  exist. It waits on choosing a moderation service.
+- **Visual pass (P6).** Against D01/M01 the floor/wall seam now fades over
+  the back of the stage, the paper is ivory, shadows are softer and papers
+  spread across the width, roomiest spot first on a phone
+  ([`28fc6e8`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/28fc6e8)); the readme
+  follows D06's serif hierarchy
+  ([`e982d5c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/e982d5c)).
+- **Corrections found by looking (P6).** In a keyboard check, closing a
+  paper left focus on the page body: the field was still inert and the
+  paper's button hidden while it crumpled back. Focus now returns once the
+  button is back, and to "Leave something here" after the write dialog
+  ([`dad880a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/dad880a)). In the
+  spec run, a long-running local server failed two return-key specs with 429
+  because earlier runs had used up its in-memory failure allowance. CI starts
+  a fresh container each time, so only local reruns are affected; locally
+  the specs are now run against a freshly started server.
+- **Checked in a browser (local, fresh database):** a 2,000-code-point
+  Chinese/emoji/newline paper reads back exactly and scrolls inside the
+  sheet at 1672 and 390 wide with no sideways page scroll; without WebGL the
+  fallback still receives a paper thrown elsewhere and opens it; with
+  reduced motion a throw still lands and the count moves.
