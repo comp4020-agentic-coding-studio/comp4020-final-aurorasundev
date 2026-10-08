@@ -62,10 +62,20 @@ textarea {
   line-height: 1;
 }
 
+.header-links {
+  display: flex;
+  align-items: baseline;
+  gap: 40px;
+}
+
 .header-link {
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--ink);
   text-decoration: none;
   font-size: 19px;
+  cursor: pointer;
 }
 
 .header-link:hover {
@@ -433,6 +443,70 @@ fieldset:disabled .choice,
   margin-top: 28px;
 }
 
+/* return key (D05) */
+.key-dialog {
+  width: min(840px, calc(100vw - 8px));
+  max-height: calc(100dvh - 16px);
+  padding: 20px 40px 48px 24px;
+  overflow-y: auto;
+}
+
+.key-sheet {
+  padding: 72px 96px 76px;
+}
+
+.key-title {
+  margin: 24px 0 10px;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 40px;
+  line-height: 1.15;
+}
+
+.key-principle {
+  margin: 0 0 30px;
+  font-size: 19px;
+}
+
+.key-label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 18px;
+}
+
+.key-input {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 16px;
+  border: 1px solid #8f897d;
+  border-radius: 4px;
+  background: rgb(250 248 244 / 0.6);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 19px;
+  letter-spacing: 0.06em;
+}
+
+.key-value {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 12px 16px;
+  user-select: all;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.key-note {
+  margin: 16px 0 0;
+  font-size: 17px;
+  color: var(--muted);
+}
+
+.key-done {
+  margin-top: 28px;
+}
+
 /* reading (D03/M03) */
 .read-dialog {
   width: min(660px, calc(100vw - 32px));
@@ -605,6 +679,38 @@ fieldset:disabled .choice,
     font-size: 30px;
   }
 
+  .header-links {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+  }
+
+  .header-links .header-link:last-child {
+    order: -1;
+  }
+
+  .wide-only {
+    display: none;
+  }
+
+  .key-dialog {
+    width: 100vw;
+    padding: 0 12px 48px 8px;
+  }
+
+  .key-sheet {
+    padding: 40px 24px 32px;
+  }
+
+  .key-title {
+    font-size: 28px;
+  }
+
+  .key-input {
+    font-size: 16px;
+    letter-spacing: 0.02em;
+  }
+
   .header-link {
     font-size: 16px;
   }
@@ -643,7 +749,7 @@ fieldset:disabled .choice,
     width: 100vw;
     margin: 104px auto 0;
     max-height: calc(100dvh - 168px);
-    padding: 0 12px 24px 8px;
+    padding: 0 12px 48px 8px;
   }
 
   .write-sheet {

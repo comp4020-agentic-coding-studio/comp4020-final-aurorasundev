@@ -51,7 +51,12 @@ export const burnPaper = (id: string, receipt: string, opKey: string): Promise<B
 // A lost response can't tell "not saved" from "saved, reply dropped", so a
 // network failure is retried with the same submission key: the server answers
 // a repeat with the paper it already saved instead of saving it twice.
-export type Created = { paper: { id: string; version: number; status: string }; total: number; revision: number };
+export type Created = {
+  paper: { id: string; version: number; status: string };
+  total: number;
+  revision: number;
+  offer_return_key: boolean;
+};
 
 export async function createPaper(content: string, mode: PaperMode, submissionKey: string): Promise<Created> {
   const send = (): Promise<Created> =>
@@ -65,3 +70,11 @@ export async function createPaper(content: string, mode: PaperMode, submissionKe
     }
   }
 }
+
+// The raw key exists only in this reply; the server keeps a digest.
+export const issueReturnKey = (): Promise<{ return_key: string }> => request("/api/identity/return-key", postJson({}));
+
+export const markReturnKeySaved = (): Promise<{ ok: true }> => request("/api/identity/return-key/saved", postJson({}));
+
+export const restoreIdentity = (key: string): Promise<{ ok: true }> =>
+  request("/api/identity/restore", postJson({ return_key: key }));

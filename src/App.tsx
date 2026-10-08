@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Header } from "./components/Header.tsx";
 import { PaperField, type PaperFieldHandle, type SheetRect } from "./components/PaperField.tsx";
 import { ReadDialog, type Ended } from "./components/ReadDialog.tsx";
+import { ReturnKeyDialog } from "./components/ReturnKeyDialog.tsx";
 import { SpaceFooter } from "./components/SpaceFooter.tsx";
 import { WriteDialog } from "./components/WriteDialog.tsx";
 import type { Burned, Created } from "./lib/api.ts";
@@ -10,6 +11,7 @@ import { useLiveSpace } from "./lib/useLiveSpace.ts";
 type Mode =
   | { kind: "space" }
   | { kind: "writing" }
+  | { kind: "key"; variant: "issue" | "restore" }
   | { kind: "reading"; id: string; revealed: boolean; rect: SheetRect | null; ended: Ended | null };
 
 // The references show generously spaced papers rather than the demo's crowded
@@ -94,21 +96,37 @@ export function App() {
 
   // The server confirmed the save: only now does the paper crumple and fly.
   // Its own SSE echo (matched by submission key) only moved the count.
+  // After a Keep, the return key is offered once the throw has landed.
   const thrown = useCallback(
     (created: Created) => {
       setMode({ kind: "space" });
       dispatch({ type: "arrived", id: created.paper.id, revision: created.revision, total: created.total, limit, reading: null });
       field.current?.throwCreatedPaper(created.paper.id);
+      if (created.offer_return_key) {
+        setTimeout(() => {
+          if (modeRef.current.kind === "space") setMode({ kind: "key", variant: "issue" });
+        }, 1800);
+      }
     },
     [dispatch, limit],
   );
+
+  const openReturnKey = useCallback(() => {
+    returnFocus.current = document.activeElement as HTMLElement | null;
+    setMode({ kind: "key", variant: "restore" });
+  }, []);
+
+  const closeKey = useCallback(() => {
+    setMode({ kind: "space" });
+    returnFocus.current?.focus();
+  }, []);
 
   const busy = mode.kind !== "space";
   const ready = space.status === "ready";
 
   return (
     <div className={`app${mode.kind === "writing" ? " is-writing" : ""}`}>
-      <Header />
+      <Header onReturnKey={openReturnKey} />
       {ready && <PaperField ref={field} ids={space.ids} onOpen={openPaper} onOpenRect={moveSheet} inert={busy} />}
       {space.status === "loading" && <p className="space-status">Finding the space…</p>}
       {space.status === "error" && (
@@ -130,6 +148,7 @@ export function App() {
           offline={space.connection === "reconnecting"}
         />
       )}
+      {mode.kind === "key" && <ReturnKeyDialog variant={mode.variant} onClose={closeKey} onRestored={retry} />}
       {mode.kind === "reading" && (
         <ReadDialog
           id={mode.id}
