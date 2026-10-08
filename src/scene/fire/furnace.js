@@ -115,11 +115,11 @@ export function createFurnace(camera, textures, { radius = 0.42, position = new 
           vec2 flatUv = vFLocal.xz / ${(R * 1.1).toFixed(4)};
           float flatness = smoothstep(0.55, 0.85, abs(normalize(cross(dFdx(vFLocal), dFdy(vFLocal))).y));
           vec3 ironCol = mix(texture2D(uIron, wallUv).rgb, texture2D(uIron, flatUv + 0.37).rgb, flatness);
-          diffuseColor.rgb *= ironCol * 2.4;
+          diffuseColor.rgb *= ironCol * vec3(2.6, 2.35, 2.1);
           fInside = 1.0 - smoothstep(${(R - wall * 0.6).toFixed(4)}, ${(R - wall * 0.3).toFixed(4)}, r);
           fInside *= 1.0 - smoothstep(${(H - wall * 0.7).toFixed(4)}, ${(H - wall * 0.2).toFixed(4)}, vFLocal.y);
           // soot inside and on the hearth, worn a little lighter on the rim's crown
-          diffuseColor.rgb *= mix(1.0, 0.62, fInside);
+          diffuseColor.rgb *= mix(1.0, 0.48, fInside);
           float crown = smoothstep(${(H - wall * 0.35).toFixed(4)}, ${H.toFixed(4)}, vFLocal.y);
           diffuseColor.rgb *= 1.0 + crown * 0.28;
           float mottle = snoise(vFLocal * 7.0) * 0.5 + 0.5;

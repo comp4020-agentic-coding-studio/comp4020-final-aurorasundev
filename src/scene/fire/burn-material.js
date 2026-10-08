@@ -104,8 +104,8 @@ const FRAGMENT_EMISSIVE = /* glsl */ `
     vec3 core = vec3(1.0, 0.72, 0.28);
     totalEmissiveRadiance += amber * bEdge * (0.55 + 2.1 * hot) * uGlow;
     totalEmissiveRadiance += core * pow(bEdge, 3.0) * hot * 1.6 * uGlow;
-    float pockets = smoothstep(0.62, 0.9, snoise(vBurnPos * uNoiseScale * 14.0 + vec3(uTime * 0.3, 0.0, -uTime * 0.2)) * 0.5 + 0.5);
-    totalEmissiveRadiance += vec3(1.0, 0.26, 0.04) * pockets * bHeat * 0.9 * uGlow * (1.0 - bAshRim);
+    float pockets = smoothstep(0.74, 0.95, snoise(vBurnPos * uNoiseScale * 14.0 + vec3(uTime * 0.3, 0.0, -uTime * 0.2)) * 0.5 + 0.5);
+    totalEmissiveRadiance += vec3(1.0, 0.26, 0.04) * pockets * bHeat * 0.7 * uGlow * (1.0 - bAshRim);
   }
 `;
 
@@ -124,7 +124,7 @@ export function createBurnMaterial(source, { charMap, seed }) {
     uNoiseScale: { value: 4.5 },
     uCollapse: { value: 0 },
     uTime: { value: 0 },
-    uConsume: { value: 0.24 },
+    uConsume: { value: 0.3 },
     uGlow: { value: 1 },
     uCharMap: { value: charMap },
   };

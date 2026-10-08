@@ -86,10 +86,12 @@ export function createAsh(textures, { count, seed, flakeSize }) {
   const moundUniforms = { uGrow: { value: 0 }, uHeight: { value: 0.04 }, uSeed: { value: (seed % 101) * 0.7 } };
   const moundMaterial = new THREE.MeshStandardMaterial({
     map: textures.ashBed,
-    color: new THREE.Color("#c9c4bd"),
+    color: new THREE.Color("#ffffff"),
     roughness: 1,
     metalness: 0,
-    alphaTest: 0.22,
+    // blended, so the powder's edge thins out instead of ending in a cut line
+    transparent: true,
+    alphaTest: 0.03,
     envMapIntensity: 0.15,
   });
   moundMaterial.onBeforeCompile = (shader) => {
@@ -107,8 +109,14 @@ export function createAsh(textures, { count, seed, flakeSize }) {
           transformed.z += h * uHeight * uGrow;
         }`,
       );
+    // the photograph's black flakes against white ash are too harsh under the
+    // room's light: compress them towards a soft grey
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <map_fragment>",
+      "#include <map_fragment>\ndiffuseColor.rgb = diffuseColor.rgb * 0.55 + vec3(0.07, 0.066, 0.062);",
+    );
   };
-  moundMaterial.customProgramCacheKey = () => "throwaway-ash-mound-v1";
+  moundMaterial.customProgramCacheKey = () => "throwaway-ash-mound-v2";
   const mound = new THREE.Mesh(moundGeo, moundMaterial);
   mound.rotation.x = -Math.PI / 2;
   mound.receiveShadow = true;
@@ -131,6 +139,11 @@ export function createAsh(textures, { count, seed, flakeSize }) {
   group.add(shade);
 
   let moundRadius = flakeSize * 3;
+  // how far the powder's surface stands above the bed at a world point (without the lumps)
+  const moundRise = (x, z) => {
+    const r = Math.hypot(x - mound.position.x, z - mound.position.z) / Math.max(mound.scale.x, 1e-4);
+    return Math.pow(Math.max(1 - r * r, 0), 1.6) * moundUniforms.uHeight.value * moundUniforms.uGrow.value;
+  };
   let opacity = 1;
   let growth = 0;
   function applyGrowth() {
@@ -206,14 +219,15 @@ export function createAsh(textures, { count, seed, flakeSize }) {
           f.vel.z *= 1 - 0.8 * dt;
           f.pos.addScaledVector(f.vel, dt);
           f.rot.addScaledVector(f.spin, dt);
-          if (f.pos.y <= f.restY && f.vel.y < 0) {
-            f.pos.y = f.restY;
+          if (f.pos.y <= f.restY + moundRise(f.pos.x, f.pos.z) && f.vel.y < 0) {
             f.settled = true;
             // lie down, mostly flat
-            f.rot.x = (Math.random() - 0.5) * 0.5;
-            f.rot.z = (Math.random() - 0.5) * 0.5;
+            f.rot.x = (random() - 0.5) * 0.5;
+            f.rot.z = (random() - 0.5) * 0.5;
           }
         }
+        // lying flakes ride up as the powder gathers under them
+        if (f.settled) f.pos.y = f.restY + moundRise(f.pos.x, f.pos.z);
         _e.set(f.rot.x, f.rot.y, f.rot.z);
         _q.setFromEuler(_e);
         _s.setScalar(f.size * opacity + 1e-5);

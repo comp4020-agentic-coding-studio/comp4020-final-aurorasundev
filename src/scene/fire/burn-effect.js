@@ -41,7 +41,7 @@ const REMOTE_FADE = 1;
  *   durationMs?: number,              flames to last ember, default 4800
  *   reducedMotion?: boolean,
  *   surfaceY: number,                 world y of the hearth (furnace) or floor (remote) under the paper
- *   settleTo?: THREE.Vector3,         furnace: world point the paper's centre settles to as it ignites
+ *   settleTo?: THREE.Vector3,         furnace: world point on the hearth the paper comes to rest on (its lowest point lands there, centred above it)
  *   furnace?: { setGlow(point: THREE.Vector3, strength: number): void },
  *   viewportHeight?: number,          CSS pixels, for ember size
  * }} options
@@ -81,12 +81,23 @@ export function createBurnEffect(options) {
   const height = (frame.max - frame.min) * scale;
   const worldCentre = () => mesh.localToWorld(local.copy(centreLocal));
 
-  // furnace: the paper drops the last few centimetres onto the hearth
+  // furnace: the paper drops the last few centimetres onto the hearth, its
+  // lowest point landing on the surface
   let settleFrom = null;
-  let settleOffset = null;
+  let restPosition = original.position.clone();
   if (options.settleTo) {
     settleFrom = mesh.position.clone();
-    settleOffset = worldCentre().clone().sub(mesh.position);
+    let lowest = Infinity;
+    for (let k = 0; k < frame.used.length; k++) {
+      if (!frame.used[k]) continue;
+      lowest = Math.min(lowest, mesh.localToWorld(local.fromArray(frame.snapshot, k * 3)).y);
+    }
+    const c = worldCentre();
+    restPosition = new THREE.Vector3(
+      mesh.position.x + options.settleTo.x - c.x,
+      mesh.position.y + options.settleTo.y - lowest,
+      mesh.position.z + options.settleTo.z - c.z,
+    );
   }
 
   const flames = createFlames(camera, { seed });
@@ -150,14 +161,14 @@ export function createBurnEffect(options) {
       phase = "igniting";
       if (settleFrom) {
         const k = 1 - (1 - e) * (1 - e);
-        mesh.position.copy(settleFrom).lerp(local.copy(options.settleTo).sub(settleOffset), k);
+        mesh.position.copy(settleFrom).lerp(restPosition, k);
       }
     } else if (time < IGNITE + FRONT) {
       const v = (time - IGNITE) / FRONT;
       // slow to take hold, steady, then quick through the last of it
-      progress = lerp(-0.02, end, v * v * (0.55 + 0.45 * v) * 0.5 + v * 0.5);
-      strength = Math.min(1, 0.45 + v * 2.2) * (1 - smooth(0.7, 1.0, v) * 0.55);
-      collapse = smooth(0.58, 1.0, v);
+      progress = lerp(-0.02, end, Math.pow(v, 0.92));
+      strength = Math.min(1, 0.45 + v * 2.2) * (1 - smooth(0.65, 1.0, v) * 0.7);
+      collapse = smooth(0.68, 1.0, v);
       smoke = 0.25 + 0.75 * Math.min(1, v * 2);
       phase = "burning";
     } else if (time < total) {
@@ -180,25 +191,28 @@ export function createBurnEffect(options) {
     u.uCollapse.value = collapse;
     u.uGlow.value = glow;
     u.uTime.value = time;
-    // the remaining paper slumps into what is below it
+    // what is left rests on the surface as its underside burns away, then
+    // slumps into the ash
+    const consumed = progress - consume;
+    const sink = Math.min(Math.max(consumed, 0), 1) * 0.7 + collapse * 0.12;
     if (!settleFrom || time >= IGNITE) {
-      const restPosition = settleFrom ? local.copy(options.settleTo).sub(settleOffset) : original.position;
-      mesh.position.set(restPosition.x, restPosition.y - collapse * height * 0.32, restPosition.z);
+      mesh.position.set(restPosition.x, restPosition.y - sink * height, restPosition.z);
     }
     mesh.visible = progress < end + 0.05;
 
-    const consumed = progress - consume;
     releaseFlakes(consumed, false);
     ash.setGrowth(smooth(-0.05, 1.05, consumed) * 0.85 + (time >= total ? 0.15 : smooth(IGNITE + FRONT, total, time) * 0.15));
 
-    // flames rise from under the paper and lick up its sides past the
-    // burning front; the tallest tongues clear what is left of the top
+    // tongues stand around the burning front, lean in over the paper and
+    // the tallest licks clear its top; they draw in as what is left shrinks
     const c = worldCentre();
-    const frontY = surfaceY + Math.max(0, Math.min(progress, 1)) * height * (1 - 0.3 * collapse);
-    const topY = surfaceY + height * (1 - 0.7 * collapse);
-    base.set(c.x, surfaceY + height * 0.02, c.z);
-    const reach = Math.max(frontY + diameter * 0.35, topY + diameter * 0.25 * strength) - base.y;
-    flames.update(base, diameter * (1.3 - 0.35 * collapse), reach, strength, time);
+    const frontY = surfaceY + Math.max(0, Math.min(progress, 1) - sink) * height;
+    base.set(c.x, surfaceY, c.z);
+    const flameBox = height * 1.9;
+    const front = Math.min(0.6, (frontY - surfaceY) / flameBox);
+    const ring = 0.62 * (1 - 0.3 * Math.min(Math.max(consumed, 0), 1) - 0.35 * collapse);
+    flames.update(base, diameter * 1.5, flameBox, strength, time, front, ring);
+    const reach = flameBox;
     source.set(c.x, frontY, c.z);
     particles.update(dt, {
       source,
@@ -216,7 +230,7 @@ export function createBurnEffect(options) {
     const end = 1 + consume + 0.12;
     u.uTime.value = 0;
     u.uGlow.value = 0;
-    if (settleFrom) mesh.position.copy(options.settleTo).sub(settleOffset);
+    if (settleFrom) mesh.position.copy(restPosition);
     // chars from the bottom up, then falls to ash
     const progress = time < 0.6 ? lerp(-0.2, 1.0, time / 0.6) : lerp(1.0, end + 0.2, Math.min(1, (time - 0.6) / 0.8));
     u.uConsume.value = time < 0.6 ? 0.9 : consume;
