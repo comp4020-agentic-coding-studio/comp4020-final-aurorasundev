@@ -6,6 +6,7 @@ export type SheetRect = { left: number; top: number; width: number; height: numb
 export type PaperFieldHandle = {
   openPaper: (id: string, onUnfolded: (rect: SheetRect | null) => void) => void;
   closePaper: () => void;
+  burnOpenPaper: () => void;
   throwCreatedPaper: (id: string) => void;
 };
 
@@ -81,6 +82,7 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
         else scene.current.openPaper(id, onUnfolded);
       },
       closePaper: () => scene.current?.closePaper(),
+      burnOpenPaper: () => scene.current?.burnOpenPaper(),
       throwCreatedPaper: (id) => scene.current?.throwCreatedPaper(id),
     }),
     [failed],

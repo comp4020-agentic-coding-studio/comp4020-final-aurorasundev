@@ -527,6 +527,60 @@ fieldset:disabled .choice,
   color: var(--muted);
 }
 
+/* D07: the confirmation replaces the actions on the same sheet */
+.read-confirm {
+  padding-top: 22px;
+  border-top: 1px solid rgb(146 139 126 / 0.45);
+}
+
+.read-confirm-title {
+  margin: 10px 0 6px;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 30px;
+  line-height: 1.2;
+}
+
+.read-confirm-note {
+  margin: 0;
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.read-confirm .choice-check {
+  margin: 18px 0 20px;
+  font-size: 17px;
+}
+
+.read-confirm .read-meta {
+  margin-top: 28px;
+}
+
+/* D04: someone else let it go while this reader held it */
+.read-final-title {
+  margin: 0 0 6px;
+  font-size: 19px;
+}
+
+.read-final-note {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: var(--muted);
+}
+
+/* Only the outer edge chars, at one corner, under the text, taking no clicks;
+   the texture's own outline masks it so it follows the torn edge. */
+.read-dialog.is-final .read-sheet::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(130px 170px at 100% 96%, rgb(52 34 22 / 0.85), rgb(96 66 40 / 0.45) 34%, rgb(150 112 72 / 0.14) 58%, transparent 74%);
+  mask: url("/textures/paper-sheet.png") center / 100% 100% no-repeat;
+  mix-blend-mode: multiply;
+}
+
 .read-status {
   display: grid;
   gap: 16px;

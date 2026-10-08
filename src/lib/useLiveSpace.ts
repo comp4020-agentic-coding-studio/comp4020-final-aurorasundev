@@ -67,6 +67,23 @@ export function useLiveSpace({ limit, reading, pendingOps, onGone, onChanged }: 
         }
       });
 
+      // A paper this page let go itself arrives here too; that page plays its
+      // own ending from the HTTP reply, so its echo only moves the count.
+      source.addEventListener("paper:destroyed", (e) => {
+        const d = JSON.parse((e as MessageEvent<string>).data) as {
+          id: string;
+          revision: number;
+          active_total: number;
+          op: string;
+        };
+        if (pendingOps.has(d.op)) {
+          act({ type: "counted", revision: d.revision, total: d.active_total });
+          return;
+        }
+        act({ type: "removed", id: d.id, revision: d.revision, total: d.active_total, reading: latest.current.reading() });
+        latest.current.onGone(d.id, "destroyed");
+      });
+
       source.addEventListener("paper:witnessed", (e) => {
         const d = JSON.parse((e as MessageEvent<string>).data) as { id: string; version: number; revision: number };
         act({ type: "revised", revision: d.revision });

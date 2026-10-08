@@ -483,7 +483,8 @@ export function createPaperScene(container, buttonLayer, options) {
     if (pointerState && pointerState.paper === paper) pointerState.paper = null;
     scene.remove(paper.mesh);
     paper.mesh.geometry.dispose();
-    physicsWorld.removeBody(paper.body);
+    paper.ownMaterial?.dispose();
+    if (!paper.bodyRemoved) physicsWorld.removeBody(paper.body);
     paper.button.remove();
     papers.delete(paper.id);
   }
@@ -494,8 +495,8 @@ export function createPaperScene(container, buttonLayer, options) {
     for (const [id, paper] of [...papers.entries()]) {
       if (wanted.has(id) || paper === activePaper) continue;
       // null marks a paper still waiting for its staggered drop-in
-      if (paper) removePaper(paper);
-      else papers.delete(id);
+      if (!paper) papers.delete(id);
+      else if (paper.state !== "fading") startFade(paper, false);
     }
     let i = 0;
     for (const id of wantedIds) {
@@ -718,8 +719,58 @@ export function createPaperScene(container, buttonLayer, options) {
     }
   }
 
+  const ASH = new THREE.Color("#4b423a");
+  const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // A paper leaves the local scene. `burn` is for one that was let go: it
+  // darkens and lifts as it fades, where it is, with no flames or debris.
+  // Anything else (another visitor's destruction, a window refill) just
+  // shrinks away. Its own material, so fading it leaves the others alone.
+  function startFade(paper, burn) {
+    if (!paper.bodyRemoved) physicsWorld.removeBody(paper.body);
+    paper.bodyRemoved = true;
+    paper.mesh.visible = true;
+    paper.mesh.castShadow = false;
+    paper.ownMaterial = paperMaterial3d.clone();
+    paper.ownMaterial.transparent = true;
+    paper.mesh.material = paper.ownMaterial;
+    paper.state = "fading";
+    paper.time = 0;
+    paper.fade = {
+      burn,
+      duration: reduceMotion() ? 0.2 : burn ? 1.5 : 0.7,
+      scale: paper.mesh.scale.x,
+      frame: paper.frameIdx,
+      color: paper.ownMaterial.color.clone(),
+    };
+  }
+
   function updatePaperMotion(paper, dt) {
     const maxFrame = animData.frameCount - 1;
+
+    if (paper.state === "fading") {
+      paper.time += dt;
+      const { burn, duration, scale, frame, color } = paper.fade;
+      const t = clamp01(paper.time / duration);
+      if (burn) {
+        // An open sheet balls itself up first (a flat card fading out reads
+        // as a slab), darkening as it goes, then fades in the last stretch.
+        const crumple = easeOutCubic(clamp01(t / 0.6));
+        if (frame < maxFrame) {
+          paper.frameIdx = lerp(frame, maxFrame, crumple);
+          updatePaperFrame(paper, animData, paper.frameIdx);
+        }
+        paper.mesh.scale.setScalar(lerp(scale, Math.min(scale, CLOSED_SCALE) * 0.85, crumple));
+        paper.ownMaterial.color.lerpColors(color, ASH, clamp01(t * 1.4));
+        paper.ownMaterial.opacity = 1 - easeInCubic(clamp01((t - 0.45) / 0.55));
+        if (!reduceMotion()) paper.mesh.position.y += dt * 0.08;
+      } else {
+        paper.ownMaterial.opacity = 1 - easeInCubic(t);
+        paper.mesh.scale.setScalar(scale * (1 - 0.6 * easeInCubic(t)));
+      }
+      if (t >= 1) removePaper(paper);
+      return;
+    }
 
     if (paper.state === "opening") {
       paper.time += dt * ANIM_SPEED;
@@ -888,6 +939,17 @@ export function createPaperScene(container, buttonLayer, options) {
         }, 300);
       };
       startOpen(paper);
+    },
+
+    /**
+     * The open paper is gone (let go here, or by someone else while it was
+     * being read): it fades where it is instead of crumpling back.
+     */
+    burnOpenPaper() {
+      if (!activePaper) return;
+      activePaper.onUnfolded = null;
+      startFade(activePaper, true);
+      activePaper = null;
     },
 
     /** Crumples the open paper back into the space. Nothing is deleted. */

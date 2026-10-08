@@ -1,13 +1,16 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Header } from "./components/Header.tsx";
 import { PaperField, type PaperFieldHandle, type SheetRect } from "./components/PaperField.tsx";
-import { ReadDialog } from "./components/ReadDialog.tsx";
+import { ReadDialog, type Ended } from "./components/ReadDialog.tsx";
 import { SpaceFooter } from "./components/SpaceFooter.tsx";
 import { WriteDialog } from "./components/WriteDialog.tsx";
-import type { Created } from "./lib/api.ts";
+import type { Burned, Created } from "./lib/api.ts";
 import { useLiveSpace } from "./lib/useLiveSpace.ts";
 
-type Mode = { kind: "space" } | { kind: "writing" } | { kind: "reading"; id: string; revealed: boolean; rect: SheetRect | null };
+type Mode =
+  | { kind: "space" }
+  | { kind: "writing" }
+  | { kind: "reading"; id: string; revealed: boolean; rect: SheetRect | null; ended: Ended | null };
 
 // The references show generously spaced papers rather than the demo's crowded
 // 40-paper stage; the window stays small enough to keep that negative space.
@@ -28,7 +31,9 @@ export function App() {
     limit,
     reading: () => (modeRef.current.kind === "reading" ? modeRef.current.id : null),
     pendingOps,
-    onGone: () => {},
+    onGone: (id, why) => {
+      setMode((m) => (m.kind === "reading" && m.id === id && !m.ended ? { ...m, ended: why } : m));
+    },
     onChanged: (id, version) => {
       if (modeRef.current.kind === "reading" && modeRef.current.id === id) setReadingVersion((v) => Math.max(v, version));
     },
@@ -37,7 +42,7 @@ export function App() {
   const openPaper = useCallback((id: string) => {
     returnFocus.current = document.activeElement as HTMLElement | null;
     setReadingVersion(0);
-    setMode({ kind: "reading", id, revealed: false, rect: null });
+    setMode({ kind: "reading", id, revealed: false, rect: null, ended: null });
     field.current?.openPaper(id, (rect) =>
       setMode((m) => (m.kind === "reading" && m.id === id ? { ...m, revealed: true, rect } : m)),
     );
@@ -47,10 +52,34 @@ export function App() {
     setMode((m) => (m.kind === "reading" && m.revealed ? { ...m, rect } : m));
   }, []);
 
+  // Closing an ended paper is the last of it: it fades instead of crumpling
+  // back, and leaves this page's window.
   const closePaper = useCallback(() => {
-    field.current?.closePaper();
+    const m = modeRef.current;
+    if (m.kind === "reading" && m.ended) {
+      field.current?.burnOpenPaper();
+      dispatch({ type: "removed", id: m.id, revision: -1, total: 0, reading: null });
+    } else field.current?.closePaper();
     setMode({ kind: "space" });
     returnFocus.current?.focus();
+  }, [dispatch]);
+
+  // This page let it go: the server has committed, so it plays its own
+  // ending; other pages learn of it from the stream.
+  const burned = useCallback(
+    (result: Burned) => {
+      const m = modeRef.current;
+      if (m.kind !== "reading") return;
+      field.current?.burnOpenPaper();
+      dispatch({ type: "removed", id: m.id, revision: result.revision, total: result.total, reading: null });
+      setMode({ kind: "space" });
+      document.querySelector<HTMLElement>(".space-write")?.focus();
+    },
+    [dispatch],
+  );
+
+  const ended = useCallback((why: Ended) => {
+    setMode((m) => (m.kind === "reading" && !m.ended ? { ...m, ended: why } : m));
   }, []);
 
   const startWriting = useCallback(() => {
@@ -101,7 +130,19 @@ export function App() {
           offline={space.connection === "reconnecting"}
         />
       )}
-      {mode.kind === "reading" && <ReadDialog id={mode.id} revealed={mode.revealed} rect={mode.rect} liveVersion={readingVersion} onClose={closePaper} />}
+      {mode.kind === "reading" && (
+        <ReadDialog
+          id={mode.id}
+          revealed={mode.revealed}
+          rect={mode.rect}
+          liveVersion={readingVersion}
+          ended={mode.ended}
+          pendingOps={pendingOps}
+          onBurned={burned}
+          onEnded={ended}
+          onClose={closePaper}
+        />
+      )}
     </div>
   );
 }

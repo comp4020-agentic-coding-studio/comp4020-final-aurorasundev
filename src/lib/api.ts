@@ -42,6 +42,12 @@ export const getPaper = (id: string): Promise<OpenedPaper> => request(paperPath(
 export const witnessPaper = (id: string, receipt: string): Promise<PaperState> =>
   request(paperPath(id, "/witness"), postJson({ read_receipt: receipt }));
 
+export type Burned = { id: string; status: "destroyed"; revision: number; total: number };
+
+// The op key is reused for a retry, so a lost reply gets the first outcome.
+export const burnPaper = (id: string, receipt: string, opKey: string): Promise<Burned> =>
+  request(paperPath(id, "/burn"), postJson({ read_receipt: receipt, op_key: opKey, confirmed: true }));
+
 // A lost response can't tell "not saved" from "saved, reply dropped", so a
 // network failure is retried with the same submission key: the server answers
 // a repeat with the paper it already saved instead of saving it twice.
