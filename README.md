@@ -11,22 +11,28 @@ to open them.
 A paper cannot be edited after it is thrown. There is no personal archive,
 search, ranking, or public profile.
 
-## What works in this first version?
+## What works now?
 
-You can write a paper, throw it into the space, and open papers left by
-others. Papers are stored on the server and remain after you leave. Refresh
-the space to see changes.
+You can write a paper, choose to keep it or release it, and throw it into
+the space. Visitors already there see it land without reloading. Opening a
+paper shows its words; choosing "I saw it" witnesses it, once per visitor.
+A kept paper can be let go only by the person who left it; a released paper
+by anyone who has witnessed it. If a paper is let go while you are reading
+it, you may finish before it is gone.
 
 ## What comes later?
 
-Witnessing, Keep / Release choices, real-time changes, and burning are
-planned for later versions.
+Return keys to restore your rights on another device, automated checks
+before a paper enters the space, and reporting are planned next.
 
 ## References
 
 - [Paper Crumple demo](https://github.com/item-develop/paper-crumple-demo) —
   the crumpled paper, its folding animation and its physics, reused under MIT
   from nagasawa (ITEM Inc.); `THIRD_PARTY_NOTICES.md` records what changed.
+- Decision records:
+  [real-time over SSE, recovered from snapshots](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/001-sse-snapshots.md)
+  and [letting go while someone is reading](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/002-active-reader-final-read.md).
 - [Project design notes](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/plan.md) —
   the implementation plan and design references the app is built from (the
   [Week 9 plan](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/crit-8/throwaway-week9-claude-package/throwaway-week9-plan.md)
