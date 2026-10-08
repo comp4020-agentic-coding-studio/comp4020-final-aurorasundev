@@ -282,24 +282,44 @@ textarea {
   filter: blur(5px);
 }
 
-/* Keep the cut-out edge, but calm the folds beneath readable content. */
+/* A sheet is three layers, none stretched over the whole sheet (V3): a fill
+   of fine paper tooth repeating at its own scale, restrained folds that live
+   only in a band along the edges and corners, and a torn outline clipping
+   both. Edges and corners are 9-slices of one generated photograph
+   (docs/generated-assets.md), so a wide write sheet and a narrow phone
+   sheet share the same deckle and folds without distorting them. */
 .paper-sheet {
+  --sheet-fill: #f4f0e7;
+  --sheet-edge: 44px;
+  --sheet-folds: 112px;
   position: relative;
   isolation: isolate;
-  background: url("/textures/paper-sheet.png") center / 100% 100% no-repeat;
-  filter: drop-shadow(0 2px 3px rgb(40 36 30 / 0.06))
-    drop-shadow(10px 18px 28px rgb(40 36 30 / 0.13));
+  filter: drop-shadow(0 1px 2px rgb(40 36 30 / 0.07))
+    drop-shadow(8px 16px 26px rgb(40 36 30 / 0.12));
 }
 
-.paper-sheet::before {
+.paper-sheet::before,
+.paper-sheet::after {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: -1;
-  background: #faf8f2;
-  opacity: 0.72;
-  mask: url("/textures/paper-sheet.png") center / 100% 100% no-repeat;
   pointer-events: none;
+  -webkit-mask-box-image: url("/textures/sheet-outline.png") 56 / var(--sheet-edge) round;
+  mask-border: url("/textures/sheet-outline.png") 56 fill / var(--sheet-edge) round;
+}
+
+.paper-sheet::before {
+  z-index: -2;
+  background: url("/textures/paper-fibre.jpg") 0 0 / 256px repeat, var(--sheet-fill);
+  background-blend-mode: soft-light;
+}
+
+.paper-sheet::after {
+  z-index: -1;
+  box-sizing: border-box;
+  border: var(--sheet-folds) solid transparent;
+  border-image: url("/textures/sheet-folds.jpg") 120 round;
+  mix-blend-mode: soft-light;
 }
 
 /* writing (D02/M02) */
@@ -653,17 +673,14 @@ fieldset:disabled .choice,
   color: var(--muted);
 }
 
-/* Only the outer edge chars, at one corner, under the text, taking no clicks;
-   the texture's own outline masks it so it follows the torn edge. */
-.read-dialog.is-final .read-sheet::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+/* Only the outer edge chars, at one corner, under the text: one more layer
+   of the sheet's fill, so the torn outline clips it with the rest. */
+.read-dialog.is-final .read-sheet::before {
   background:
-    radial-gradient(120px 160px at 100% 97%, rgb(34 22 14 / 0.95), rgb(70 44 24 / 0.7) 22%, rgb(140 98 58 / 0.22) 44%, transparent 62%);
-  mask: url("/textures/paper-sheet.png") center / 100% 100% no-repeat;
-  mix-blend-mode: multiply;
+    radial-gradient(120px 160px at 100% 97%, rgb(34 22 14 / 0.95), rgb(70 44 24 / 0.7) 22%, rgb(140 98 58 / 0.22) 44%, transparent 62%),
+    url("/textures/paper-fibre.jpg") 0 0 / 256px repeat,
+    var(--sheet-fill);
+  background-blend-mode: multiply, soft-light;
 }
 
 .read-status {
@@ -682,6 +699,11 @@ fieldset:disabled .choice,
 
 /* phone (M01–M03) */
 @media (max-width: 600px) {
+  .paper-sheet {
+    --sheet-edge: 30px;
+    --sheet-folds: 72px;
+  }
+
   .site-header {
     padding-top: 44px;
   }
