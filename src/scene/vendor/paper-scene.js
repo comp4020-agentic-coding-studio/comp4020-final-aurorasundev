@@ -493,12 +493,35 @@ export function createPaperScene(container, buttonLayer, options) {
     return Math.max(low, ARRIVAL_DROP.min);
   }
 
+  // The demo's crumple ends as a cupped ball whose open side is local +Y.
+  // Seen from above (as every paper used to land) each one read as the same
+  // bowl; D01's papers are closed, rounded volumes. So a paper rests with
+  // that open side turned away from the camera (down, or down and back) in
+  // a random direction, and spun at random about it: rounded silhouettes
+  // that still differ from one another.
+  const UP = new THREE.Vector3(0, 1, 0);
+  const _open = new THREE.Vector3();
+  const _toCamera = new THREE.Vector3();
+  const _spin = new THREE.Quaternion();
+  function closedOrientation(position) {
+    _toCamera.copy(camera.position).sub(position).normalize();
+    for (let i = 0; i < 24; i++) {
+      _open.set(randomRange(-1, 1), randomRange(-1, -0.15), randomRange(-1, 1)).normalize();
+      if (_open.dot(_toCamera) < -0.25) break;
+    }
+    const q = new THREE.Quaternion().setFromUnitVectors(UP, _open);
+    _spin.setFromAxisAngle(_open, randomRange(0, Math.PI * 2));
+    return q.premultiply(_spin);
+  }
+
   function spawnPaper(id, position, dropIn, dropHeight = randomRange(0.8, 1.2)) {
     const maxFrame = animData.frameCount - 1;
     const base = createPaper(animData, paperMaterial3d);
     base.mesh.castShadow = true;
-    base.mesh.rotation.set(0, Math.PI + randomRange(-0.6, 0.6), randomRange(-0.18, 0.18));
+    base.mesh.quaternion.copy(closedOrientation(position));
     base.mesh.position.copy(position);
+    // seat its collision sphere on the floor whatever way up it lies
+    base.mesh.position.y = restCenterY - crumpleWorldOffset(CLOSED_SCALE, base.mesh.quaternion).y;
     base.mesh.scale.setScalar(CLOSED_SCALE);
     scene.add(base.mesh);
     const body = createPaperBody(base);
