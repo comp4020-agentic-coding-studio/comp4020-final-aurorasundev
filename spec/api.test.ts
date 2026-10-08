@@ -21,11 +21,13 @@ async function newSession(): Promise<string> {
 
 const key = (): string => randomUUID();
 
+// Every save names its mode and carries the author's confirmation, unless a
+// test is checking what happens without them.
 async function throwPaper(cookie: string, body: Record<string, unknown>): Promise<Response> {
   return fetch(url("/api/papers"), {
     method: "POST",
     headers: { "content-type": "application/json", cookie },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ mode: "KEEP", confirmed: true, ...body }),
   });
 }
 
@@ -46,7 +48,10 @@ describe("a stranger leaves a paper and someone else reads it", () => {
     expect(b).not.toBe(a);
     const read = await fetch(url(`/api/papers/${paper.id}`), { headers: { cookie: b } });
     expect(read.status).toBe(200);
-    expect(await read.json()).toEqual({ id: paper.id, content });
+    const opened = (await read.json()) as Record<string, unknown>;
+    expect(opened.id).toBe(paper.id);
+    expect(opened.content).toBe(content);
+    expect(JSON.stringify(opened)).not.toMatch(/owner/);
 
     const anonymous = await fetch(url(`/api/papers/${paper.id}`));
     expect(anonymous.status).toBe(200);
@@ -90,6 +95,43 @@ describe("what gets written", () => {
     expect(res.status).toBe(201);
     const body = (await res.json()) as Record<string, unknown>;
     expect(JSON.stringify(body)).not.toContain("someone-else");
+  });
+});
+
+describe("how it is left", () => {
+  it("needs an intentional mode and the author's confirmation", async () => {
+    const cookie = await newSession();
+    const before = await total();
+    for (const body of [
+      { content: "no mode", submission_key: key(), mode: undefined },
+      { content: "made-up mode", submission_key: key(), mode: "BURN" },
+      { content: "unconfirmed", submission_key: key(), confirmed: false },
+      { content: "unconfirmed", submission_key: key(), confirmed: undefined },
+    ]) {
+      const res = await throwPaper(cookie, body);
+      expect(res.status, JSON.stringify(body)).toBe(400);
+      expect(((await res.json()) as { code: string }).code).toBe("invalid_input");
+    }
+    expect(await total()).toBe(before);
+  });
+
+  it("can't be edited or have its mode changed once saved", async () => {
+    const cookie = await newSession();
+    const submission_key = key();
+    const res = await throwPaper(cookie, { content: "as it was", submission_key, mode: "KEEP" });
+    const { paper } = (await res.json()) as { paper: { id: string } };
+    for (const method of ["PUT", "PATCH", "DELETE"]) {
+      const attempt = await fetch(url(`/api/papers/${paper.id}`), {
+        method,
+        headers: { "content-type": "application/json", cookie },
+        body: JSON.stringify({ content: "rewritten", mode: "RELEASE" }),
+      });
+      expect(attempt.status, method).toBeGreaterThanOrEqual(400);
+    }
+    const sameKeyOtherMode = await throwPaper(cookie, { content: "as it was", submission_key, mode: "RELEASE" });
+    expect(sameKeyOtherMode.status).toBe(409);
+    const read = (await (await fetch(url(`/api/papers/${paper.id}`))).json()) as { content: string; mode: string };
+    expect(read).toMatchObject({ content: "as it was", mode: "keep" });
   });
 });
 
@@ -148,7 +190,7 @@ describe("persistence", () => {
     const path = join(mkdtempSync(join(tmpdir(), "throwaway-")), "papers.sqlite");
     const first = openDb(path);
     first.prepare("INSERT INTO identities (id, created_at) VALUES (?, ?)").run("owner", "now");
-    const result = createPaper(first, "owner", "still here\n还在", "persist-key-1");
+    const result = createPaper(first, "owner", "still here\n还在", "persist-key-1", "RELEASE");
     expect(result.ok).toBe(true);
     first.close();
 

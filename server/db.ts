@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -60,7 +60,30 @@ const MIGRATIONS: ((db: DB) => void)[] = [
     const set = db.prepare("UPDATE papers SET request_digest = ? WHERE id = ?");
     for (const row of rows) set.run(requestDigest(row.content, row.mode), row.id);
   },
+
+  // 3: witnessing, and the key that signs read receipts. One row per
+  // (paper, identity), so tabs and repeats count once; `counts` is 0 for the
+  // paper's author, whose acknowledgement grants eligibility but no tally.
+  (db) => {
+    db.exec(`
+      CREATE TABLE witnesses (
+        paper_id TEXT NOT NULL REFERENCES papers(id),
+        identity_id TEXT NOT NULL REFERENCES identities(id),
+        counts INTEGER NOT NULL CHECK (counts IN (0, 1)),
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (paper_id, identity_id)
+      );
+      CREATE TABLE server_secrets (
+        name TEXT PRIMARY KEY,
+        value BLOB NOT NULL
+      );
+    `);
+    db.prepare("INSERT INTO server_secrets (name, value) VALUES ('read_receipt', ?)").run(randomBytes(32));
+  },
 ];
+
+export const serverSecret = (db: DB, name: string): Buffer =>
+  (db.prepare("SELECT value FROM server_secrets WHERE name = ?").get(name) as { value: Buffer }).value;
 
 export function openDb(path: string): DB {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });

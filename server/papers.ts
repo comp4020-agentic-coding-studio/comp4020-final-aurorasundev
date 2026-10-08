@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
-import { activeTotal, bumpRevision, currentRevision, requestDigest, type DB } from "./db.ts";
+import { activeTotal, bumpRevision, currentRevision, requestDigest, serverSecret, type DB } from "./db.ts";
 import { broadcast } from "./events.ts";
 import { log } from "./log.ts";
+import { checkReceipt, issueReceipt } from "./receipt.ts";
 import { identityFor } from "./session.ts";
 
 export const MAX_CODE_POINTS = 2000;
@@ -20,7 +21,7 @@ export function createPaper(
   ownerId: string,
   content: unknown,
   submissionKey: unknown,
-  modeInput: unknown = "KEEP",
+  modeInput: unknown,
 ): Result<Created> {
   if (typeof content !== "string" || content.trim() === "") {
     return fail(400, "invalid_input", "Write something before throwing it.");
@@ -64,6 +65,54 @@ export function createPaper(
 
 export const countPapers = activeTotal;
 
+type PaperRow = { id: string; owner_identity_id: string; content: string; mode: Mode; status: string; version: number };
+
+const paperRow = (db: DB, id: string): PaperRow | undefined =>
+  db.prepare("SELECT id, owner_identity_id, content, mode, status, version FROM papers WHERE id = ?").get(id) as
+    | PaperRow
+    | undefined;
+
+const witnessCount = (db: DB, paperId: string): number =>
+  (db.prepare("SELECT COUNT(*) AS n FROM witnesses WHERE paper_id = ? AND counts = 1").get(paperId) as { n: number }).n;
+
+const hasAcknowledged = (db: DB, paperId: string, identityId: string): boolean =>
+  !!db.prepare("SELECT 1 FROM witnesses WHERE paper_id = ? AND identity_id = ?").get(paperId, identityId);
+
+// What this viewer may do with this paper. Keep: only its author may destroy
+// it, with no need to witness first. Release: anyone who has acknowledged it,
+// the author included, but the author gains nothing beyond any visitor.
+export function viewerState(db: DB, paper: PaperRow, identityId: string | undefined) {
+  const isAuthor = !!identityId && paper.owner_identity_id === identityId;
+  const witnessed = !!identityId && hasAcknowledged(db, paper.id, identityId);
+  const canBurn = !!identityId && (paper.mode === "KEEP" ? isAuthor : witnessed);
+  return { is_author: isAuthor, has_witnessed: witnessed, can_burn: canBurn };
+}
+
+const publicPaper = (db: DB, paper: PaperRow, identityId: string | undefined) => ({
+  id: paper.id,
+  mode: paper.mode.toLowerCase(),
+  version: paper.version,
+  witness_count: witnessCount(db, paper.id),
+  viewer: viewerState(db, paper, identityId),
+});
+
+export function witnessPaper(db: DB, paperId: string, identityId: string) {
+  return db.transaction(() => {
+    const paper = paperRow(db, paperId);
+    if (!paper || paper.status !== "ACTIVE") return { ok: false as const };
+    const counts = paper.owner_identity_id === identityId ? 0 : 1;
+    const inserted = db
+      .prepare("INSERT OR IGNORE INTO witnesses (paper_id, identity_id, counts, created_at) VALUES (?, ?, ?, ?)")
+      .run(paperId, identityId, counts, new Date().toISOString()).changes;
+    let revision: number | undefined;
+    if (inserted) {
+      db.prepare("UPDATE papers SET version = version + 1 WHERE id = ?").run(paperId);
+      revision = bumpRevision(db);
+    }
+    return { ok: true as const, paper: paperRow(db, paperId)!, fresh: inserted > 0, revision, counted: counts === 1 };
+  })();
+}
+
 export function papersRouter(db: DB): Router {
   const router = Router();
 
@@ -74,16 +123,46 @@ export function papersRouter(db: DB): Router {
     res.set("Cache-Control", "no-store").json({ papers, total: activeTotal(db), revision: currentRevision(db) });
   });
 
+  // Opening is not witnessing: this never records anything. It returns the
+  // words, this viewer's own state and a receipt proving they were fetched.
   router.get("/papers/:id", (req, res) => {
     res.set("Cache-Control", "no-store");
-    const row = db.prepare("SELECT id, content FROM papers WHERE id = ? AND status = 'ACTIVE'").get(req.params.id) as
-      | { id: string; content: string }
-      | undefined;
-    if (!row) {
+    const paper = paperRow(db, req.params.id);
+    if (!paper || paper.status !== "ACTIVE") {
       res.status(404).json({ code: "paper_gone", error: "This paper is no longer here." });
       return;
     }
-    res.json(row);
+    const identityId = identityFor(db, req);
+    res.json({
+      ...publicPaper(db, paper, identityId),
+      content: paper.content,
+      read_receipt: identityId ? issueReceipt(serverSecret(db, "read_receipt"), paper.id, identityId) : null,
+    });
+  });
+
+  router.post("/papers/:id/witness", (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const identityId = identityFor(db, req);
+    const paperId = req.params.id;
+    if (!identityId) {
+      res.status(401).json({ code: "unauthenticated", error: "Your session has expired. Reload the page and try again." });
+      return;
+    }
+    if (!checkReceipt(serverSecret(db, "read_receipt"), req.body?.read_receipt, paperId, identityId)) {
+      log("witness", { identity: identityId, paper: paperId, outcome: "forbidden" });
+      res.status(403).json({ code: "forbidden", error: "Open the paper before witnessing it." });
+      return;
+    }
+    const result = witnessPaper(db, paperId, identityId);
+    if (!result.ok) {
+      log("witness", { identity: identityId, paper: paperId, outcome: "paper_gone" });
+      res.status(410).json({ code: "paper_gone", error: "This paper is no longer here." });
+      return;
+    }
+    const { paper, fresh, revision, counted } = result;
+    log("witness", { identity: identityId, paper: paperId, outcome: fresh ? (counted ? "counted" : "author") : "repeat", revision });
+    if (fresh) broadcast("paper:witnessed", { id: paperId, version: paper.version, revision });
+    res.json(publicPaper(db, paper, identityId));
   });
 
   router.post("/papers", (req, res) => {
@@ -93,7 +172,11 @@ export function papersRouter(db: DB): Router {
       return;
     }
     const key = req.body?.submission_key;
-    const result = createPaper(db, ownerId, req.body?.content, key, req.body?.mode ?? "KEEP");
+    if (req.body?.confirmed !== true) {
+      res.status(400).json({ code: "invalid_input", error: "Confirm that you understand before throwing it." });
+      return;
+    }
+    const result = createPaper(db, ownerId, req.body?.content, key, req.body?.mode);
     if (!result.ok) {
       log("create", { identity: ownerId, outcome: result.code });
       res.status(result.status).json({ code: result.code, error: result.error });

@@ -27,7 +27,7 @@ const throwPaper = (cookie: string, body: Record<string, unknown>): Promise<Resp
   fetch(url("/api/papers"), {
     method: "POST",
     headers: { "content-type": "application/json", cookie },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ mode: "KEEP", confirmed: true, ...body }),
   });
 
 describe("live arrivals", () => {
