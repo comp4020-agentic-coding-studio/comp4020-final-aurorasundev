@@ -21,9 +21,9 @@ import { createPaper, updatePaperFrame } from "./paper.js";
 import { loadVATData } from "./paper-vat.js";
 
 const BACKGROUND = "#e7e4de";
-const WALL_COLOR = "#d7d3ca";
+const WALL_COLOR = "#ddd6c7";
 const FLOOR_COLOR = "#d3cdbc";
-const PAPER_COLOR = "#f1ece3";
+const PAPER_COLOR = "#ece6da";
 
 const FLOOR_VISUAL_Y = -0.1;
 const WALL_Z = -1.1;
@@ -51,6 +51,7 @@ const clamp01 = (v) => Math.min(Math.max(v, 0), 1);
 const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
 const easeInCubic = (t) => t * t * t;
 const lerp = (a, b, t) => a + (b - a) * t;
+const clampAbs = (v, limit) => Math.min(Math.max(v, -limit), limit);
 const randomRange = (min, max) => min + Math.random() * (max - min);
 
 /**
@@ -111,7 +112,27 @@ export function createPaperScene(container, buttonLayer, options) {
       stageBounds = { minX: -halfW, maxX: halfW, minZ: -0.95, maxZ: 0.7 };
     }
     camera.updateProjectionMatrix();
+    camera.updateMatrixWorld(true);
+    measureStageEdges();
   }
+
+  // How far left/right a paper can sit at a given depth and still be in
+  // view: wide at the back, narrower near the camera. Spawning, physics and
+  // dragging all use it, so papers spread across the frame (D01) without
+  // rolling off its near edge.
+  let edgeFar = 1;
+  let edgeNear = 1;
+  function measureStageEdges() {
+    const v = new THREE.Vector3();
+    const halfAt = (z) => {
+      v.set(1, 0, z).project(camera);
+      return 0.86 / Math.abs(v.x);
+    };
+    edgeFar = halfAt(stageBounds.minZ);
+    edgeNear = halfAt(stageBounds.maxZ);
+  }
+  const halfWidthAt = (z) =>
+    lerp(edgeFar, edgeNear, clamp01((z - stageBounds.minZ) / (stageBounds.maxZ - stageBounds.minZ)));
   applyCamera();
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -124,7 +145,7 @@ export function createPaperScene(container, buttonLayer, options) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.domElement.className = "paper-canvas";
   container.appendChild(renderer.domElement);
 
@@ -149,13 +170,33 @@ export function createPaperScene(container, buttonLayer, options) {
     color: FLOOR_COLOR,
     roughness: 1,
     metalness: 0,
-    envMapIntensity: 0.14,
+    envMapIntensity: 0.3,
   });
   const floor = new THREE.Mesh(floorGeometry, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, FLOOR_VISUAL_Y, 1);
   floor.receiveShadow = true;
   scene.add(floor);
+
+  // The references' ground fades into the background with no hard seam. Fog
+  // does that here. three.js fogs by depth along the camera's view direction,
+  // so both ends are measured that way: it starts halfway back across the
+  // stage and is complete where the floor meets the wall, so the back half
+  // of the floor drifts into the wall's colour while the front stays as lit.
+  // Papers ignore it. (A band only past the last paper was too narrow to
+  // read as anything but a line; a fog set by eye washed out the floor.)
+  const viewDepth = (point) => {
+    const forward = camera.getWorldDirection(new THREE.Vector3());
+    return point.clone().sub(camera.position).dot(forward);
+  };
+  function measureFog() {
+    const seam = viewDepth(new THREE.Vector3(0, FLOOR_VISUAL_Y, WALL_Z));
+    const midStage = (stageBounds.minZ + stageBounds.maxZ) / 2;
+    scene.fog.near = viewDepth(new THREE.Vector3(0, FLOOR_VISUAL_Y, midStage));
+    scene.fog.far = seam;
+  }
+  scene.fog = new THREE.Fog(new THREE.Color(WALL_COLOR), 4, 5);
+  measureFog();
 
   const wallHeight = 12;
   const wallGeometry = new THREE.PlaneGeometry(24, wallHeight);
@@ -165,20 +206,21 @@ export function createPaperScene(container, buttonLayer, options) {
   scene.add(wall);
 
   // Lights
-  // The references' contact shadows read as dense and dark at their core,
-  // a fifth or less of the floor's own brightness. Ambient and the fill
-  // light reach shadowed ground the same as lit ground (neither is blocked
-  // by the shadow map), so both stay low; the directional key light is
-  // balanced with a softer key so paper highlights retain their texture.
-  const ambient = new THREE.AmbientLight(0xffffff, 0.22);
+  // plan.md's D01 target is soft broad light and restrained contact shadows
+  // with visible but gentle shade in the folds. The hemisphere and fill reach
+  // shadowed ground too (no light here is blocked except the key), so they
+  // set how light the shadows stay; the key stays soft-edged and moderate.
+  // Broad soft light from above, warm from the ground: D01's papers are lit
+  // all round, with gentle shade in the folds rather than black creases.
+  const ambient = new THREE.HemisphereLight(0xfffaf2, 0xd8cfbf, 0.75);
   scene.add(ambient);
 
   // A gentle fill preserves detail on the shaded faces of matte paper.
-  const fillLight = new THREE.DirectionalLight(0xffffff, 0.18);
+  const fillLight = new THREE.DirectionalLight(0xffffff, 0.35);
   fillLight.position.set(0.4, 2.2, 4.2);
   scene.add(fillLight);
 
-  const dirLight = new THREE.DirectionalLight(0xfff6ea, 2.5);
+  const dirLight = new THREE.DirectionalLight(0xfff6ea, 1.75);
   dirLight.position.set(-2.2, 3.1, 1.8);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.set(compact ? 1024 : 2048, compact ? 1024 : 2048);
@@ -242,9 +284,11 @@ export function createPaperScene(container, buttonLayer, options) {
     envMapIntensity: 0.16,
     side: THREE.DoubleSide,
   });
+  // the horizon fog is for the far floor and the wall, never the papers
+  paperMaterial3d.fog = false;
 
   // ==================================================
-  // 状態
+  // State
   // ==================================================
   /** @type {Map<string, any>} */
   const papers = new Map();
@@ -362,14 +406,14 @@ export function createPaperScene(container, buttonLayer, options) {
   }
 
   function applyPhysicsBounds(dt) {
-    const minX = stageBounds.minX + collisionRadius;
-    const maxX = stageBounds.maxX - collisionRadius;
     const minZ = stageBounds.minZ + collisionRadius;
     const maxZ = stageBounds.maxZ - collisionRadius;
 
     for (const paper of livePapers()) {
       if (paper.body.type !== CANNON.Body.DYNAMIC) continue;
       const body = paper.body;
+      const maxX = halfWidthAt(body.position.z) - collisionRadius;
+      const minX = -maxX;
       if (body.position.x < minX) {
         if (body.velocity.x < 0) body.velocity.x = Math.abs(body.velocity.x) * 0.42;
         body.velocity.x += BOUNDS_PULL * dt;
@@ -416,23 +460,30 @@ export function createPaperScene(container, buttonLayer, options) {
   // Creating and removing paper
   // ==================================================
   function randomSpawnPosition() {
+    // Takes the first spot clear of every paper; on a stage too small for
+    // that (a phone), the roomiest spot tried rather than the last one.
     const margin = collisionRadius * 1.3;
+    const wanted = (collisionRadius * 4.2) ** 2;
     const pos = new THREE.Vector3(0, restMeshY, 0);
+    const best = pos.clone();
+    let bestRoom = -1;
     for (let attempt = 0; attempt < 80; attempt++) {
-      pos.x = randomRange(stageBounds.minX + margin, stageBounds.maxX - margin);
       pos.z = randomRange(stageBounds.minZ + margin, stageBounds.maxZ - margin);
-      let clear = true;
+      const half = halfWidthAt(pos.z) - margin;
+      pos.x = randomRange(-half, half);
+      let room = Infinity;
       for (const p of livePapers()) {
         const dx = p.body.position.x - pos.x;
         const dz = p.body.position.z - pos.z;
-        if (dx * dx + dz * dz <= (collisionRadius * 3.4) ** 2) {
-          clear = false;
-          break;
-        }
+        room = Math.min(room, dx * dx + dz * dz);
       }
-      if (clear) break;
+      if (room > bestRoom) {
+        bestRoom = room;
+        best.copy(pos);
+      }
+      if (room > wanted) break;
     }
-    return pos;
+    return best;
   }
 
   function spawnPaper(id, position, dropIn, dropHeight = randomRange(0.8, 1.2)) {
@@ -620,7 +671,7 @@ export function createPaperScene(container, buttonLayer, options) {
     grabPlane.constant = -(restCenterY + GRAB_LIFT);
     if (!raycaster.ray.intersectPlane(grabPlane, grabHitPoint)) return;
     paper.grab.target.set(
-      Math.min(Math.max(grabHitPoint.x, stageBounds.minX + collisionRadius), stageBounds.maxX - collisionRadius),
+      clampAbs(grabHitPoint.x, halfWidthAt(grabHitPoint.z) - collisionRadius),
       restCenterY + GRAB_LIFT,
       Math.min(Math.max(grabHitPoint.z, stageBounds.minZ + collisionRadius), stageBounds.maxZ - collisionRadius),
     );
@@ -874,6 +925,7 @@ export function createPaperScene(container, buttonLayer, options) {
   function onResize() {
     const { w, h } = size();
     applyCamera();
+    measureFog();
     renderer.setSize(w, h);
     composer.setSize(w, h);
     if (activePaper && activePaper.state === "open") {
