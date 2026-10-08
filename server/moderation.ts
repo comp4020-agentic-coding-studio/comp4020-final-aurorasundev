@@ -255,6 +255,9 @@ export const FIXTURE = {
   malformed: "[[fixture:malformed]]",
   wrongVersion: "[[fixture:wrong-version]]",
   slow: "[[fixture:slow]]",
+  // checks once, then the provider is "down" for that exact text: proves a
+  // retry of a saved submission never asks again
+  onceThenDown: "[[fixture:once-then-down]]",
   // allowed at publication, judged differently once reported
   reportViolation: "[[fixture:report-violation]]",
   reportUncertain: "[[fixture:report-uncertain]]",
@@ -278,6 +281,7 @@ export type FixtureProvider = Provider & { calls: { categorize: number; classify
 
 export function fixtureProvider(): FixtureProvider {
   const calls = { categorize: 0, classify: 0 };
+  const seen = new Set<string>();
   return {
     name: "fixture",
     model: "fixture",
@@ -285,6 +289,10 @@ export function fixtureProvider(): FixtureProvider {
     async categorize(text) {
       calls.categorize++;
       if (text.includes(FIXTURE.unavailable)) throw new ProviderError("timeout", "transient");
+      if (text.includes(FIXTURE.onceThenDown)) {
+        if (seen.has(text)) throw new ProviderError("timeout", "transient");
+        seen.add(text);
+      }
       if (text.includes(FIXTURE.slow)) await new Promise((r) => setTimeout(r, 1500));
       if (text.includes(FIXTURE.hardGate)) return { ...NO_FLAGS, harassment: true, "harassment/threatening": true };
       if (text.includes(FIXTURE.broadFlag)) return { ...NO_FLAGS, "self-harm": true, violence: true };
