@@ -337,18 +337,27 @@ textarea {
   line-height: 1.2;
 }
 
+/* The frame is on the field, not the textarea, so the count sits on its own
+   line under the text instead of over text that has scrolled beneath it. */
 .write-field {
-  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgb(250 248 244 / 0.78);
+}
+
+.write-field:focus-within {
+  border-color: #928b7e;
+  box-shadow: 0 0 0 2px rgb(146 139 126 / 0.12);
 }
 
 .write-field textarea {
   display: block;
   width: 100%;
   height: clamp(150px, 26dvh, 250px);
-  padding: 18px 20px 40px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgb(250 248 244 / 0.78);
+  padding: 18px 20px 4px;
+  border: 0;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
   font-size: 19px;
   line-height: 1.6;
   resize: none;
@@ -356,8 +365,6 @@ textarea {
 
 .write-field textarea:focus-visible {
   outline: none;
-  border-color: #928b7e;
-  box-shadow: 0 0 0 2px rgb(146 139 126 / 0.12);
 }
 
 .write-field textarea::placeholder {
@@ -369,9 +376,9 @@ textarea {
 }
 
 .write-count {
-  position: absolute;
-  right: 18px;
-  bottom: 14px;
+  display: block;
+  padding: 0 18px 12px;
+  text-align: right;
   font-size: 15px;
   color: var(--muted);
 }
@@ -397,16 +404,16 @@ textarea {
 
 .choice {
   display: grid;
-  grid-template-columns: 28px 1fr;
+  grid-template-columns: 30px 1fr;
   gap: 12px;
   align-items: start;
   cursor: pointer;
 }
 
 .choice input {
-  width: 22px;
-  height: 22px;
-  margin: 2px 0 0;
+  width: 26px;
+  height: 26px;
+  margin: 0;
   accent-color: var(--ink);
   cursor: pointer;
 }
@@ -463,12 +470,12 @@ fieldset:disabled .choice,
   margin: 24px 0 10px;
   font-family: var(--serif);
   font-weight: 400;
-  font-size: 40px;
+  font-size: 44px;
   line-height: 1.15;
 }
 
 .key-principle {
-  margin: 0 0 30px;
+  margin: 0 0 40px;
   font-size: 19px;
 }
 
@@ -502,8 +509,8 @@ fieldset:disabled .choice,
 }
 
 .key-note {
-  margin: 16px 0 0;
-  font-size: 17px;
+  margin: 18px 0 0;
+  font-size: 18px;
   color: var(--muted);
 }
 
@@ -615,7 +622,7 @@ fieldset:disabled .choice,
   margin: 10px 0 6px;
   font-family: var(--serif);
   font-weight: 400;
-  font-size: 30px;
+  font-size: 34px;
   line-height: 1.2;
 }
 
@@ -654,7 +661,7 @@ fieldset:disabled .choice,
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(130px 170px at 100% 96%, rgb(52 34 22 / 0.85), rgb(96 66 40 / 0.45) 34%, rgb(150 112 72 / 0.14) 58%, transparent 74%);
+    radial-gradient(120px 160px at 100% 97%, rgb(34 22 14 / 0.95), rgb(70 44 24 / 0.7) 22%, rgb(140 98 58 / 0.22) 44%, transparent 62%);
   mask: url("/textures/paper-sheet.png") center / 100% 100% no-repeat;
   mix-blend-mode: multiply;
 }
@@ -757,16 +764,16 @@ fieldset:disabled .choice,
   }
 
   .write-sheet {
-    padding: 28px 24px 28px;
+    padding: 28px 24px 24px;
   }
 
   .write-title {
-    font-size: 26px;
-    margin: 30px 0 16px;
+    font-size: 29px;
+    margin: 24px 0 14px;
   }
 
   .write-field textarea {
-    height: clamp(130px, 20dvh, 200px);
+    height: clamp(104px, 15dvh, 180px);
     font-size: 16px;
   }
 
@@ -780,6 +787,7 @@ fieldset:disabled .choice,
   }
 
   .choice-check {
+    margin-top: 16px;
     font-size: 15px;
   }
 
@@ -795,6 +803,7 @@ fieldset:disabled .choice,
   .write-actions {
     grid-template-columns: 1fr 1fr;
     gap: 10px;
+    margin-top: 20px;
   }
 
   .write-actions .button {
