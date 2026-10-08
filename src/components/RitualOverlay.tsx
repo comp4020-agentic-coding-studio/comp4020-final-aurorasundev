@@ -61,7 +61,8 @@ export function RitualOverlay({ stage, outcome, error, canPlace, fallback, layou
   // them; centred lower down when there is no scene to measure
   // (kept clear of the rim: the two lines take about 90px)
   const between = layout && precommit ? Math.min((layout.paperBottom + layout.furnaceTop) / 2, layout.furnaceTop - 56) : null;
-  const above = layout && !precommit ? layout.furnaceTop - 24 : null;
+  // above the rim and the paper burning in it (B02/B03)
+  const above = layout && !precommit ? layout.furnaceTop - 100 : null;
   const style = between !== null ? { top: between } : above !== null ? { top: above, transform: "translate(-50%, -100%)" } : undefined;
 
   return (

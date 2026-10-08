@@ -690,7 +690,7 @@ export function createPaperScene(container, buttonLayer, options) {
     }
     paper.state = "closed";
     syncBodyToMesh(paper);
-    setPaperBodyDynamic(paper, true);
+    if (!paper.parked) setPaperBodyDynamic(paper, true);
   }
   const _axisX = new THREE.Vector3(1, 0, 0);
   const _axisZ = new THREE.Vector3(0, 0, 1);
@@ -1108,6 +1108,8 @@ export function createPaperScene(container, buttonLayer, options) {
   const FURNACE_HEIGHT = 0.62;
   const FURNACE_INNER = 1 - 0.085;
   const CRUMPLE_SECONDS = 0.75;
+  // the phone's camera is close: the held paper is drawn smaller (B05)
+  const RITUAL_SCALE = compact ? CLOSED_SCALE * 0.66 : CLOSED_SCALE;
   const PRECOMMIT = ["crumpling", "hovering", "dragging", "returning", "holding"];
   let ritual = null;
 
@@ -1174,28 +1176,45 @@ export function createPaperScene(container, buttonLayer, options) {
   }
 
   // B01 keeps the furnace and the space above it clear: papers lying in its
-  // footprint, or behind it where they would show between the furnace and
-  // the hovering paper, roll aside to the nearer side and stay there.
+  // footprint, in front of it, or behind it where they would show between
+  // the furnace and the hovering paper, roll aside to the nearer side and
+  // stay there.
+  // Measured on screen: a paper far back sits close to the middle of the
+  // picture even when it is well to one side in the room. The column is the
+  // furnace's on-screen width plus a paper's; a paper is moved sideways until
+  // it clears it, even if that leaves it partly past the edge of the view.
   function clearRitualColumn(r) {
     const { anchor, radius } = r.place;
-    const side = radius + collisionRadius * 1.9;
+    const { w } = size();
+    const half = (x, z) => Math.abs(screenPoint(_q.set(x, restCenterY, z)).x - w / 2);
+    const furnaceHalf = half(anchor.x + radius, anchor.z);
     for (const p of livePapers()) {
       if (p === r.paper || !isGrabbable(p) || p.explore) continue;
       const at = p.body.position;
-      if (Math.abs(at.x - anchor.x) >= side || at.z > anchor.z + radius + collisionRadius) continue;
+      const paperR = half(at.x + collisionRadius, at.z) - half(at.x, at.z);
+      const needed = furnaceHalf + Math.abs(paperR) * 1.6 + 12;
+      if (half(at.x, at.z) >= needed) continue;
       const dir = at.x >= anchor.x ? 1 : -1;
-      const to = new THREE.Vector3(anchor.x + dir * side, 0, at.z);
-      to.x = clampAbs(to.x, Math.max(side, halfWidthAt(at.z) - collisionRadius));
+      let low = Math.abs(at.x);
+      let high = Math.max(low, halfWidthAt(at.z)) + collisionRadius * 6;
+      for (let i = 0; i < 18; i++) {
+        const mid = (low + high) / 2;
+        if (half(dir * mid, at.z) < needed) low = mid;
+        else high = mid;
+      }
+      const to = new THREE.Vector3(dir * high, 0, at.z);
       const from = p.mesh.position.clone();
       to.y = from.y;
       to.z = from.z - (at.z - to.z);
       to.x = from.x + (to.x - at.x);
+      // held there (the stage bounds would roll it back) until the ritual ends
+      p.parked = true;
+      setPaperBodyDynamic(p, false);
       if (reduceMotion()) {
         p.mesh.position.copy(to);
         syncBodyToMesh(p);
         continue;
       }
-      setPaperBodyDynamic(p, false);
       p.state = "entering";
       p.explore = { from, to, time: 0, delay: randomRange(0, 0.12) };
     }
@@ -1234,10 +1253,10 @@ export function createPaperScene(container, buttonLayer, options) {
         const t = clamp01(r.time / (r.reduced ? 0.15 : CRUMPLE_SECONDS));
         const e = easeOutCubic(t);
         paper.mesh.quaternion.slerpQuaternions(r.start.quaternion, r.quaternion, e);
-        paper.mesh.scale.setScalar(lerp(r.start.scale, CLOSED_SCALE, e));
+        paper.mesh.scale.setScalar(lerp(r.start.scale, RITUAL_SCALE, e));
         paper.frameIdx = lerp(r.start.frameIdx, animData.frameCount - 1, e);
         updatePaperFrame(paper, animData, paper.frameIdx);
-        const target = _p.copy(r.place.hover).sub(crumpleWorldOffset(CLOSED_SCALE, r.quaternion));
+        const target = _p.copy(r.place.hover).sub(crumpleWorldOffset(RITUAL_SCALE, r.quaternion));
         paper.mesh.position.lerpVectors(r.start.position, target, e);
         if (t >= 1) {
           r.phase = "hovering";
@@ -1350,6 +1369,12 @@ export function createPaperScene(container, buttonLayer, options) {
   // The furnace goes and the ritual ends once it has; the paper (if any) is
   // no longer the ritual's.
   function endFurnace(r) {
+    // papers moved aside drift back into the stage on their own
+    for (const p of livePapers()) {
+      if (!p.parked) continue;
+      p.parked = false;
+      if (!p.explore && p.state === "closed") setPaperBodyDynamic(p, true);
+    }
     r.phase = "ending";
     r.paper = null;
     r.pendingIgnite = null;
@@ -1612,7 +1637,8 @@ export function createPaperScene(container, buttonLayer, options) {
       paper.onUnfolded = (rect) => {
         onUnfolded(rect);
         later(() => {
-          if (activePaper === paper) paper.mesh.visible = false;
+          // (not if it was released in the meantime: it is needed again)
+          if (activePaper === paper && paper.state === "open") paper.mesh.visible = false;
         }, 300);
       };
       startOpen(paper);
@@ -1721,7 +1747,7 @@ export function createPaperScene(container, buttonLayer, options) {
         r.paper.frameIdx = animData.frameCount - 1;
         updatePaperFrame(r.paper, animData, r.paper.frameIdx);
         r.paper.mesh.quaternion.copy(r.quaternion);
-        r.paper.mesh.scale.setScalar(CLOSED_SCALE);
+        r.paper.mesh.scale.setScalar(RITUAL_SCALE);
         r.centre.copy(r.place.hover);
       }
       r.phase = "holding";
