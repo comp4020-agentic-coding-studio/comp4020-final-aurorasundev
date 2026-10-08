@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Router } from "express";
 import type { DB } from "./db.ts";
 import { log } from "./log.ts";
@@ -56,6 +56,11 @@ export const keyState = (db: DB, identityId: string): "none" | "issued" | "saved
   ((db.prepare("SELECT state FROM return_keys WHERE identity_id = ?").get(identityId) as { state: "issued" | "saved" } | undefined)
     ?.state ?? "none");
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+const keptAPaper = (db: DB, identityId: string): boolean =>
+  !!db.prepare("SELECT 1 FROM papers WHERE owner_identity_id = ? AND mode = 'KEEP'").get(identityId);
+
 const unauthenticated = { code: "unauthenticated", error: "Your session has expired. Reload the page and try again." };
 
 export function identityRouter(db: DB): Router {
@@ -63,7 +68,9 @@ export function identityRouter(db: DB): Router {
 
   // Issued once a visitor has kept a paper. A key already confirmed as saved
   // is never shown again; an unconfirmed one (a lost reply, a closed tab) is
-  // replaced, which also invalidates the one that was never confirmed.
+  // replaced, which also invalidates the one that was never confirmed. The
+  // replacement only applies while the row is still unconfirmed, so it can't
+  // race past a confirmation that commits first.
   router.post("/identity/return-key", (req, res) => {
     res.set("Cache-Control", "no-store");
     const identityId = identityFor(db, req);
@@ -71,35 +78,74 @@ export function identityRouter(db: DB): Router {
       res.status(401).json(unauthenticated);
       return;
     }
-    const kept = db.prepare("SELECT 1 FROM papers WHERE owner_identity_id = ? AND mode = 'KEEP'").get(identityId);
-    if (!kept) {
+    if (!keptAPaper(db, identityId)) {
       res.status(409).json({ code: "not_needed", error: "A return key is offered after you keep a paper." });
       return;
     }
-    if (keyState(db, identityId) === "saved") {
+    const key = generateKey();
+    const issuanceId = randomUUID();
+    const written = db
+      .prepare(
+        `INSERT INTO return_keys (identity_id, digest, state, issued_at, issuance_id) VALUES (?, ?, 'issued', ?, ?)
+         ON CONFLICT (identity_id) DO UPDATE
+           SET digest = excluded.digest, issued_at = excluded.issued_at, issuance_id = excluded.issuance_id
+           WHERE return_keys.state = 'issued'`,
+      )
+      .run(identityId, digest(key), new Date().toISOString(), issuanceId).changes;
+    if (!written) {
       res.status(409).json({ code: "already_saved", error: "You already saved a return key." });
       return;
     }
-    const key = generateKey();
-    db.prepare(
-      `INSERT INTO return_keys (identity_id, digest, state, issued_at) VALUES (?, ?, 'issued', ?)
-       ON CONFLICT (identity_id) DO UPDATE SET digest = excluded.digest, state = 'issued', issued_at = excluded.issued_at`,
-    ).run(identityId, digest(key), new Date().toISOString());
     log("return_key", { identity: identityId, outcome: "issued" });
-    res.json({ return_key: key });
+    res.json({ return_key: key, issuance_id: issuanceId });
   });
 
+  // Confirms exactly the issuance the visitor was shown. Repeating a
+  // confirmation that succeeded succeeds again; an older issuance (replaced
+  // in another tab) is refused, never reported as saved.
   router.post("/identity/return-key/saved", (req, res) => {
+    res.set("Cache-Control", "no-store");
     const identityId = identityFor(db, req);
     if (!identityId) {
       res.status(401).json(unauthenticated);
       return;
     }
-    const changed = db
-      .prepare("UPDATE return_keys SET state = 'saved', saved_at = ? WHERE identity_id = ? AND state = 'issued'")
-      .run(new Date().toISOString(), identityId).changes;
-    log("return_key", { identity: identityId, outcome: changed ? "saved" : "unchanged" });
+    const issuanceId = req.body?.issuance_id;
+    if (typeof issuanceId !== "string" || !UUID.test(issuanceId)) {
+      res.status(400).json({ code: "invalid_input", error: "Missing issuance." });
+      return;
+    }
+    const outcome = db.transaction((): "saved" | "repeat" | "superseded" => {
+      const changed = db
+        .prepare(
+          "UPDATE return_keys SET state = 'saved', saved_at = ? WHERE identity_id = ? AND issuance_id = ? AND state = 'issued'",
+        )
+        .run(new Date().toISOString(), identityId, issuanceId).changes;
+      if (changed) return "saved";
+      const row = db.prepare("SELECT state, issuance_id FROM return_keys WHERE identity_id = ?").get(identityId) as
+        | { state: string; issuance_id: string | null }
+        | undefined;
+      return row?.state === "saved" && row.issuance_id === issuanceId ? "repeat" : "superseded";
+    })();
+    log("return_key", { identity: identityId, outcome });
+    if (outcome === "superseded") {
+      res.status(409).json({ code: "key_superseded", error: "This key was replaced in another tab. Generate and save a new key." });
+      return;
+    }
     res.json({ ok: true });
+  });
+
+  // This browser's own key situation, so a missed offer can be found again.
+  // Nothing about papers: no ids, no counts, no history.
+  router.get("/identity/state", (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const identityId = identityFor(db, req);
+    if (!identityId) {
+      res.status(401).json(unauthenticated);
+      return;
+    }
+    const saved = keyState(db, identityId) === "saved";
+    res.json({ return_key: saved ? "saved" : keptAPaper(db, identityId) ? "available" : "not_needed" });
   });
 
   // Maps this browser to the key's identity with a new session. It returns

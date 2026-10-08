@@ -115,6 +115,47 @@ describe("disappearing", () => {
     expect(await again.json()).toMatchObject({ status: "destroyed", total: first.total, revision: first.revision });
   });
 
+  it("refuses an operation key reused for a different paper", async () => {
+    const author = await visitor();
+    const first = await leave(author, "KEEP");
+    const second = await leave(author, "KEEP");
+    const op_key = randomUUID();
+    const firstReceipt = (await open(author, first)).read_receipt;
+    expect((await burn(author, first, { read_receipt: firstReceipt, op_key })).status).toBe(200);
+
+    const reused = await burn(author, second, { read_receipt: (await open(author, second)).read_receipt, op_key });
+    expect(reused.status).toBe(409);
+    expect(((await reused.json()) as { code: string }).code).toBe("operation_conflict");
+    // the second paper is untouched, and the key still answers for the first paper
+    expect((await open(author, second)).id).toBe(second);
+    expect((await burn(author, first, { read_receipt: firstReceipt, op_key })).status).toBe(200);
+  });
+
+  it("carries the same ending facts in the reply, the retry and the event", async () => {
+    const author = await visitor();
+    const id = await leave(author, "KEEP");
+    const receipt = (await open(author, id)).read_receipt;
+    const op_key = randomUUID();
+    const stream = await openStream(url("/api/events"));
+    try {
+      await stream.next("space:snapshot");
+      const reply = (await (await burn(author, id, { read_receipt: receipt, op_key })).json()) as Record<string, unknown>;
+      const retry = (await (await burn(author, id, { read_receipt: receipt, op_key })).json()) as Record<string, unknown>;
+      const { data } = await stream.next("paper:destroyed", (d) => d.id === id);
+      const facts = ["id", "version", "destroyed_at", "burn_duration_ms", "effect_seed", "op", "revision"] as const;
+      for (const key of facts) {
+        expect(reply[key], key).toBeDefined();
+        expect(retry[key], key).toEqual(reply[key]);
+        expect(data[key], key).toEqual(reply[key]);
+      }
+      expect(data.active_total).toBe(reply.total);
+      expect(Number.isNaN(Date.parse(String(reply.destroyed_at)))).toBe(false);
+      expect(JSON.stringify(data)).not.toMatch(/content|owner|witness/);
+    } finally {
+      stream.close();
+    }
+  });
+
   it("is reported to a reconnecting visitor who still held the paper", async () => {
     const author = await visitor();
     const id = await leave(author, "KEEP");

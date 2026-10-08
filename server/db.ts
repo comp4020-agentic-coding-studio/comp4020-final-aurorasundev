@@ -109,6 +109,13 @@ const MIGRATIONS: ((db: DB) => void)[] = [
         saved_at TEXT
       );
     `),
+
+  // 6: each issued key gets a random, non-secret issuance id, and "I have
+  // saved it" must name the issuance it saw, so a tab holding a key another
+  // tab has since replaced can't confirm a key that no longer restores
+  // anything. Keys issued before this have none and can't be confirmed;
+  // their owner is offered a fresh one. Saved keys are untouched.
+  (db) => db.exec("ALTER TABLE return_keys ADD COLUMN issuance_id TEXT"),
 ];
 
 export const serverSecret = (db: DB, name: string): Buffer =>

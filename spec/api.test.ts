@@ -167,6 +167,31 @@ describe("the space", () => {
     for (const paper of body.papers) expect(Object.keys(paper)).toEqual(["id"]);
   });
 
+  it("samples elsewhere in the space when told what is already on screen", async () => {
+    const cookie = await newSession();
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const res = await throwPaper(cookie, { content: `explore ${i}`, submission_key: key() });
+      ids.push(((await res.json()) as { paper: { id: string } }).paper.id);
+    }
+    const res = await fetch(url(`/api/papers?limit=24&exclude=${ids.join(",")}`));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { papers: { id: string }[] };
+    expect(body.papers.length).toBeLessThanOrEqual(24);
+    for (const paper of body.papers) {
+      expect(ids).not.toContain(paper.id);
+      expect(Object.keys(paper)).toEqual(["id"]);
+    }
+  });
+
+  it("refuses an unbounded or malformed sample request", async () => {
+    const many = Array.from({ length: 33 }, () => randomUUID()).join(",");
+    for (const query of [`exclude=${many}`, "exclude=not-an-id", "limit=0", "limit=25", "limit=abc", "exclude=a&exclude=b"]) {
+      expect((await fetch(url(`/api/papers?${query}`))).status, query).toBe(400);
+    }
+    expect((await fetch(url(`/api/papers?exclude=${Array.from({ length: 32 }, () => randomUUID()).join(",")}`))).status).toBe(200);
+  });
+
   it("treats a retried submission as the same paper", async () => {
     const cookie = await newSession();
     const submission_key = key();
