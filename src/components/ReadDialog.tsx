@@ -1,9 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, burnPaper, getPaper, witnessPaper, type Burned, type OpenedPaper, type PaperState } from "../lib/api.ts";
+import {
+  ApiError,
+  burnPaper,
+  countCodePoints,
+  getPaper,
+  MAX_REPORT_NOTE,
+  reportPaper,
+  witnessPaper,
+  type Burned,
+  type OpenedPaper,
+  type PaperState,
+  type ReportReason,
+} from "../lib/api.ts";
 import type { PaperStatus } from "../lib/space.ts";
 import type { SheetRect } from "./PaperField.tsx";
 
 export type Ended = Exclude<PaperStatus, "active">;
+
+const REASONS: { value: ReportReason; label: string }[] = [
+  { value: "threats_abuse", label: "Threats or targeted abuse" },
+  { value: "private_information", label: "Private information" },
+  { value: "sexual_graphic", label: "Sexual or graphic content" },
+  { value: "harmful_instructions", label: "Harmful instructions" },
+  { value: "spam_scam", label: "Spam or scam" },
+  { value: "something_else", label: "Something else" },
+];
+
+const REPORTED = "Report received. It will be checked against the space's safety rules.";
 
 type Props = {
   id: string;
@@ -15,6 +38,8 @@ type Props = {
   liveVersion: number;
   // set when the paper left the shared space while open here
   ended: Ended | null;
+  // the live stream is down: what this sheet shows may be out of date
+  reconnecting: boolean;
   pendingOps: Set<string>;
   onBurned: (result: Burned) => void;
   onEnded: (why: Ended) => void;
@@ -46,10 +71,16 @@ function sheetBox(rect: SheetRect): { left: number; top: number; width: number; 
 export const witnessLine = (n: number): string | null =>
   n === 0 ? null : `${n.toLocaleString("en-AU")} ${n === 1 ? "person has" : "people have"} witnessed this.`;
 
-export function ReadDialog({ id, revealed, rect, liveVersion, ended, pendingOps, onBurned, onEnded, onClose }: Props) {
+export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnecting, pendingOps, onBurned, onEnded, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [load, setLoad] = useState<Load>({ kind: "loading" });
-  const [view, setView] = useState<"read" | "confirm">("read");
+  const [view, setView] = useState<"read" | "confirm" | "report">("read");
+  const [reason, setReason] = useState<ReportReason | null>(null);
+  const [note, setNote] = useState("");
+  const [reported, setReported] = useState(false);
+  // one key per report attempt, kept across retries so a lost reply can't
+  // file it twice
+  const reportKey = useRef<string | null>(null);
   const [ready, setReady] = useState(false);
   const [acting, setActing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -143,6 +174,32 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, pendingOps,
     }
   }
 
+  function startReport() {
+    reportKey.current ??= crypto.randomUUID();
+    setActionError(null);
+    setView("report");
+  }
+
+  // Reporting is not acknowledging: it counts nothing, grants nothing and
+  // changes nothing about the paper here. The server queues a check.
+  async function sendReport(event: React.FormEvent) {
+    event.preventDefault();
+    if (load.kind !== "ready" || !load.paper.read_receipt || !reason || !reportKey.current || acting) return;
+    setActing(true);
+    setActionError(null);
+    try {
+      await reportPaper(id, load.paper.read_receipt, reason, note, reportKey.current);
+      setReported(true);
+      setView("read");
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "paper_gone") onEnded("destroyed");
+      else setActionError(err instanceof ApiError ? err.message : "That didn't reach the space. Try again.");
+    } finally {
+      setActing(false);
+    }
+  }
+
+  const noteCount = countCodePoints(note);
   const box = rect ? sheetBox(rect) : null;
   const paper = load.kind === "ready" ? load.paper : null;
   const count = paper ? witnessLine(paper.witness_count) : null;
@@ -167,6 +224,66 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, pendingOps,
         <button type="button" className="sheet-close" onClick={onClose} autoFocus>
           Close
         </button>
+        {paper && !ended && view === "report" ? (
+          <form className="read-report" onSubmit={sendReport} aria-labelledby="report-title">
+            <div className="read-body" tabIndex={0}>
+              <h2 id="report-title" className="read-report-title">
+                Report this paper
+              </h2>
+              <p className="read-report-lead">
+                Reporting starts an automated check. It does not give you permission to destroy this paper.
+              </p>
+              <fieldset className="report-reasons" disabled={acting}>
+                <legend>What concerns you?</legend>
+                {REASONS.map((r) => (
+                  <label key={r.value} className="choice">
+                    <input type="radio" name="reason" value={r.value} checked={reason === r.value} onChange={() => setReason(r.value)} />
+                    <span className="choice-label">{r.label}</span>
+                  </label>
+                ))}
+              </fieldset>
+              <label className="report-note-label" htmlFor="report-note">
+                Anything to add? (optional)
+              </label>
+              <p id="report-note-hint" className="report-note-hint">
+                Don't add names, contact details or anything private.
+              </p>
+              <textarea
+                id="report-note"
+                className="report-note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                readOnly={acting}
+                aria-describedby="report-note-hint report-note-count"
+                rows={3}
+              />
+              <p id="report-note-count" className={`report-note-count${noteCount > MAX_REPORT_NOTE ? " is-over" : ""}`}>
+                {noteCount.toLocaleString("en-AU")} / {MAX_REPORT_NOTE}
+              </p>
+            </div>
+            <div className="read-foot">
+              <p className="read-report-caveat">The paper is only removed from the space if the check requires it.</p>
+              {reconnecting && <p className="read-reconnecting">Reconnecting… wait a moment before sending.</p>}
+              {actionError && (
+                <p className="form-error" role="alert">
+                  {actionError}
+                </p>
+              )}
+              <div className="read-actions">
+                <button type="button" className="button button-secondary" onClick={() => setView("read")} disabled={acting}>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="button button-primary"
+                  disabled={!reason || noteCount > MAX_REPORT_NOTE || acting || reconnecting || !paper.read_receipt}
+                >
+                  {acting ? "Sending…" : "Send report"}
+                </button>
+              </div>
+            </div>
+          </form>
+        ) : (
         <div className="read-body" tabIndex={0}>
           {load.kind === "loading" && <p className="read-status">Opening paper…</p>}
           {load.kind === "missing" && <p className="read-status">{goneText}</p>}
@@ -180,6 +297,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, pendingOps,
           )}
           {paper && <p className="read-text">{paper.content}</p>}
         </div>
+        )}
 
         {finalReading && (
           <div className="read-foot read-final" role="status">
@@ -191,9 +309,21 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, pendingOps,
         {paper && !ended && view === "read" && (
           <div className="read-foot">
             {count && <p className="read-count">{count}</p>}
+            {/* While the stream is down the count and rights may be stale, so
+                nothing here claims a fresh success until it is back. */}
+            {reconnecting && (
+              <p className="read-reconnecting" role="status">
+                Reconnecting… this paper's details will catch up.
+              </p>
+            )}
             {actionError && (
               <p className="form-error" role="alert">
                 {actionError}
+              </p>
+            )}
+            {reported && (
+              <p className="read-reported" role="status">
+                {REPORTED}
               </p>
             )}
             <div className="read-actions">
@@ -201,18 +331,28 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, pendingOps,
                 type="button"
                 className="button button-primary"
                 onClick={sawIt}
-                disabled={paper.viewer.has_witnessed || acting || !paper.read_receipt}
+                disabled={paper.viewer.has_witnessed || acting || !paper.read_receipt || reconnecting}
               >
                 {paper.viewer.has_witnessed ? "Witnessed" : "I saw it"}
               </button>
               {showBurn && (
-                <button type="button" className="button button-secondary" onClick={startConfirm} disabled={!paper.viewer.can_burn}>
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={startConfirm}
+                  disabled={!paper.viewer.can_burn || reconnecting}
+                >
                   Let it disappear
                 </button>
               )}
             </div>
             <div className="read-meta">
               <p className="read-origin">{paper.viewer.is_author ? "You left this here." : "Someone left this here."}</p>
+              {!reported && (
+                <button type="button" className="text-button read-report-link" onClick={startReport} disabled={acting}>
+                  Report this paper
+                </button>
+              )}
             </div>
           </div>
         )}
