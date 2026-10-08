@@ -646,35 +646,6 @@ fieldset:disabled .choice,
   color: var(--muted);
 }
 
-/* D07: the confirmation replaces the actions on the same sheet */
-.read-confirm {
-  padding-top: 22px;
-  border-top: 1px solid rgb(146 139 126 / 0.45);
-}
-
-.read-confirm-title {
-  margin: 10px 0 6px;
-  font-family: var(--serif);
-  font-weight: 400;
-  font-size: 34px;
-  line-height: 1.2;
-}
-
-.read-confirm-note {
-  margin: 0;
-  font-size: 16px;
-  color: var(--muted);
-}
-
-.read-confirm .choice-check {
-  margin: 18px 0 20px;
-  font-size: 17px;
-}
-
-.read-confirm .read-meta {
-  margin-top: 28px;
-}
-
 /* D04: someone else let it go while this reader held it */
 .read-final-title {
   margin: 0 0 6px;
@@ -1051,5 +1022,221 @@ fieldset:disabled .choice,
 
   .read-report-lead {
     font-size: 16px;
+  }
+}
+
+/* The furnace ritual (B01–B03 desktop, B05 phone). The paper and furnace
+   are drawn in the scene behind; the overlay lets pointers through to the
+   canvas, where the paper is dragged, and holds only words and controls. */
+.ritual {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.ritual > * {
+  pointer-events: auto;
+}
+
+.ritual-words {
+  position: absolute;
+  top: 56%;
+  left: 50%;
+  width: min(640px, calc(100vw - 2 * var(--gutter)));
+  margin: 0;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.ritual-lead {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 34px;
+  line-height: 1.2;
+}
+
+.ritual.is-ashes .ritual-lead {
+  font-size: 44px;
+}
+
+.ritual-note {
+  margin: 10px 0 0;
+  font-size: 19px;
+  color: var(--muted);
+}
+
+.ritual-words .form-error {
+  margin-top: 14px;
+  pointer-events: auto;
+}
+
+.ritual-actions {
+  position: absolute;
+  right: var(--gutter);
+  bottom: 38px;
+  display: flex;
+  align-items: center;
+  gap: 36px;
+}
+
+.ritual-actions .button {
+  min-width: 136px;
+  min-height: 52px;
+  font-size: 19px;
+}
+
+.ritual-place {
+  min-height: 44px;
+  font-size: 19px;
+  color: var(--ink);
+}
+
+.ritual-place:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* without WebGL: a drawn paper over a drawn furnace, and its ending */
+.ritual-drawn {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ritual-drawn-paper,
+.ritual-drawn-furnace {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.ritual-drawn-paper {
+  top: 26%;
+  width: 120px;
+  height: 120px;
+  border-radius: 46% 54% 50% 48%;
+  background: radial-gradient(circle at 38% 34%, #fbf8f1, var(--paper) 55%, #ddd5c7);
+  box-shadow: 0 26px 30px -18px rgb(0 0 0 / 0.25);
+  transition:
+    top 0.5s ease,
+    transform 0.5s ease;
+}
+
+.ritual-drawn-furnace {
+  top: 64%;
+  width: min(300px, 62vw);
+  height: 110px;
+  border-radius: 0 0 22px 22px;
+  background: linear-gradient(#3b3631, #2a2622);
+}
+
+.ritual-drawn-furnace::before {
+  content: "";
+  position: absolute;
+  inset: -22px 0 auto;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 60%, #171513 55%, #4a443d 58%);
+}
+
+.ritual-drawn.is-committing .ritual-drawn-paper,
+.ritual-drawn.is-checking .ritual-drawn-paper {
+  top: calc(64% - 120px);
+}
+
+.ritual-drawn.is-burning .ritual-drawn-paper {
+  top: calc(64% - 90px);
+  animation: drawn-burn 1.8s ease-in forwards;
+}
+
+.ritual-drawn.is-ashes .ritual-drawn-paper,
+.ritual-drawn.is-removed .ritual-drawn-paper {
+  display: none;
+}
+
+.ritual-drawn.is-ashes .ritual-drawn-furnace::after {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 46%;
+  height: 18px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse, #8d8781, #5d5852 60%, transparent 72%);
+}
+
+@keyframes drawn-burn {
+  0% {
+    background: radial-gradient(circle at 38% 34%, #fbf8f1, var(--paper) 55%, #ddd5c7);
+  }
+  45% {
+    background: linear-gradient(#f3f0e8 30%, #b5651d 46%, #2b2420 60%);
+  }
+  80% {
+    background: linear-gradient(#2b2420, #4a443e);
+    transform: translateX(-50%) scale(0.6, 0.45);
+  }
+  100% {
+    background: #7d7771;
+    transform: translateX(-50%) scale(0.4, 0.1);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ritual-drawn-paper {
+    transition: none;
+  }
+
+  .ritual-drawn.is-burning .ritual-drawn-paper {
+    animation-duration: 0.4s;
+  }
+}
+
+@media (max-width: 600px) {
+  /* B05: sans-serif words between paper and furnace; the two controls on a
+     row above the count */
+  .ritual-lead {
+    font-family: var(--sans);
+    font-size: 19px;
+  }
+
+  .ritual.is-ashes .ritual-lead {
+    font-family: var(--serif);
+    font-size: 30px;
+  }
+
+  .ritual-note {
+    margin-top: 6px;
+    font-size: 15px;
+  }
+
+  .ritual-actions {
+    left: var(--gutter);
+    right: var(--gutter);
+    bottom: calc(max(20px, env(safe-area-inset-bottom)) + 48px);
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .ritual-actions .button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 48px;
+    font-size: 17px;
+  }
+
+  .ritual-place {
+    flex: 1 1 0;
+    font-size: 17px;
+  }
+
+  .ritual-actions .ritual-back {
+    flex: 0 1 auto;
+    margin-left: auto;
+    padding: 0 28px;
   }
 }

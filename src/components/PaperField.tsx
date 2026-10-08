@@ -11,7 +11,22 @@ export type PaperFieldHandle = {
   removeOpenPaper: () => void;
   setEntryEdge: (edge: ExploreEdge) => void;
   throwCreatedPaper: (id: string) => void;
+  // the furnace ritual (plan §5); false from prepare means no scene to hold it
+  prefetchFire: () => void;
+  prepareRitual: (id: string) => boolean;
+  placeRitual: () => void;
+  returnRitual: () => void;
+  igniteRitual: (burn: Burn) => void;
+  burnRitualRemotely: (burn: Burn) => void;
+  clearRitual: () => void;
+  cancelRitual: () => void;
+  endRitual: () => void;
+  burnRemote: (id: string, burn: Burn) => boolean;
 };
+
+export type Burn = { seed: number; durationMs: number };
+export type RitualEvent = { type: "ready" | "dropped" | "burning" | "ashes" };
+export type RitualLayout = { paperBottom: number; furnaceTop: number; furnaceBottom: number };
 
 type Props = {
   ids: string[];
@@ -19,6 +34,10 @@ type Props = {
   onOpenRect: (rect: SheetRect) => void;
   // a deliberate drag across empty floor, toward where new papers come from
   onExplore: (edge: ExploreEdge) => void;
+  onRitual: (event: RitualEvent) => void;
+  onRitualLayout: (layout: RitualLayout) => void;
+  // the scene could not be drawn (or recovered): the app offers HTML instead
+  onAvailable: (available: boolean) => void;
   inert: boolean;
 };
 
@@ -28,7 +47,7 @@ type Status = "loading" | "ready" | "failed";
 const compact = (): boolean => window.matchMedia("(max-width: 600px)").matches;
 
 export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperField(
-  { ids, onOpen, onOpenRect, onExplore, inert },
+  { ids, onOpen, onOpenRect, onExplore, onRitual, onRitualLayout, onAvailable, inert },
   ref,
 ) {
   const stage = useRef<HTMLDivElement>(null);
@@ -36,8 +55,8 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
   const scene = useRef<Scene | null>(null);
   const [status, setStatus] = useState<Status>("loading");
   const [attempt, setAttempt] = useState(0);
-  const latest = useRef({ ids, onOpen, onOpenRect, onExplore });
-  latest.current = { ids, onOpen, onOpenRect, onExplore };
+  const latest = useRef({ ids, onOpen, onOpenRect, onExplore, onRitual, onRitualLayout, onAvailable });
+  latest.current = { ids, onOpen, onOpenRect, onExplore, onRitual, onRitualLayout, onAvailable };
 
   useEffect(() => {
     setStatus("loading");
@@ -48,6 +67,8 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
         compact: compact(),
         onPaperOpen: (id: string) => latest.current.onOpen(id),
         onExplore: (edge: ExploreEdge) => latest.current.onExplore(edge),
+        onRitual: (event: RitualEvent) => latest.current.onRitual(event),
+        onRitualLayout: (layout: RitualLayout) => latest.current.onRitualLayout(layout),
         onReady: () => setStatus("ready"),
         onError: (err: Error) => {
           console.error("paper scene failed", err.message);
@@ -79,6 +100,9 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
   }, [ids]);
 
   const failed = status === "failed";
+  useEffect(() => {
+    latest.current.onAvailable(!failed);
+  }, [failed]);
 
   useImperativeHandle(
     ref,
@@ -92,6 +116,16 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
       removeOpenPaper: () => scene.current?.removeOpenPaper(),
       setEntryEdge: (edge) => scene.current?.setEntryEdge(edge),
       throwCreatedPaper: (id) => scene.current?.throwCreatedPaper(id),
+      prefetchFire: () => scene.current?.prefetchFire(),
+      prepareRitual: (id) => (!failed && scene.current ? scene.current.prepareRitual(id) : false),
+      placeRitual: () => scene.current?.placeRitual(),
+      returnRitual: () => scene.current?.returnRitual(),
+      igniteRitual: (burn) => scene.current?.igniteRitual(burn),
+      burnRitualRemotely: (burn) => scene.current?.burnRitualRemotely(burn),
+      clearRitual: () => scene.current?.clearRitual(),
+      cancelRitual: () => scene.current?.cancelRitual(),
+      endRitual: () => scene.current?.endRitual(),
+      burnRemote: (id, burn) => (!failed && scene.current ? scene.current.burnRemote(id, burn) : false),
     }),
     [failed],
   );
