@@ -22,4 +22,6 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json README.md ./
 COPY server ./server
+# the private moderation CLI, run over `fly ssh console`
+COPY scripts/moderation.ts ./scripts/moderation.ts
 CMD ["node", "server/index.ts"]
