@@ -29,19 +29,18 @@ export function identityFor(db: DB, req: Request): string | undefined {
 export function ensureSession(db: DB, req: Request, res: Response): string {
   const existing = identityFor(db, req);
   if (existing) return existing;
-
-  const token = randomBytes(32).toString("base64url");
   const identityId = randomUUID();
-  const now = new Date();
-  db.transaction(() => {
-    db.prepare("INSERT INTO identities (id, created_at) VALUES (?, ?)").run(identityId, now.toISOString());
-    db.prepare("INSERT INTO sessions (token_hash, identity_id, expires_at) VALUES (?, ?, ?)").run(
-      hash(token),
-      identityId,
-      new Date(now.getTime() + MAX_AGE_MS).toISOString(),
-    );
-  })();
+  db.prepare("INSERT INTO identities (id, created_at) VALUES (?, ?)").run(identityId, new Date().toISOString());
+  startSession(db, res, identityId);
+  return identityId;
+}
 
+// A fresh cookie mapped to an identity: a new visitor's, or one restored
+// with a return key. Only the token's hash is stored.
+export function startSession(db: DB, res: Response, identityId: string): void {
+  const token = randomBytes(32).toString("base64url");
+  const expires = new Date(Date.now() + MAX_AGE_MS).toISOString();
+  db.prepare("INSERT INTO sessions (token_hash, identity_id, expires_at) VALUES (?, ?, ?)").run(hash(token), identityId, expires);
   res.cookie(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
@@ -49,5 +48,4 @@ export function ensureSession(db: DB, req: Request, res: Response): string {
     maxAge: MAX_AGE_MS,
     path: "/",
   });
-  return identityId;
 }

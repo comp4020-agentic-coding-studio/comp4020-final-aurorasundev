@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { openDb } from "./db.ts";
 import { closeAllStreams, eventsRouter } from "./events.ts";
+import { identityRouter } from "./identity.ts";
 import { papersRouter } from "./papers.ts";
 import { renderReadmePage } from "./readme.ts";
 import { ensureSession } from "./session.ts";
@@ -26,6 +27,7 @@ app.post("/api/session", (req, res) => {
 });
 app.use("/api", papersRouter(db));
 app.use("/api", eventsRouter(db));
+app.use("/api", identityRouter(db));
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "Not found." });
 });

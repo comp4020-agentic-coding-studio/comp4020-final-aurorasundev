@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { activeTotal, bumpRevision, currentRevision, requestDigest, serverSecret, type DB } from "./db.ts";
 import { broadcast } from "./events.ts";
+import { keyState } from "./identity.ts";
 import { log } from "./log.ts";
 import { checkReceipt, issueReceipt } from "./receipt.ts";
 import { identityFor } from "./session.ts";
@@ -262,7 +263,9 @@ export function papersRouter(db: DB): Router {
     const { id, version, status, revision, total, fresh } = result.value;
     log("create", { identity: ownerId, paper: id, outcome: fresh ? "created" : "retry", revision });
     if (fresh) broadcast("paper:created", { id, version, revision, active_total: total, op: key });
-    res.status(201).json({ paper: { id, version, status: status.toLowerCase() }, total, revision });
+    // After a Keep, offer a return key until one has been confirmed saved.
+    const offerReturnKey = req.body.mode === "KEEP" && keyState(db, ownerId) !== "saved";
+    res.status(201).json({ paper: { id, version, status: status.toLowerCase() }, total, revision, offer_return_key: offerReturnKey });
   });
 
   return router;

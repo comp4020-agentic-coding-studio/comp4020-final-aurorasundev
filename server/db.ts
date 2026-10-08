@@ -96,6 +96,19 @@ const MIGRATIONS: ((db: DB) => void)[] = [
         PRIMARY KEY (identity_id, op_key)
       );
     `),
+
+  // 5: one return key per anonymous identity, stored only as a digest. An
+  // issued key not yet confirmed as saved may be replaced by a new one.
+  (db) =>
+    db.exec(`
+      CREATE TABLE return_keys (
+        identity_id TEXT PRIMARY KEY REFERENCES identities(id),
+        digest TEXT NOT NULL UNIQUE,
+        state TEXT NOT NULL CHECK (state IN ('issued', 'saved')),
+        issued_at TEXT NOT NULL,
+        saved_at TEXT
+      );
+    `),
 ];
 
 export const serverSecret = (db: DB, name: string): Buffer =>

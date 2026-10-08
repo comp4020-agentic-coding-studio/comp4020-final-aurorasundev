@@ -1,0 +1,132 @@
+import { createHash, randomBytes } from "node:crypto";
+import { Router } from "express";
+import type { DB } from "./db.ts";
+import { log } from "./log.ts";
+import { identityFor, startSession } from "./session.ts";
+
+// Crockford base32: no I, L, O or U, so a key read aloud or retyped survives.
+const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const KEY_BYTES = 20; // 160 bits
+
+export function generateKey(): string {
+  const bytes = randomBytes(KEY_BYTES);
+  let bits = 0;
+  let value = 0;
+  let out = "";
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out += ALPHABET[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  return out.match(/.{4}/g)!.join("-");
+}
+
+export const normalizeKey = (raw: string): string =>
+  raw
+    .toUpperCase()
+    .replace(/[^0-9A-Z]/g, "")
+    .replace(/O/g, "0")
+    .replace(/[IL]/g, "1");
+
+const digest = (key: string): string => createHash("sha256").update(normalizeKey(key)).digest("hex");
+
+// Failed restore attempts per client address, kept in memory: enough to make
+// guessing pointless (keys carry 160 bits) without locking anyone out long.
+// Only failures count, so people sharing an address can still restore.
+const WINDOW_MS = 15 * 60 * 1000;
+const MAX_FAILURES = 10;
+const failures = new Map<string, { count: number; since: number }>();
+
+function blocked(address: string, now = Date.now()): boolean {
+  const entry = failures.get(address);
+  if (entry && now - entry.since > WINDOW_MS) failures.delete(address);
+  return (failures.get(address)?.count ?? 0) >= MAX_FAILURES;
+}
+
+function recordFailure(address: string, now = Date.now()): void {
+  const entry = failures.get(address);
+  if (entry) entry.count++;
+  else failures.set(address, { count: 1, since: now });
+}
+
+export const keyState = (db: DB, identityId: string): "none" | "issued" | "saved" =>
+  ((db.prepare("SELECT state FROM return_keys WHERE identity_id = ?").get(identityId) as { state: "issued" | "saved" } | undefined)
+    ?.state ?? "none");
+
+const unauthenticated = { code: "unauthenticated", error: "Your session has expired. Reload the page and try again." };
+
+export function identityRouter(db: DB): Router {
+  const router = Router();
+
+  // Issued once a visitor has kept a paper. A key already confirmed as saved
+  // is never shown again; an unconfirmed one (a lost reply, a closed tab) is
+  // replaced, which also invalidates the one that was never confirmed.
+  router.post("/identity/return-key", (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const identityId = identityFor(db, req);
+    if (!identityId) {
+      res.status(401).json(unauthenticated);
+      return;
+    }
+    const kept = db.prepare("SELECT 1 FROM papers WHERE owner_identity_id = ? AND mode = 'KEEP'").get(identityId);
+    if (!kept) {
+      res.status(409).json({ code: "not_needed", error: "A return key is offered after you keep a paper." });
+      return;
+    }
+    if (keyState(db, identityId) === "saved") {
+      res.status(409).json({ code: "already_saved", error: "You already saved a return key." });
+      return;
+    }
+    const key = generateKey();
+    db.prepare(
+      `INSERT INTO return_keys (identity_id, digest, state, issued_at) VALUES (?, ?, 'issued', ?)
+       ON CONFLICT (identity_id) DO UPDATE SET digest = excluded.digest, state = 'issued', issued_at = excluded.issued_at`,
+    ).run(identityId, digest(key), new Date().toISOString());
+    log("return_key", { identity: identityId, outcome: "issued" });
+    res.json({ return_key: key });
+  });
+
+  router.post("/identity/return-key/saved", (req, res) => {
+    const identityId = identityFor(db, req);
+    if (!identityId) {
+      res.status(401).json(unauthenticated);
+      return;
+    }
+    const changed = db
+      .prepare("UPDATE return_keys SET state = 'saved', saved_at = ? WHERE identity_id = ? AND state = 'issued'")
+      .run(new Date().toISOString(), identityId).changes;
+    log("return_key", { identity: identityId, outcome: changed ? "saved" : "unchanged" });
+    res.json({ ok: true });
+  });
+
+  // Maps this browser to the key's identity with a new session. It returns
+  // nothing about that identity: no papers, no history, no counts.
+  router.post("/identity/restore", (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const address = req.ip ?? "unknown";
+    if (blocked(address)) {
+      log("restore", { outcome: "rate_limited" });
+      res.status(429).json({ code: "rate_limited", error: "Too many tries. Wait a few minutes and try again." });
+      return;
+    }
+    const raw = req.body?.return_key;
+    const row =
+      typeof raw === "string" && normalizeKey(raw).length === 32
+        ? (db.prepare("SELECT identity_id FROM return_keys WHERE digest = ?").get(digest(raw)) as { identity_id: string } | undefined)
+        : undefined;
+    if (!row) {
+      recordFailure(address);
+      log("restore", { outcome: "invalid" });
+      res.status(400).json({ code: "invalid_key", error: "That key doesn't match. Check it and try again." });
+      return;
+    }
+    startSession(db, res, row.identity_id);
+    log("restore", { identity: row.identity_id, outcome: "restored" });
+    res.json({ ok: true });
+  });
+
+  return router;
+}
