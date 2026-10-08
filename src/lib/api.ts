@@ -42,7 +42,17 @@ export const getPaper = (id: string): Promise<OpenedPaper> => request(paperPath(
 export const witnessPaper = (id: string, receipt: string): Promise<PaperState> =>
   request(paperPath(id, "/witness"), postJson({ read_receipt: receipt }));
 
-export type Burned = { id: string; status: "destroyed"; revision: number; total: number };
+export type Burned = {
+  id: string;
+  status: "destroyed";
+  version: number;
+  revision: number;
+  total: number;
+  op: string;
+  destroyed_at: string;
+  burn_duration_ms: number;
+  effect_seed: string;
+};
 
 // The op key is reused for a retry, so a lost reply gets the first outcome.
 export const burnPaper = (id: string, receipt: string, opKey: string): Promise<Burned> =>
@@ -71,10 +81,48 @@ export async function createPaper(content: string, mode: PaperMode, submissionKe
   }
 }
 
-// The raw key exists only in this reply; the server keeps a digest.
-export const issueReturnKey = (): Promise<{ return_key: string }> => request("/api/identity/return-key", postJson({}));
+// The raw key exists only in this reply; the server keeps a digest. The
+// issuance id is not secret: it names which key this page showed.
+export type Issued = { return_key: string; issuance_id: string };
+export const issueReturnKey = (): Promise<Issued> => request("/api/identity/return-key", postJson({}));
 
-export const markReturnKeySaved = (): Promise<{ ok: true }> => request("/api/identity/return-key/saved", postJson({}));
+export const markReturnKeySaved = (issuanceId: string): Promise<{ ok: true }> =>
+  request("/api/identity/return-key/saved", postJson({ issuance_id: issuanceId }));
+
+// Whether this browser has a key it could still save (an offer it missed).
+export type KeyAvailability = "not_needed" | "available" | "saved";
+export const identityState = (): Promise<{ return_key: KeyAvailability }> => request("/api/identity/state");
+
+// A random handful of papers not already on screen, for exploring.
+export type Sample = { papers: { id: string }[]; total: number; revision: number };
+export function samplePapers(limit: number, exclude: string[]): Promise<Sample> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (exclude.length) query.set("exclude", exclude.slice(-32).join(","));
+  return request(`/api/papers?${query}`);
+}
+
+export type ReportReason =
+  | "threats_abuse"
+  | "private_information"
+  | "sexual_graphic"
+  | "harmful_instructions"
+  | "spam_scam"
+  | "something_else";
+
+export const MAX_REPORT_NOTE = 500;
+
+// Retried with the same operation key, a lost reply gets the same receipt.
+export const reportPaper = (
+  id: string,
+  receipt: string,
+  reason: ReportReason,
+  note: string,
+  operationKey: string,
+): Promise<{ report_id: string; status: "queued" }> =>
+  request(
+    paperPath(id, "/report"),
+    postJson({ read_receipt: receipt, reason, ...(note.trim() ? { note } : {}), operation_key: operationKey }),
+  );
 
 export const restoreIdentity = (key: string): Promise<{ ok: true }> =>
   request("/api/identity/restore", postJson({ return_key: key }));

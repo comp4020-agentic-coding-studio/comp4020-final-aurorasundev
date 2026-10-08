@@ -2,11 +2,14 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 import { createPaperScene } from "../scene/vendor/paper-scene.js";
 
 export type SheetRect = { left: number; top: number; width: number; height: number };
+export type ExploreEdge = "left" | "right" | "back" | "front";
 
 export type PaperFieldHandle = {
   openPaper: (id: string, onUnfolded: (rect: SheetRect | null) => void) => void;
   closePaper: () => void;
   burnOpenPaper: () => void;
+  removeOpenPaper: () => void;
+  setEntryEdge: (edge: ExploreEdge) => void;
   throwCreatedPaper: (id: string) => void;
 };
 
@@ -14,6 +17,8 @@ type Props = {
   ids: string[];
   onOpen: (id: string) => void;
   onOpenRect: (rect: SheetRect) => void;
+  // a deliberate drag across empty floor, toward where new papers come from
+  onExplore: (edge: ExploreEdge) => void;
   inert: boolean;
 };
 
@@ -23,7 +28,7 @@ type Status = "loading" | "ready" | "failed";
 const compact = (): boolean => window.matchMedia("(max-width: 600px)").matches;
 
 export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperField(
-  { ids, onOpen, onOpenRect, inert },
+  { ids, onOpen, onOpenRect, onExplore, inert },
   ref,
 ) {
   const stage = useRef<HTMLDivElement>(null);
@@ -31,8 +36,8 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
   const scene = useRef<Scene | null>(null);
   const [status, setStatus] = useState<Status>("loading");
   const [attempt, setAttempt] = useState(0);
-  const latest = useRef({ ids, onOpen, onOpenRect });
-  latest.current = { ids, onOpen, onOpenRect };
+  const latest = useRef({ ids, onOpen, onOpenRect, onExplore });
+  latest.current = { ids, onOpen, onOpenRect, onExplore };
 
   useEffect(() => {
     setStatus("loading");
@@ -42,6 +47,7 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
         vatBase: "/vat/",
         compact: compact(),
         onPaperOpen: (id: string) => latest.current.onOpen(id),
+        onExplore: (edge: ExploreEdge) => latest.current.onExplore(edge),
         onReady: () => setStatus("ready"),
         onError: (err: Error) => {
           console.error("paper scene failed", err.message);
@@ -83,6 +89,8 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
       },
       closePaper: () => scene.current?.closePaper(),
       burnOpenPaper: () => scene.current?.burnOpenPaper(),
+      removeOpenPaper: () => scene.current?.removeOpenPaper(),
+      setEntryEdge: (edge) => scene.current?.setEntryEdge(edge),
       throwCreatedPaper: (id) => scene.current?.throwCreatedPaper(id),
     }),
     [failed],
