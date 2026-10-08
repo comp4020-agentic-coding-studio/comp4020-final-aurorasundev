@@ -838,3 +838,182 @@ fieldset:disabled .choice,
 @media (prefers-reduced-motion: reduce) {
   .read-sheet { transition: none; }
 }
+
+/* track C: report, checking, exploration */
+
+/* The footer's right column: the hint, and the quiet way to explore. */
+.space-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  justify-self: end;
+}
+
+.space-explore {
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.space-explore:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+/* Said once, before the confirmation, without crowding the sheet. */
+.write-disclosure {
+  margin: 20px 0 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.write-disclosure a {
+  color: var(--ink);
+  text-underline-offset: 3px;
+}
+
+/* D08: reporting is a state of the same sheet, not another dialog. The form
+   needs the sheet's height more than the reading margin above the text. */
+.read-report {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.read-dialog.over-scene .read-report .read-body {
+  margin-top: clamp(16px, 3dvh, 32px);
+}
+
+.read-report-title {
+  margin: 0 0 12px;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(30px, 2.6vw, 40px);
+  line-height: 1.2;
+}
+
+.read-report-lead {
+  margin: 0 0 24px;
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+.report-reasons {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.report-reasons legend {
+  margin-bottom: 14px;
+  padding: 0;
+  font-size: 18px;
+}
+
+.report-note-label {
+  display: block;
+  margin: 24px 0 2px;
+  font-size: 16px;
+}
+
+.report-note {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #c9c3b8;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.45);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink);
+  resize: vertical;
+}
+
+.report-note-hint {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.report-note-count {
+  margin: 4px 0 0;
+  font-size: 14px;
+  text-align: right;
+  color: var(--muted);
+}
+
+.report-note-count.is-over {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.read-report-caveat {
+  margin: 0 0 14px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.read-reconnecting,
+.read-reported {
+  margin: 0 0 14px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.read-report-link {
+  font-size: 15px;
+  color: var(--muted);
+}
+
+/* A missed key offer, reachable from the header's Return key. */
+.key-recover {
+  margin-top: 20px;
+}
+
+.key-recover .key-note {
+  margin: 0 0 8px;
+}
+
+.key-recover .text-button {
+  font-size: 18px;
+  color: var(--ink);
+}
+
+@media (max-width: 600px) {
+  /* the explore line costs a row: the footer's spacing gives it back, so the
+     count stays clear of the papers nearest the camera */
+  .space-footer {
+    gap: 10px;
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+
+  .space-side {
+    align-items: center;
+    justify-self: center;
+    gap: 4px;
+  }
+
+  .space-explore {
+    font-size: 15px;
+  }
+
+  .write-disclosure {
+    margin-top: 14px;
+    font-size: 14px;
+  }
+
+  /* the disclosure's lines come out of the writing box, so the actions
+     stay on screen above the count at 390 x 844 */
+  .write-field textarea {
+    height: clamp(88px, 10dvh, 140px);
+  }
+
+  .read-report-lead {
+    font-size: 16px;
+  }
+}

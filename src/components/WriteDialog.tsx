@@ -12,6 +12,9 @@ type Props = {
 
 const formatCount = (n: number): string => n.toLocaleString("en-AU");
 
+// Server answers that mean nothing was saved, even though they are 5xx.
+const SETTLED = new Set(["moderation_unavailable"]);
+
 export function WriteDialog({ onCancel, onThrown, pendingOps, offline }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [text, setText] = useState("");
@@ -51,7 +54,9 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline }: Props) 
       onThrown(result);
     } catch (err) {
       setSaving(false);
-      if (err instanceof ApiError && err.status < 500) {
+      // A refusal, or a check that couldn't run, is a definite "not saved":
+      // the draft stays editable. Only an unknown outcome locks it.
+      if (err instanceof ApiError && (err.status < 500 || SETTLED.has(err.code))) {
         setUnsettled(false);
         setError(err.message);
       } else {
@@ -63,7 +68,8 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline }: Props) 
     }
   }
 
-  const submitLabel = saving ? "Saving…" : offline ? "Reconnecting…" : unsettled ? "Try again" : "Crumple & throw";
+  // Saving includes the automated safety check, which is most of the wait.
+  const submitLabel = saving ? "Checking this paper…" : offline ? "Reconnecting…" : unsettled ? "Try again" : "Crumple & throw";
 
   return (
     <dialog
@@ -118,6 +124,11 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline }: Props) 
           </label>
         </fieldset>
 
+        <p className="write-disclosure" id="write-disclosure">
+          Before it enters the space, your text is sent to OpenAI for automated safety checks. Do not include private
+          details. <a href="/readme/">How checks work</a>
+        </p>
+
         <label className="choice choice-check">
           <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} disabled={locked} />
           <span>I understand: once thrown, this paper cannot be edited or found in a personal history.</span>
@@ -126,6 +137,11 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline }: Props) 
         {error && (
           <p className="form-error" role="alert">
             {error}
+          </p>
+        )}
+        {saving && (
+          <p className="visually-hidden" role="status">
+            Checking this paper…
           </p>
         )}
         <div className="write-actions">
