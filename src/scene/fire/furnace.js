@@ -138,10 +138,13 @@ export function createFurnace(camera, textures, { radius = 0.42, position = new 
           float fall = exp(-d * d * 2.2);
           float flicker = 0.82 + 0.18 * snoise(vec3(uTimeF * 3.1, 0.0, 0.0));
           totalEmissiveRadiance += vec3(1.0, 0.38, 0.09) * fall * facing * fInside * uGlow * flicker * 0.32;
+          // and a broad warm wash over the whole chamber (B02's lit brown inside)
+          float wash = exp(-d * d * 0.35);
+          totalEmissiveRadiance += vec3(0.55, 0.24, 0.07) * wash * (0.4 + 0.6 * facing) * fInside * uGlow * flicker * 0.1;
         }`,
       );
   };
-  material.customProgramCacheKey = () => "throwaway-furnace-v1";
+  material.customProgramCacheKey = () => "throwaway-furnace-v2";
 
   const group = new THREE.Group();
   group.position.copy(position);

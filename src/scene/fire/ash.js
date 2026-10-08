@@ -96,6 +96,7 @@ export function createAsh(textures, { count, seed, flakeSize }) {
   });
   moundMaterial.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, moundUniforms);
+    shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nuniform float uSeed;");
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nuniform float uGrow;\nuniform float uHeight;\nuniform float uSeed;")
       .replace(
@@ -113,10 +114,19 @@ export function createAsh(textures, { count, seed, flakeSize }) {
     // room's light: compress them towards a soft grey
     shader.fragmentShader = shader.fragmentShader.replace(
       "#include <map_fragment>",
-      "#include <map_fragment>\ndiffuseColor.rgb = diffuseColor.rgb * 0.55 + vec3(0.07, 0.066, 0.062);",
+      `#include <map_fragment>
+      {
+        // loose powder, not a disc: the edge breaks up along the photograph's
+        // own flakes and a few lobes
+        vec2 c = vMapUv - 0.5;
+        float lobes = sin(atan(c.y, c.x) * 5.0 + uSeed) * 0.07 + sin(atan(c.y, c.x) * 11.0 - uSeed * 1.3) * 0.04;
+        float edge = length(c) * 2.0 + lobes + (0.5 - diffuseColor.g) * 0.5;
+        diffuseColor.a *= smoothstep(1.0, 0.62, edge);
+      }
+      diffuseColor.rgb = diffuseColor.rgb * 0.55 + vec3(0.07, 0.066, 0.062);`,
     );
   };
-  moundMaterial.customProgramCacheKey = () => "throwaway-ash-mound-v2";
+  moundMaterial.customProgramCacheKey = () => "throwaway-ash-mound-v3";
   const mound = new THREE.Mesh(moundGeo, moundMaterial);
   mound.rotation.x = -Math.PI / 2;
   mound.receiveShadow = true;

@@ -26,7 +26,7 @@ export function createParticles(textures, { seed, size }) {
   const wisps = [];
   for (let i = 0; i < WISPS; i++) {
     const material = new THREE.SpriteMaterial({
-      color: new THREE.Color("#8c8883"),
+      color: new THREE.Color("#7f7a74"),
       alphaMap: textures.smoke,
       transparent: true,
       depthWrite: false,
@@ -121,11 +121,12 @@ export function createParticles(textures, { seed, size }) {
         sprite.scale.set(size * (0.35 + 0.5 * t), height, 1);
         sprite.position.set(
           source.x + w.x + Math.sin(w.sway + w.age * 1.3) * size * 0.12 * t,
-          top + height * 0.42 + w.age * size * 0.25,
+          // the wisp's foot starts among the flame tips (B02), not above them
+          source.y + (top - source.y) * 0.2 + height * 0.5 + w.age * size * 0.25,
           source.z + w.z,
         );
         sprite.material.rotation = Math.sin(w.sway + w.age * 0.7) * 0.18;
-        sprite.material.opacity = smoke * 0.22 * Math.sin(Math.PI * t);
+        sprite.material.opacity = smoke * 0.45 * Math.sin(Math.PI * t);
       }
 
       // embers: born at the burning region, drift up, flicker out

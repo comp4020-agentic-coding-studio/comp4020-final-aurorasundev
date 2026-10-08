@@ -97,17 +97,21 @@ void main() {
   if (density < 0.004) discard;
   density = min(density, 1.0);
 
-  vec3 deep = vec3(0.62, 0.09, 0.015);
-  vec3 orange = vec3(1.0, 0.36, 0.05);
-  vec3 yellow = vec3(1.0, 0.66, 0.22);
-  vec3 core = vec3(1.0, 0.88, 0.62);
+  // over-range on purpose: the room's ACES tone mapping pulls these back to
+  // a saturated orange and a pale yellow core instead of a washed peach
+  vec3 deep = vec3(1.1, 0.13, 0.01);
+  vec3 orange = vec3(2.3, 0.48, 0.03);
+  vec3 yellow = vec3(2.6, 1.05, 0.18);
+  vec3 core = vec3(2.6, 1.8, 0.8);
   vec3 col = mix(deep, orange, smoothstep(0.04, 0.3, heat));
   col = mix(col, yellow, smoothstep(0.35, 0.7, heat));
   col = mix(col, core, smoothstep(0.75, 0.95, heat));
 
   float a = clamp(density * (0.35 + heat) * uOpacity * 4.0 / ${SLICES.toFixed(1)}, 0.0, 1.0);
-  // premultiplied: a little brighter than the alpha, so it reads as light
-  gl_FragColor = vec4(col * a * 1.4, a);
+  // premultiplied
+  gl_FragColor = vec4(col * a, a);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }
 `;
 
@@ -127,7 +131,7 @@ export function createFlames(camera, { seed = 1 } = {}) {
     uToBox: { value: new THREE.Matrix4() },
     uTime: { value: 0 },
     uSeed: { value: (seed % 997) * 0.31 },
-    uOpacity: { value: 1.7 },
+    uOpacity: { value: 3.2 },
     uTongueA: { value: tongueA },
     uTongueB: { value: tongueB },
   };
@@ -157,7 +161,8 @@ export function createFlames(camera, { seed = 1 } = {}) {
   };
   const tongues = Array.from({ length: TONGUES }, (_, i) => ({
     angle: ((i + random() * 0.6) / TONGUES) * Math.PI * 2,
-    tall: 0.45 + random() * 0.55,
+    // mostly small licks along the edge
+    tall: 0.3 + Math.pow(random(), 2) * 0.6,
     rate: 2.2 + random() * 2.6,
     phase: random() * 100,
     width: 0.75 + random() * 0.5,
@@ -202,7 +207,7 @@ export function createFlames(camera, { seed = 1 } = {}) {
         const z = Math.sin(g.angle) * half * g.out;
         const h = Math.max(0, (1 - front) * g.tall * f * alive);
         tongueA[i].set(x, front * 0.85, z, h);
-        tongueB[i].set(0.09 * g.width * (0.6 + 0.4 * alive), -x * 0.7, -z * 0.7, g.phase);
+        tongueB[i].set(0.105 * g.width * (0.6 + 0.4 * alive), -x * 0.7, -z * 0.7, g.phase);
       }
       boxPos.copy(base);
       boxScale.set(width, height, width);

@@ -23,6 +23,7 @@ uniform vec3 uCenter;      // object-space centre the paper collapses towards
 uniform float uHMin;
 uniform float uHMax;
 uniform float uSeed;
+uniform vec3 uTilt;        // object space: the side the fire took first burns ahead
 uniform float uNoiseScale;
 uniform float uCollapse;   // 0..1, structure lost late in the burn
 uniform float uTime;
@@ -31,7 +32,7 @@ varying vec3 vBurnPos;
 ${NOISE_GLSL}
 float burnHeight(vec3 p) {
   float h = (dot(p, uAxis) - uHMin) / max(uHMax - uHMin, 1e-4);
-  return h + fbm3(p * uNoiseScale + uSeed) * 0.11 + snoise(p * uNoiseScale * 4.3 - uSeed) * 0.018;
+  return h - dot(p - uCenter, uTilt) + fbm3(p * uNoiseScale + uSeed) * 0.16 + snoise(p * uNoiseScale * 4.3 - uSeed) * 0.02;
 }
 `;
 
@@ -45,7 +46,7 @@ const VERTEX_MAIN = /* glsl */ `
   vBurnPos = aBurnPos;
   {
     float span = uHMax - uHMin;
-    float h = (dot(aBurnPos, uAxis) - uHMin) / max(span, 1e-4) + snoise(aBurnPos * uNoiseScale + uSeed) * 0.11;
+    float h = (dot(aBurnPos, uAxis) - uHMin) / max(span, 1e-4) - dot(aBurnPos - uCenter, uTilt) + snoise(aBurnPos * uNoiseScale + uSeed) * 0.14;
     float d = h - uProgress;
     float burnt = smoothstep(0.02, -0.22, d);
     vec3 fromAxis = transformed - uCenter;
@@ -121,6 +122,7 @@ export function createBurnMaterial(source, { charMap, seed }) {
     uHMin: { value: 0 },
     uHMax: { value: 1 },
     uSeed: { value: (seed % 1000) * 0.137 },
+    uTilt: { value: new THREE.Vector3() },
     uNoiseScale: { value: 4.5 },
     uCollapse: { value: 0 },
     uTime: { value: 0 },
@@ -143,7 +145,7 @@ export function createBurnMaterial(source, { charMap, seed }) {
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>\n${FRAGMENT_ROUGHNESS}`)
       .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>\n${FRAGMENT_EMISSIVE}`);
   };
-  material.customProgramCacheKey = () => "throwaway-burn-v1";
+  material.customProgramCacheKey = () => "throwaway-burn-v2";
 
   const depthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide });
   depthMaterial.onBeforeCompile = (shader) => {
@@ -155,7 +157,7 @@ export function createBurnMaterial(source, { charMap, seed }) {
       .replace("#include <common>", `#include <common>\n${COMMON}`)
       .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>\n${FRAGMENT_MAIN}`);
   };
-  depthMaterial.customProgramCacheKey = () => "throwaway-burn-depth-v1";
+  depthMaterial.customProgramCacheKey = () => "throwaway-burn-depth-v2";
 
   return {
     material,

@@ -60,7 +60,20 @@ export function createBurnEffect(options) {
     charMap: textures.charred,
     seed,
   });
+  // remote papers keep a wider band of charcoal before it falls away (B04)
+  burn.uniforms.uConsume.value = mode === "remote" ? 0.42 : 0.34;
   const frame = fixBurnFrame(mesh, burn.uniforms);
+  // the fire takes one side first, so the front leans as in B02/B04: the
+  // side roughly facing the viewer, turned by up to ±45° per seed
+  {
+    const span = Math.max(frame.max - frame.min, 1e-4);
+    const toViewer = camera.getWorldPosition(new THREE.Vector3()).sub(mesh.getWorldPosition(new THREE.Vector3()));
+    const angle = Math.atan2(toViewer.z, toViewer.x) + (((seed * 0.6180339887) % 1) - 0.5) * (Math.PI / 2);
+    const side = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+    side.applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()).invert());
+    side.addScaledVector(frame.axis, -side.dot(frame.axis)).normalize();
+    burn.uniforms.uTilt.value.copy(side).multiplyScalar(0.45 / span);
+  }
   mesh.material = burn.material;
   mesh.customDepthMaterial = burn.depthMaterial;
 
@@ -73,7 +86,8 @@ export function createBurnEffect(options) {
     if (!frame.used[k]) continue;
     local.fromArray(frame.snapshot, k * 3);
     radiusLocal = Math.max(radiusLocal, local.distanceTo(centreLocal));
-    order.push({ k, h: (local.dot(frame.axis) - frame.min) / Math.max(frame.max - frame.min, 1e-4) });
+    const tilt = local.clone().sub(centreLocal).dot(burn.uniforms.uTilt.value);
+    order.push({ k, h: (local.dot(frame.axis) - frame.min) / Math.max(frame.max - frame.min, 1e-4) - tilt });
   }
   order.sort((a, b) => a.h - b.h);
   const scale = mesh.getWorldScale(new THREE.Vector3()).x;
@@ -126,7 +140,7 @@ export function createBurnEffect(options) {
   function placeBed() {
     const c = worldCentre();
     bed.set(c.x, surfaceY, c.z);
-    ash.setBed(bed, diameter * (mode === "furnace" ? 0.72 : 0.55), diameter * (mode === "furnace" ? 0.1 : 0.07));
+    ash.setBed(bed, diameter * (mode === "furnace" ? 0.72 : 0.42), diameter * (mode === "furnace" ? 0.1 : 0.05));
   }
   placeBed();
 
@@ -137,7 +151,8 @@ export function createBurnEffect(options) {
         mesh.localToWorld(at);
         const c = worldCentre();
         outward.set(at.x - c.x, 0, at.z - c.z).normalize();
-        ash.release(at, outward, surfaceY, settled);
+        // on the open floor the flakes skitter further than in the furnace
+        ash.release(at, outward.multiplyScalar(mode === "furnace" ? 1 : 2.2), surfaceY, settled);
         released++;
       }
       releasePtr++;
@@ -167,7 +182,8 @@ export function createBurnEffect(options) {
       const v = (time - IGNITE) / FRONT;
       // slow to take hold, steady, then quick through the last of it
       progress = lerp(-0.02, end, Math.pow(v, 0.92));
-      strength = Math.min(1, 0.45 + v * 2.2) * (1 - smooth(0.65, 1.0, v) * 0.7);
+      // biggest while there is most paper to burn, then shrinking with it
+      strength = Math.min(1, 0.45 + v * 2.2) * (1 - smooth(0.45, 0.95, v) * 0.75);
       collapse = smooth(0.68, 1.0, v);
       smoke = 0.25 + 0.75 * Math.min(1, v * 2);
       phase = "burning";
@@ -194,7 +210,7 @@ export function createBurnEffect(options) {
     // what is left rests on the surface as its underside burns away, then
     // slumps into the ash
     const consumed = progress - consume;
-    const sink = Math.min(Math.max(consumed, 0), 1) * 0.7 + collapse * 0.12;
+    const sink = Math.min(Math.max(consumed, 0), 1) * 0.9 + collapse * 0.08;
     if (!settleFrom || time >= IGNITE) {
       mesh.position.set(restPosition.x, restPosition.y - sink * height, restPosition.z);
     }
@@ -208,10 +224,16 @@ export function createBurnEffect(options) {
     const c = worldCentre();
     const frontY = surfaceY + Math.max(0, Math.min(progress, 1) - sink) * height;
     base.set(c.x, surfaceY, c.z);
-    const flameBox = height * 1.9;
+    // in the furnace the fire licks along the char (B02); on the open floor
+    // one tall tongue climbs well clear of the paper (B04)
+    const flameBox = height * (mode === "furnace" ? 1.75 : 2.4);
     const front = Math.min(0.6, (frontY - surfaceY) / flameBox);
-    const ring = 0.62 * (1 - 0.3 * Math.min(Math.max(consumed, 0), 1) - 0.35 * collapse);
-    flames.update(base, diameter * 1.5, flameBox, strength, time, front, ring);
+    // the tongues stand on the burning edge: a crumpled ball is narrow at its
+    // foot and widest at its middle, then everything draws in as it slumps
+    const p = Math.min(Math.max(progress, 0), 1);
+    const across = Math.sqrt(Math.max(0.15, 1 - (2 * p - 1) * (2 * p - 1)));
+    const ring = (across * (1 - 0.35 * collapse)) / 1.5;
+    flames.update(base, diameter * 1.5, flameBox, strength * (0.4 + 0.6 * (1 - Math.min(Math.max(consumed, 0), 1))), time, front, ring);
     const reach = flameBox;
     source.set(c.x, frontY, c.z);
     particles.update(dt, {
