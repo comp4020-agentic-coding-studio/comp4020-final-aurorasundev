@@ -64,6 +64,7 @@ const randomRange = (min, max) => min + Math.random() * (max - min);
  *   vatBase: string,
  *   compact: boolean,
  *   onPaperOpen: (id: string) => void,
+ *   onExplore?: (edge: "left" | "right" | "back" | "front") => void,
  *   onReady: () => void,
  *   onError: (err: Error) => void,
  * }} options
@@ -459,8 +460,11 @@ export function createPaperScene(container, buttonLayer, options) {
       pos.x = randomRange(-half, half);
       let room = Infinity;
       for (const p of livePapers()) {
-        const dx = p.body.position.x - pos.x;
-        const dz = p.body.position.z - pos.z;
+        if (p.state === "leaving") continue;
+        // an entering paper counts where it is going, not where it is now
+        const at = p.state === "entering" ? p.explore.to : p.body.position;
+        const dx = at.x - pos.x;
+        const dz = at.z - pos.z;
         room = Math.min(room, dx * dx + dz * dz);
       }
       if (room > bestRoom) {
@@ -574,11 +578,19 @@ export function createPaperScene(container, buttonLayer, options) {
   function syncPapers() {
     if (!animData) return;
     const wanted = new Set(wantedIds);
+    // set by an exploration: the window changes as a move through the space
+    const edge = entryEdge;
+    entryEdge = null;
     for (const [id, paper] of [...papers.entries()]) {
       if (wanted.has(id) || paper === activePaper) continue;
       // null marks a paper still waiting for its staggered drop-in
       if (!paper) papers.delete(id);
-      else if (paper.state !== "fading") startFade(paper, false);
+      else if (edge && isGrabbable(paper)) startLeaving(paper, edge);
+      else if (paper.state !== "fading" && paper.state !== "leaving") startFade(paper, false);
+    }
+    if (edge) {
+      for (const id of wantedIds) if (!papers.has(id)) spawnEntering(id, edge);
+      return;
     }
     let i = 0;
     for (const id of wantedIds) {
@@ -596,6 +608,96 @@ export function createPaperScene(container, buttonLayer, options) {
       }, delay);
     }
   }
+
+  // ==================================================
+  // Exploring — the window moves to another part of the space
+  // ==================================================
+  // Exploring swaps the papers on screen for others from the shared pool. It
+  // reads as moving through the space: the papers here slide out on one side
+  // and the new ones come in from the other, the side the visitor moved
+  // toward, then settle and behave like any other. Outgoing papers are
+  // disposed; the scene never holds more than the window plus those leaving.
+  // `edge` names where the new papers enter: left, right, back or front.
+  let entryEdge = null;
+  const EXPLORE_SECONDS = 0.85;
+  const _slide = new THREE.Vector3();
+
+  // A point just outside the visible stage on that edge, at the paper's depth
+  // (or width, for back and front).
+  function offstage(position, edge) {
+    const out = position.clone();
+    const reach = collisionRadius * 3;
+    if (edge === "left") out.x = -(halfWidthAt(position.z) + reach);
+    else if (edge === "right") out.x = halfWidthAt(position.z) + reach;
+    else if (edge === "back") out.z = stageBounds.minZ - reach * 2.5;
+    else out.z = stageBounds.maxZ + reach * 2.5;
+    return out;
+  }
+  const opposite = { left: "right", right: "left", back: "front", front: "back" };
+
+  function spawnEntering(id, edge) {
+    const target = randomSpawnPosition();
+    const paper = spawnPaper(id, target, false);
+    if (reduceMotion()) return paper;
+    setPaperBodyDynamic(paper, false);
+    paper.state = "entering";
+    paper.explore = { from: offstage(target, edge), to: target, time: 0, delay: randomRange(0, 0.18) };
+    paper.mesh.position.copy(paper.explore.from);
+    syncBodyToMesh(paper);
+    return paper;
+  }
+
+  function startLeaving(paper, edge) {
+    if (reduceMotion()) {
+      removePaper(paper);
+      return;
+    }
+    if (!paper.bodyRemoved) physicsWorld.removeBody(paper.body);
+    paper.bodyRemoved = true;
+    paper.state = "leaving";
+    const from = paper.mesh.position.clone();
+    paper.explore = { from, to: offstage(from, opposite[edge]), time: 0, delay: 0 };
+  }
+
+  // Slides an entering or leaving paper, rolling it the way it travels.
+  function updateExploreMotion(paper, dt) {
+    const e = paper.explore;
+    e.time += dt;
+    const t = clamp01((e.time - e.delay) / EXPLORE_SECONDS);
+    const eased = paper.state === "entering" ? easeOutCubic(t) : easeInCubic(t);
+    const before = _slide.copy(paper.mesh.position);
+    paper.mesh.position.lerpVectors(e.from, e.to, eased);
+    const dx = paper.mesh.position.x - before.x;
+    const dz = paper.mesh.position.z - before.z;
+    paper.mesh.rotateOnWorldAxis(_axisZ, -dx / Math.max(collisionRadius, 0.01));
+    paper.mesh.rotateOnWorldAxis(_axisX, dz / Math.max(collisionRadius, 0.01));
+    if (paper.state === "entering") syncBodyToMesh(paper);
+    if (t < 1) return;
+    paper.explore = null;
+    if (paper.state === "leaving") {
+      removePaper(paper);
+      return;
+    }
+    paper.state = "closed";
+    syncBodyToMesh(paper);
+    setPaperBodyDynamic(paper, true);
+  }
+  const _axisX = new THREE.Vector3(1, 0, 0);
+  const _axisZ = new THREE.Vector3(0, 0, 1);
+
+  // A deliberate drag across empty floor (not a paper, not a click or a
+  // small wobble) asks the app to explore toward where it pulled from.
+  function exploreGesture(e, start) {
+    const dx = e.clientX - start.startX;
+    const dy = e.clientY - start.startY;
+    const { w, h } = size();
+    const needed = Math.max(EXPLORE_DRAG_MIN_PX, Math.min(w, h) * 0.12);
+    if (Math.hypot(dx, dy) < needed) return null;
+    // the space moves with the pointer, so new papers come from the far side
+    if (Math.abs(dx) >= Math.abs(dy)) return dx < 0 ? "right" : "left";
+    return dy < 0 ? "front" : "back";
+  }
+  const EXPLORE_DRAG_MIN_PX = 80;
 
   // ==================================================
   // Pointer handling — click to open / drag to grab and throw
@@ -657,6 +759,9 @@ export function createPaperScene(container, buttonLayer, options) {
     if (!pointerState || e.pointerId !== pointerState.pointerId) return;
     if (pointerState.grabbing) {
       if (pointerState.paper) releaseGrab(pointerState.paper, true);
+    } else if (!pointerState.paper) {
+      const edge = activePaper ? null : exploreGesture(e, pointerState);
+      if (edge) options.onExplore?.(edge);
     } else {
       const p = pickPaper(e);
       if (p && p.state === "closed" && !activePaper) options.onPaperOpen(p.id);
@@ -833,6 +938,10 @@ export function createPaperScene(container, buttonLayer, options) {
 
   function updatePaperMotion(paper, dt) {
     const maxFrame = animData.frameCount - 1;
+    if (paper.explore) {
+      updateExploreMotion(paper, dt);
+      return;
+    }
 
     if (paper.state === "fading") {
       paper.time += dt;
@@ -1005,6 +1114,22 @@ export function createPaperScene(container, buttonLayer, options) {
     setPapers(ids) {
       wantedIds = [...ids];
       syncPapers();
+    },
+
+    /** The next setPapers is an exploration: new papers enter from this edge. */
+    setEntryEdge(edge) {
+      entryEdge = edge;
+    },
+
+    /**
+     * The open paper was taken out for safety: it goes at once, with none of
+     * the ending a let-go paper gets.
+     */
+    removeOpenPaper() {
+      if (!activePaper) return;
+      activePaper.onUnfolded = null;
+      startFade(activePaper, false);
+      activePaper = null;
     },
 
     /** Unfolds the paper toward the camera; calls back with its screen rect once flat. */

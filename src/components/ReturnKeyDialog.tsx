@@ -1,19 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, issueReturnKey, markReturnKeySaved, restoreIdentity } from "../lib/api.ts";
+import { ApiError, identityState, issueReturnKey, markReturnKeySaved, restoreIdentity, type KeyAvailability } from "../lib/api.ts";
 
 type Props = {
-  // issue: right after a Keep, show this identity's key once.
-  // restore: a returning visitor types theirs in (D05).
+  // issue: after a Keep, show this identity's key once.
+  // restore: a returning visitor types theirs in (D05); a visitor who kept a
+  // paper but never saved its key can reach issuance from here too.
   variant: "issue" | "restore";
   onClose: () => void;
   onRestored: () => void;
 };
 
-type Issue = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; key: string };
+type Issue =
+  | { kind: "loading" }
+  | { kind: "error"; message: string }
+  | { kind: "ready"; key: string; issuanceId: string }
+  // another tab replaced the key this one showed
+  | { kind: "superseded"; message: string };
 
-export function ReturnKeyDialog({ variant, onClose, onRestored }: Props) {
+export function ReturnKeyDialog({ variant: initial, onClose, onRestored }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const [variant, setVariant] = useState(initial);
   const [issue, setIssue] = useState<Issue>({ kind: "loading" });
+  const [available, setAvailable] = useState<KeyAvailability | null>(null);
   const [copied, setCopied] = useState(false);
   const [entered, setEntered] = useState("");
   const [busy, setBusy] = useState(false);
@@ -28,14 +36,29 @@ export function ReturnKeyDialog({ variant, onClose, onRestored }: Props) {
 
   const requestKey = () => {
     setIssue({ kind: "loading" });
+    setCopied(false);
+    setError(null);
     issueReturnKey()
-      .then(({ return_key }) => setIssue({ kind: "ready", key: return_key }))
+      .then(({ return_key, issuance_id }) => setIssue({ kind: "ready", key: return_key, issuanceId: issuance_id }))
       .catch((err: Error) => setIssue({ kind: "error", message: err.message }));
   };
 
   useEffect(() => {
     if (variant === "issue") requestKey();
   }, [variant]);
+
+  // Opened from the header: say whether there is a key this browser never
+  // saved, so a missed offer isn't lost for good.
+  useEffect(() => {
+    if (initial !== "restore") return;
+    let live = true;
+    identityState()
+      .then(({ return_key }) => live && setAvailable(return_key))
+      .catch(() => live && setAvailable(null));
+    return () => {
+      live = false;
+    };
+  }, [initial]);
 
   async function copy(key: string) {
     try {
@@ -46,14 +69,17 @@ export function ReturnKeyDialog({ variant, onClose, onRestored }: Props) {
     }
   }
 
-  async function saved() {
+  // Confirms the key on screen and no other. If another tab replaced it, the
+  // visitor stays here to make and save a new one.
+  async function saved(issuanceId: string) {
     setBusy(true);
     try {
-      await markReturnKeySaved();
+      await markReturnKeySaved(issuanceId);
       onClose();
     } catch (err) {
       setBusy(false);
-      setError(err instanceof ApiError ? err.message : "That didn't reach the space. Try again.");
+      if (err instanceof ApiError && err.code === "key_superseded") setIssue({ kind: "superseded", message: err.message });
+      else setError(err instanceof ApiError ? err.message : "That didn't reach the space. Try again.");
     }
   }
 
@@ -127,13 +153,30 @@ export function ReturnKeyDialog({ variant, onClose, onRestored }: Props) {
                   <button type="button" className="button button-secondary" onClick={() => copy(issue.key)}>
                     {copied ? "Copied" : "Copy key"}
                   </button>
-                  <button type="button" className="button button-primary" onClick={saved} disabled={busy}>
+                  <button type="button" className="button button-primary" onClick={() => saved(issue.issuanceId)} disabled={busy}>
                     I have saved it
                   </button>
                 </div>
               </>
             )}
+            {issue.kind === "superseded" && (
+              <div className="read-status" role="alert">
+                <p>{issue.message}</p>
+                <button type="button" className="button button-primary" onClick={requestKey}>
+                  Generate a new key
+                </button>
+              </div>
+            )}
           </>
+        )}
+
+        {variant === "restore" && !restored && available === "available" && (
+          <div className="key-recover">
+            <p className="key-note">You kept a paper here and haven't saved its return key yet.</p>
+            <button type="button" className="text-button" onClick={() => setVariant("issue")} disabled={busy}>
+              Get your return key
+            </button>
+          </div>
         )}
 
         {variant === "restore" && !restored && (

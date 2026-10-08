@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Router } from "express";
 import { activeTotal, bumpRevision, currentRevision, requestDigest, serverSecret, type DB } from "./db.ts";
 import { broadcast } from "./events.ts";
@@ -9,6 +9,19 @@ import { identityFor } from "./session.ts";
 
 export const MAX_CODE_POINTS = 2000;
 export const WINDOW_SIZE = 12;
+const MAX_SAMPLE = 24;
+const MAX_EXCLUDE = 32;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+// A comma-separated list of paper ids, or null if it isn't one (too many,
+// malformed, or sent more than once).
+function parseIdList(raw: unknown): string[] | null {
+  if (raw === undefined || raw === "") return [];
+  if (typeof raw !== "string") return null;
+  const ids = raw.split(",");
+  if (ids.length > MAX_EXCLUDE || !ids.every((id) => UUID.test(id))) return null;
+  return [...new Set(ids)];
+}
 
 export type Mode = "KEEP" | "RELEASE";
 type Failure = { ok: false; status: number; code: string; error: string };
@@ -114,8 +127,29 @@ export function witnessPaper(db: DB, paperId: string, identityId: string) {
   })();
 }
 
-type BurnOutcome = "destroyed" | "paper_gone" | "forbidden";
+type BurnOutcome = "destroyed" | "paper_gone" | "forbidden" | "op_conflict";
 export type Burned = { outcome: BurnOutcome; revision: number | null; total: number | null; fresh: boolean; version?: number };
+
+// How a confirmed destruction is shown. The duration is a tuning starting
+// point for every page's ending; the seed lets each page vary its flames and
+// ash the same way without any page sending another its animation. Both are
+// derived from what is already stored, not a record of the animation.
+export const BURN_DURATION_MS = 4800;
+const effectSeed = (paperId: string, endedAt: string): string =>
+  createHash("sha256").update(`${paperId}\u0000${endedAt}`).digest("hex").slice(0, 16);
+
+export function ending(db: DB, paperId: string) {
+  const row = db.prepare("SELECT version, ended_at FROM papers WHERE id = ?").get(paperId) as
+    | { version: number; ended_at: string | null }
+    | undefined;
+  const destroyedAt = row?.ended_at ?? new Date(0).toISOString();
+  return {
+    version: row?.version ?? 0,
+    destroyed_at: destroyedAt,
+    burn_duration_ms: BURN_DURATION_MS,
+    effect_seed: effectSeed(paperId, destroyedAt),
+  };
+}
 
 // One conditional transition out of ACTIVE, with the text cleared in the same
 // commit. Two people destroying at once get one transition: the second finds
@@ -123,9 +157,14 @@ export type Burned = { outcome: BurnOutcome; revision: number | null; total: num
 export function burnPaper(db: DB, paperId: string, identityId: string, opKey: string, confirmed: boolean): Burned {
   return db.transaction((): Burned => {
     const prior = db
-      .prepare("SELECT outcome, revision, total FROM burn_operations WHERE identity_id = ? AND op_key = ?")
-      .get(identityId, opKey) as { outcome: BurnOutcome; revision: number | null; total: number | null } | undefined;
-    if (prior) return { ...prior, fresh: false };
+      .prepare("SELECT paper_id, outcome, revision, total FROM burn_operations WHERE identity_id = ? AND op_key = ?")
+      .get(identityId, opKey) as
+      | { paper_id: string; outcome: BurnOutcome; revision: number | null; total: number | null }
+      | undefined;
+    // An operation key names one paper: reusing it for another must not hand
+    // back the first paper's success.
+    if (prior && prior.paper_id !== paperId) return { outcome: "op_conflict", revision: null, total: null, fresh: false };
+    if (prior) return { outcome: prior.outcome, revision: prior.revision, total: prior.total, fresh: false };
 
     const record = (outcome: BurnOutcome, revision: number | null = null, total: number | null = null): Burned => {
       db.prepare(
@@ -155,11 +194,30 @@ export function burnPaper(db: DB, paperId: string, identityId: string, opKey: st
 export function papersRouter(db: DB): Router {
   const router = Router();
 
-  router.get("/papers", (_req, res) => {
-    const papers = db
-      .prepare("SELECT id FROM papers WHERE status = 'ACTIVE' ORDER BY random() LIMIT ?")
-      .all(WINDOW_SIZE) as { id: string }[];
-    res.set("Cache-Control", "no-store").json({ papers, total: activeTotal(db), revision: currentRevision(db) });
+  // A random handful of what is here, for the first view and for exploring.
+  // `exclude` (the papers already on screen, and a few just seen) steers it
+  // toward new encounters; nothing about age, author or attention does. Ids
+  // only: a version would hint at how often a paper has been witnessed.
+  router.get("/papers", (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const limit = req.query.limit === undefined ? WINDOW_SIZE : Number(req.query.limit);
+    const exclude = parseIdList(req.query.exclude);
+    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_SAMPLE || exclude === null) {
+      res.status(400).json({ code: "invalid_input", error: "That isn't a request this space understands." });
+      return;
+    }
+    const read = db.transaction(() => ({
+      papers: db
+        .prepare(
+          `SELECT id FROM papers
+           WHERE status = 'ACTIVE' AND id NOT IN (SELECT value FROM json_each(?))
+           ORDER BY random() LIMIT ?`,
+        )
+        .all(JSON.stringify(exclude), limit) as { id: string }[],
+      total: activeTotal(db),
+      revision: currentRevision(db),
+    }));
+    res.json(read());
   });
 
   // Opening is not witnessing: this never records anything. It returns the
@@ -233,14 +291,19 @@ export function papersRouter(db: DB): Router {
       res.status(403).json({ code: "forbidden", error: "You can't let this paper go." });
       return;
     }
+    if (result.outcome === "op_conflict") {
+      res.status(409).json({ code: "operation_conflict", error: "That request was already used for another paper." });
+      return;
+    }
     if (result.outcome === "paper_gone") {
       res.status(410).json({ code: "paper_gone", error: "This paper is no longer here." });
       return;
     }
+    const facts = ending(db, paperId);
     if (result.fresh) {
-      broadcast("paper:destroyed", { id: paperId, version: result.version, revision: result.revision, active_total: result.total, op: opKey });
+      broadcast("paper:destroyed", { id: paperId, ...facts, revision: result.revision, active_total: result.total, op: opKey });
     }
-    res.json({ id: paperId, status: "destroyed", revision: result.revision, total: result.total });
+    res.json({ id: paperId, status: "destroyed", ...facts, revision: result.revision, total: result.total, op: opKey });
   });
 
   router.post("/papers", (req, res) => {
