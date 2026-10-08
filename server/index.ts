@@ -2,6 +2,7 @@ import express from "express";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { openDb } from "./db.ts";
+import { closeAllStreams, eventsRouter } from "./events.ts";
 import { papersRouter } from "./papers.ts";
 import { renderReadmePage } from "./readme.ts";
 import { ensureSession } from "./session.ts";
@@ -24,6 +25,7 @@ app.post("/api/session", (req, res) => {
   res.json({ ok: true });
 });
 app.use("/api", papersRouter(db));
+app.use("/api", eventsRouter(db));
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "Not found." });
 });
@@ -56,7 +58,9 @@ const server = app.listen(port, "0.0.0.0", () => {
   console.log(`throwaway listening on 0.0.0.0:${port}, db ${dbPath}`);
 });
 
+// Open event streams would otherwise hold server.close() open forever.
 const shutdown = (): void => {
+  closeAllStreams();
   server.close(() => {
     db.close();
     process.exit(0);
