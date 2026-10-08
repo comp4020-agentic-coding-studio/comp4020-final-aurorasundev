@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
-  burnPaper,
   countCodePoints,
   getPaper,
   MAX_REPORT_NOTE,
   reportPaper,
   witnessPaper,
-  type Burned,
   type OpenedPaper,
   type PaperState,
   type ReportReason,
@@ -41,8 +39,11 @@ type Props = {
   ended: Ended | null;
   // the live stream is down: what this sheet shows may be out of date
   reconnecting: boolean;
-  pendingOps: Set<string>;
-  onBurned: (result: Burned) => void;
+  // "Release it": prepares the furnace ritual with this reading's receipt.
+  // Nothing is sent yet; the drop into the furnace is the confirmation.
+  onRelease: (receipt: string) => void;
+  // this reader may let it go: worth fetching the fire ahead of time
+  onReleasable: () => void;
   onEnded: (why: Ended) => void;
   onClose: () => void;
 };
@@ -72,20 +73,18 @@ function sheetBox(rect: SheetRect): { left: number; top: number; width: number; 
 export const witnessLine = (n: number): string | null =>
   n === 0 ? null : `${n.toLocaleString("en-AU")} ${n === 1 ? "person has" : "people have"} witnessed this.`;
 
-export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnecting, pendingOps, onBurned, onEnded, onClose }: Props) {
+export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnecting, onRelease, onReleasable, onEnded, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [load, setLoad] = useState<Load>({ kind: "loading" });
-  const [view, setView] = useState<"read" | "confirm" | "report">("read");
+  const [view, setView] = useState<"read" | "report">("read");
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [note, setNote] = useState("");
   const [reported, setReported] = useState(false);
   // one key per report attempt, kept across retries so a lost reply can't
   // file it twice
   const reportKey = useRef<string | null>(null);
-  const [ready, setReady] = useState(false);
   const [acting, setActing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const burnKey = useRef<string | null>(null);
   // Once the paper has left the space, no late answer may bring it back.
   const endedRef = useRef(ended);
   endedRef.current = ended;
@@ -150,29 +149,9 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
     }
   }
 
-  function startConfirm() {
-    burnKey.current = crypto.randomUUID();
-    setReady(false);
-    setActionError(null);
-    setView("confirm");
-  }
-
-  async function letGo() {
-    if (load.kind !== "ready" || !load.paper.read_receipt || !burnKey.current || acting) return;
-    const key = burnKey.current;
-    setActing(true);
-    setActionError(null);
-    pendingOps.add(key);
-    try {
-      onBurned(await burnPaper(id, load.paper.read_receipt, key));
-    } catch (err) {
-      // someone else let it go first: this reader is now just holding it
-      if (err instanceof ApiError && err.code === "paper_gone") onEnded("destroyed");
-      else setActionError(err instanceof ApiError ? err.message : "That didn't reach the space. Try again.");
-    } finally {
-      pendingOps.delete(key);
-      setActing(false);
-    }
+  function release() {
+    if (load.kind !== "ready" || !load.paper.read_receipt || !load.paper.viewer.can_burn || acting) return;
+    onRelease(load.paper.read_receipt);
   }
 
   function startReport() {
@@ -207,8 +186,12 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
   const finalReading = !!ended && ended !== "quarantined" && !!paper;
   const goneText = ended === "quarantined" ? "This paper is no longer available." : "This paper is no longer here.";
   // Keep: only its author sees the action at all. Release: everyone sees it,
-  // usable once they have witnessed the paper.
+  // usable once they have witnessed the paper (the author by the same rule).
   const showBurn = paper && (paper.mode === "release" || paper.viewer.is_author);
+  const releasable = !!paper && !ended && !!showBurn && paper.viewer.can_burn;
+  useEffect(() => {
+    if (releasable) onReleasable();
+  }, [releasable, onReleasable]);
 
   return (
     <dialog
@@ -340,10 +323,10 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
                 <button
                   type="button"
                   className="button button-secondary"
-                  onClick={startConfirm}
-                  disabled={!paper.viewer.can_burn || reconnecting}
+                  onClick={release}
+                  disabled={!paper.viewer.can_burn || !paper.read_receipt || acting || reconnecting}
                 >
-                  Let it disappear
+                  Release it
                 </button>
               )}
             </div>
@@ -358,35 +341,6 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
           </div>
         )}
 
-        {paper && !ended && view === "confirm" && (
-          <div className="read-foot read-confirm">
-            {paper.viewer.is_author && <p className="read-origin">You left this here.</p>}
-            <h3 className="read-confirm-title">Ready to let this go?</h3>
-            <p className="read-confirm-note">Once it disappears, it cannot be opened again.</p>
-            <label className="choice choice-check">
-              <input type="checkbox" checked={ready} onChange={(e) => setReady(e.target.checked)} disabled={acting} />
-              <span>I'm ready to let this go.</span>
-            </label>
-            {actionError && (
-              <p className="form-error" role="alert">
-                {actionError}
-              </p>
-            )}
-            <div className="read-actions">
-              <button type="button" className="button button-secondary" onClick={() => setView("read")} disabled={acting}>
-                Cancel
-              </button>
-              <button type="button" className="button button-primary" onClick={letGo} disabled={!ready || acting}>
-                Let it disappear
-              </button>
-            </div>
-            {count && (
-              <div className="read-meta">
-                <p className="read-origin">{count}</p>
-              </div>
-            )}
-          </div>
-        )}
       </article>
     </dialog>
   );

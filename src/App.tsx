@@ -1,18 +1,48 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "./components/Header.tsx";
-import { PaperField, type ExploreEdge, type PaperFieldHandle, type SheetRect } from "./components/PaperField.tsx";
+import {
+  PaperField,
+  type ExploreEdge,
+  type PaperFieldHandle,
+  type RitualEvent,
+  type RitualLayout,
+  type SheetRect,
+} from "./components/PaperField.tsx";
 import { ReadDialog, type Ended } from "./components/ReadDialog.tsx";
 import { ReturnKeyDialog } from "./components/ReturnKeyDialog.tsx";
+import { RitualOverlay, type RitualOutcome, type RitualStage } from "./components/RitualOverlay.tsx";
 import { SpaceFooter } from "./components/SpaceFooter.tsx";
 import { WriteDialog } from "./components/WriteDialog.tsx";
-import { samplePapers, type Burned, type Created } from "./lib/api.ts";
-import { useLiveSpace } from "./lib/useLiveSpace.ts";
+import { ApiError, burnPaper, getPaper, samplePapers, type Created } from "./lib/api.ts";
+import { useLiveSpace, type Ending } from "./lib/useLiveSpace.ts";
 
 type Mode =
   | { kind: "space" }
   | { kind: "writing" }
   | { kind: "key"; variant: "issue" | "restore" }
-  | { kind: "reading"; id: string; revealed: boolean; rect: SheetRect | null; ended: Ended | null };
+  | { kind: "reading"; id: string; revealed: boolean; rect: SheetRect | null; ended: Ended | null }
+  | {
+      kind: "ritual";
+      id: string;
+      stage: RitualStage;
+      outcome: RitualOutcome;
+      error: string | null;
+      canPlace: boolean;
+      // no scene to hold the paper: HTML confirmation and a drawn ending
+      fallback: boolean;
+    };
+
+// What the ritual keeps in memory, outside React's render cycle: the paper,
+// this reading's receipt, and one operation key for every attempt, so a
+// retry after a lost reply can't let anything go twice.
+type Ritual = { id: string; receipt: string; opKey: string; committing: boolean; ignited: boolean };
+
+const BURN_DEFAULT_MS = 4800;
+// the server's effect seed is hex; the scene wants a number
+const seedOf = (seed: string | undefined, id: string): number =>
+  parseInt((seed ?? id.replace(/[^0-9a-f]/gi, "")).slice(0, 8), 16) || 1;
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+const reducedMotion = (): boolean => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // The references show generously spaced papers rather than the demo's crowded
 // 40-paper stage; the window stays small enough to keep that negative space.
@@ -46,20 +76,226 @@ export function App() {
   const recent = useRef<string[]>([]);
   const lastExplore = useRef(-Infinity);
   const inFlight = useRef(false);
+  const ritualRef = useRef<Ritual | null>(null);
+  const [ritualLayout, setRitualLayout] = useState<RitualLayout | null>(null);
+  const sceneAvailable = useRef(true);
 
-  const readingId = (): string | null => (modeRef.current.kind === "reading" ? modeRef.current.id : null);
+  // The paper being read, or held over the furnace: never evicted, always
+  // reconciled.
+  const readingId = (): string | null =>
+    modeRef.current.kind === "reading" || modeRef.current.kind === "ritual" ? modeRef.current.id : null;
+
+  const setRitual = useCallback((patch: Partial<Extract<Mode, { kind: "ritual" }>>) => {
+    setMode((m) => (m.kind === "ritual" ? { ...m, ...patch } : m));
+  }, []);
 
   const { space, dispatch, retry, current } = useLiveSpace({
     limit: () => limitRef.current,
     reading: readingId,
     pendingOps,
-    onGone: (id, why) => {
+    onGone: (id, why, ending) => {
+      const r = ritualRef.current;
+      const m = modeRef.current;
+      if (r && r.id === id && m.kind === "ritual" && !r.ignited) {
+        // gone before this visitor's own let-go was confirmed
+        if (why === "destroyed" && r.committing && !ending) return; // a snapshot: the retry loop learns whose it was
+        r.ignited = true;
+        if (why === "quarantined" || !ending) {
+          field.current?.clearRitual();
+          setRitual({ outcome: why === "quarantined" ? "removed" : "other", stage: "ashes", error: null });
+        } else {
+          field.current?.burnRitualRemotely({ seed: seedOf(ending.effect_seed, id), durationMs: ending.burn_duration_ms ?? BURN_DEFAULT_MS });
+          setRitual({ outcome: "other", stage: "burning", error: null });
+        }
+        return;
+      }
       setMode((m) => (m.kind === "reading" && m.id === id && !m.ended ? { ...m, ended: why } : m));
+      // someone else let it go: if this page shows it closed, it burns where
+      // it lies (a reader keeps the final reading instead)
+      if (why === "destroyed" && ending && readingId() !== id) {
+        field.current?.burnRemote(id, { seed: seedOf(ending.effect_seed, id), durationMs: ending.burn_duration_ms ?? BURN_DEFAULT_MS });
+      }
+    },
+    onOwnDestroyed: (ending: Ending) => {
+      if (ritualRef.current && ending.op === ritualRef.current.opKey) {
+        confirmRitual({ ...ending, total: ending.active_total });
+      } else {
+        // an earlier let-go of this page's, no longer on screen
+        dispatch({ type: "removed", id: ending.id, revision: ending.revision, total: ending.active_total, reading: readingId() });
+        if (ending.op) pendingOps.delete(ending.op);
+      }
     },
     onChanged: (id, version) => {
-      if (readingId() === id) setReadingVersion((v) => Math.max(v, version));
+      if (modeRef.current.kind === "reading" && modeRef.current.id === id) setReadingVersion((v) => Math.max(v, version));
     },
   });
+
+  // The server has confirmed it, by its reply or by the stream, whichever
+  // came first: it leaves the shared space now, and burns here once.
+  const confirmRitual = useCallback(
+    (ending: { revision: number; total: number; effect_seed?: string; burn_duration_ms?: number }) => {
+      const r = ritualRef.current;
+      if (!r || r.ignited) return;
+      r.ignited = true;
+      r.committing = false;
+      dispatch({ type: "removed", id: r.id, revision: ending.revision, total: ending.total, reading: null });
+      const m = modeRef.current;
+      if (m.kind !== "ritual" || m.id !== r.id) {
+        // resolved after the visitor went back to the space: nothing to show
+        pendingOps.delete(r.opKey);
+        ritualRef.current = null;
+        return;
+      }
+      setRitual({ stage: "burning", error: null });
+      if (m.fallback) {
+        // the drawn paper chars and falls to ash, then the quiet ending
+        setTimeout(() => setRitual({ stage: "ashes" }), reducedMotion() ? 400 : 1800);
+      } else {
+        field.current?.igniteRitual({
+          seed: seedOf(ending.effect_seed, r.id),
+          durationMs: ending.burn_duration_ms ?? BURN_DEFAULT_MS,
+        });
+      }
+    },
+    [dispatch, pendingOps, setRitual],
+  );
+
+  // "Release it": the reading closes, the paper balls up over the furnace.
+  // Nothing has been sent; Cancel leaves everything as it was.
+  const startRitual = useCallback((receipt: string) => {
+    const m = modeRef.current;
+    if (m.kind !== "reading" || m.ended) return;
+    const prepared = sceneAvailable.current && (field.current?.prepareRitual(m.id) ?? false);
+    ritualRef.current = { id: m.id, receipt, opKey: crypto.randomUUID(), committing: false, ignited: false };
+    setRitualLayout(null);
+    setMode({
+      kind: "ritual",
+      id: m.id,
+      stage: prepared ? "preparing" : "ready",
+      outcome: "own",
+      error: null,
+      canPlace: true,
+      fallback: !prepared,
+    });
+  }, []);
+
+  // Placed in the furnace (dropped inside the opening, or "Place in
+  // furnace"): the one confirmation. The paper waits at the rim until the
+  // server answers; nothing burns before it does. A lost answer is asked
+  // again with the same operation key until it is definite.
+  const commitRitual = useCallback(async () => {
+    const r = ritualRef.current;
+    const m = modeRef.current;
+    if (!r || r.committing || r.ignited || m.kind !== "ritual" || m.outcome !== "own") return;
+    r.committing = true;
+    pendingOps.add(r.opKey);
+    setRitual({ stage: "committing", error: null });
+    for (let attempt = 0; ritualRef.current === r && !r.ignited; attempt++) {
+      try {
+        const burned = await burnPaper(r.id, r.receipt, r.opKey);
+        confirmRitual(burned);
+        return;
+      } catch (err) {
+        if (ritualRef.current !== r || r.ignited) return;
+        if (err instanceof ApiError && err.status < 500) {
+          r.committing = false;
+          pendingOps.delete(r.opKey);
+          if (err.code === "paper_gone") {
+            // someone else let it go first (ours would have answered as ours)
+            r.ignited = true;
+            dispatch({ type: "removed", id: r.id, revision: -1, total: current().total, reading: null });
+            field.current?.clearRitual();
+            setRitual({ outcome: "other", stage: "ashes", error: null });
+            return;
+          }
+          // a definite no: the paper stays, and its rights are asked again
+          field.current?.returnRitual();
+          setRitual({ stage: "ready", error: err.message });
+          getPaper(r.id)
+            .then((paper) => {
+              if (ritualRef.current !== r) return;
+              if (paper.read_receipt) r.receipt = paper.read_receipt;
+              if (!paper.viewer.can_burn) setRitual({ canPlace: false, error: "You can't let this paper go any more." });
+            })
+            .catch(() => {});
+          return;
+        }
+        // unknown outcome: never claim it wasn't released; ask again
+        setRitual({ stage: "checking" });
+        await sleep(Math.min(8000, 1000 * 2 ** attempt));
+      }
+    }
+  }, [confirmRitual, current, dispatch, pendingOps, setRitual]);
+
+  const placeRitual = useCallback(() => {
+    const m = modeRef.current;
+    if (m.kind !== "ritual" || !m.canPlace || (m.stage !== "ready" && m.stage !== "preparing")) return;
+    field.current?.placeRitual();
+    void commitRitual();
+  }, [commitRitual]);
+
+  const ritualEvent = useCallback(
+    (event: RitualEvent) => {
+      const m = modeRef.current;
+      if (m.kind !== "ritual") return;
+      if (event.type === "ready" && m.stage === "preparing") setRitual({ stage: "ready" });
+      else if (event.type === "dropped") {
+        if (m.canPlace && (m.stage === "ready" || m.stage === "preparing")) void commitRitual();
+        else field.current?.returnRitual();
+      } else if (event.type === "ashes" && (m.stage === "burning" || m.stage === "committing")) setRitual({ stage: "ashes" });
+    },
+    [commitRitual, setRitual],
+  );
+
+  // Cancel (or Escape) before placing: the paper drops back into the space.
+  // No request was made, so nothing changed for anyone.
+  const cancelRitual = useCallback(() => {
+    const m = modeRef.current;
+    const r = ritualRef.current;
+    if (m.kind !== "ritual" || !r || r.committing || r.ignited) return;
+    if (m.stage !== "preparing" && m.stage !== "ready") return;
+    field.current?.cancelRitual();
+    ritualRef.current = null;
+    setMode({ kind: "space" });
+  }, []);
+
+  // "Back to the space": the presentation ends. A confirmed let-go stays
+  // let go; an unresolved one keeps being asked about in the background.
+  const leaveRitual = useCallback(() => {
+    const m = modeRef.current;
+    const r = ritualRef.current;
+    if (m.kind !== "ritual") return;
+    field.current?.endRitual();
+    if (r && r.ignited) {
+      pendingOps.delete(r.opKey);
+      ritualRef.current = null;
+    }
+    // Gone for certain: out of this page's window. Still unresolved: the
+    // paper stays in the window until the answer comes, and comes back to
+    // the floor if it turns out it wasn't released.
+    if (!r || r.ignited || m.outcome !== "own") {
+      dispatch({ type: "removed", id: m.id, revision: -1, total: current().total, reading: null });
+    }
+    returnFocus.current = document.querySelector<HTMLElement>(".space-write");
+    setMode({ kind: "space" });
+  }, [current, dispatch, pendingOps]);
+
+  // Escape cancels only before placing; afterwards it only ends the view.
+  useEffect(() => {
+    if (mode.kind !== "ritual") return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== "Escape") return;
+      const m = modeRef.current;
+      if (m.kind !== "ritual") return;
+      e.preventDefault();
+      if (m.stage === "preparing" || m.stage === "ready") {
+        if (m.outcome === "own") cancelRitual();
+        else leaveRitual();
+      } else if (m.stage !== "committing") leaveRitual();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mode.kind, cancelRitual, leaveRitual]);
 
   const openPaper = useCallback((id: string) => {
     // a paper on its way out (explored past, let go) is no longer here to open
@@ -89,19 +325,7 @@ export function App() {
     setMode({ kind: "space" });
   }, [dispatch]);
 
-  // This page let it go: the server has committed, so it plays its own
-  // ending; other pages learn of it from the stream.
-  const burned = useCallback(
-    (result: Burned) => {
-      const m = modeRef.current;
-      if (m.kind !== "reading") return;
-      field.current?.burnOpenPaper();
-      dispatch({ type: "removed", id: m.id, revision: result.revision, total: result.total, reading: null });
-      setMode({ kind: "space" });
-      document.querySelector<HTMLElement>(".space-write")?.focus();
-    },
-    [dispatch],
-  );
+  const prefetchFire = useCallback(() => field.current?.prefetchFire(), []);
 
   const ended = useCallback((why: Ended) => {
     setMode((m) => (m.kind === "reading" && !m.ended ? { ...m, ended: why } : m));
@@ -145,6 +369,7 @@ export function App() {
   }, [keyOffer, mode.kind]);
 
   const openReturnKey = useCallback(() => {
+    if (modeRef.current.kind === "ritual") return;
     returnFocus.current = document.activeElement as HTMLElement | null;
     setMode({ kind: "key", variant: "restore" });
   }, []);
@@ -259,8 +484,8 @@ export function App() {
   const reconnecting = space.connection === "reconnecting";
 
   return (
-    <div className={`app${mode.kind === "writing" ? " is-writing" : ""}`}>
-      <Header onReturnKey={openReturnKey} />
+    <div className={`app${mode.kind === "writing" ? " is-writing" : ""}${mode.kind === "ritual" ? " is-ritual" : ""}`}>
+      <Header onReturnKey={openReturnKey} busy={mode.kind === "ritual"} />
       {ready && (
         <PaperField
           ref={field}
@@ -268,7 +493,13 @@ export function App() {
           onOpen={openPaper}
           onOpenRect={moveSheet}
           onExplore={explore}
-          inert={busy}
+          onRitual={ritualEvent}
+          onRitualLayout={setRitualLayout}
+          onAvailable={(available) => {
+            sceneAvailable.current = available;
+          }}
+          // the ritual's paper is dragged on the canvas, so it stays live
+          inert={busy && mode.kind !== "ritual"}
         />
       )}
       {space.status === "loading" && <p className="space-status">Finding the space…</p>}
@@ -302,10 +533,23 @@ export function App() {
           liveVersion={readingVersion}
           ended={mode.ended}
           reconnecting={reconnecting}
-          pendingOps={pendingOps}
-          onBurned={burned}
+          onRelease={startRitual}
+          onReleasable={prefetchFire}
           onEnded={ended}
           onClose={closePaper}
+        />
+      )}
+      {mode.kind === "ritual" && (
+        <RitualOverlay
+          stage={mode.stage}
+          outcome={mode.outcome}
+          error={mode.error}
+          canPlace={mode.canPlace && !reconnecting}
+          fallback={mode.fallback}
+          layout={ritualLayout}
+          onCancel={cancelRitual}
+          onPlace={placeRitual}
+          onBack={leaveRitual}
         />
       )}
     </div>

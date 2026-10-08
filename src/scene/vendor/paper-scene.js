@@ -65,6 +65,8 @@ const randomRange = (min, max) => min + Math.random() * (max - min);
  *   compact: boolean,
  *   onPaperOpen: (id: string) => void,
  *   onExplore?: (edge: "left" | "right" | "back" | "front") => void,
+ *   onRitual?: (event: { type: "ready" | "dropped" | "burning" | "ashes" }) => void,
+ *   onRitualLayout?: (layout: { paperBottom: number, furnaceTop: number, furnaceBottom: number }) => void,
  *   onReady: () => void,
  *   onError: (err: Error) => void,
  * }} options
@@ -565,6 +567,12 @@ export function createPaperScene(container, buttonLayer, options) {
   }
 
   function removePaper(paper) {
+    // a burn owns an attribute on the paper's geometry: it goes first
+    for (const ghost of ghosts) {
+      if (ghost.paper !== paper) continue;
+      ghost.effect?.dispose();
+      ghosts.delete(ghost);
+    }
     if (paper === activePaper) activePaper = null;
     if (pointerState && pointerState.paper === paper) pointerState.paper = null;
     scene.remove(paper.mesh);
@@ -585,6 +593,8 @@ export function createPaperScene(container, buttonLayer, options) {
       if (wanted.has(id) || paper === activePaper) continue;
       // null marks a paper still waiting for its staggered drop-in
       if (!paper) papers.delete(id);
+      // burning where it lay: it leaves once its ash has faded
+      else if (paper.ghost) continue;
       else if (edge && isGrabbable(paper)) startLeaving(paper, edge);
       else if (paper.state !== "fading" && paper.state !== "leaving") startFade(paper, false);
     }
@@ -680,7 +690,7 @@ export function createPaperScene(container, buttonLayer, options) {
     }
     paper.state = "closed";
     syncBodyToMesh(paper);
-    setPaperBodyDynamic(paper, true);
+    if (!paper.parked) setPaperBodyDynamic(paper, true);
   }
   const _axisX = new THREE.Vector3(1, 0, 0);
   const _axisZ = new THREE.Vector3(0, 0, 1);
@@ -730,6 +740,10 @@ export function createPaperScene(container, buttonLayer, options) {
   const isGrabbable = (paper) => paper.state === "closed" || paper.state === "rolling";
 
   function onPointerDown(e) {
+    if (ritual) {
+      ritualPointerDown(e);
+      return;
+    }
     if (!animData || pointerState || activePaper) return;
     const p = pickPaper(e);
     pointerState = { paper: p, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, grabbing: false };
@@ -742,6 +756,10 @@ export function createPaperScene(container, buttonLayer, options) {
   }
 
   function onPointerMove(e) {
+    if (ritual) {
+      ritualPointerMove(e);
+      return;
+    }
     if (!pointerState) {
       updateHoverCursor(e);
       return;
@@ -756,6 +774,10 @@ export function createPaperScene(container, buttonLayer, options) {
   }
 
   function onPointerUp(e) {
+    if (ritual) {
+      ritualPointerUp(e);
+      return;
+    }
     if (!pointerState || e.pointerId !== pointerState.pointerId) return;
     if (pointerState.grabbing) {
       if (pointerState.paper) releaseGrab(pointerState.paper, true);
@@ -770,6 +792,10 @@ export function createPaperScene(container, buttonLayer, options) {
   }
 
   function onPointerCancel(e) {
+    if (ritual) {
+      ritualPointerCancel(e);
+      return;
+    }
     if (!pointerState || e.pointerId !== pointerState.pointerId) return;
     if (pointerState.grabbing && pointerState.paper) releaseGrab(pointerState.paper, false);
     pointerState = null;
@@ -785,6 +811,7 @@ export function createPaperScene(container, buttonLayer, options) {
   canvas.addEventListener("pointermove", onPointerMove);
   canvas.addEventListener("pointerup", onPointerUp);
   canvas.addEventListener("pointercancel", onPointerCancel);
+  canvas.addEventListener("lostpointercapture", ritualPointerCancel);
 
   function beginGrab(paper, e) {
     pointerState.grabbing = true;
@@ -884,6 +911,8 @@ export function createPaperScene(container, buttonLayer, options) {
       physicsWorld.step(PHYSICS_STEP, dt, 3);
       applyPhysicsBounds(dt);
       for (const p of papers.values()) if (p) updatePaperMotion(p, dt);
+      if (ritual) updateRitual(dt);
+      updateGhosts(dt);
       placeButtons();
     }
     composer.render();
@@ -906,7 +935,8 @@ export function createPaperScene(container, buttonLayer, options) {
       const style = p.button.style;
       style.transform = `translate(${(x - r).toFixed(1)}px, ${(y - r).toFixed(1)}px)`;
       style.width = style.height = `${(r * 2).toFixed(1)}px`;
-      p.button.hidden = p.state !== "closed" && p.state !== "rolling";
+      // while a paper is being let go, no other paper can be picked
+      p.button.hidden = !!ritual || (p.state !== "closed" && p.state !== "rolling");
     }
   }
 
@@ -937,6 +967,8 @@ export function createPaperScene(container, buttonLayer, options) {
   }
 
   function updatePaperMotion(paper, dt) {
+    // the ritual and the burns move these themselves, their crumple fixed
+    if (paper.state === "ritual" || paper.state === "ghost") return;
     const maxFrame = animData.frameCount - 1;
     if (paper.explore) {
       updateExploreMotion(paper, dt);
@@ -1043,6 +1075,463 @@ export function createPaperScene(container, buttonLayer, options) {
     }
   }
 
+  // ==================================================
+  // Letting go: the furnace ritual and burns seen from elsewhere (plan §5)
+  // ==================================================
+  // The fire (src/scene/fire) loads only when a ritual starts, a confirmed
+  // burn must play, or a reader is about to be able to let go, so the
+  // space's first load carries none of it.
+  let fire = null;
+  let fireLoad = null;
+  function loadFire() {
+    fireLoad ??= import("../fire/index.js")
+      .then(async (module) => {
+        const textures = await module.loadFireTextures(`${options.textureBase ?? "/textures/"}fire/`);
+        fire = { module, textures };
+        return fire;
+      })
+      .catch((err) => {
+        fireLoad = null;
+        throw err;
+      });
+    return fireLoad;
+  }
+
+  // Where the ritual sits on screen (B01 desktop, B05 phone), as fractions of
+  // the viewport: the furnace's width and the screen heights of its front
+  // foot and of the hovering paper's centre. The world placement is solved
+  // from these for the current camera, so the composition holds at any size.
+  const RITUAL_FRAME = compact
+    ? { furnaceWidth: 0.56, furnaceFoot: 0.76, paperY: 0.33 }
+    : { furnaceWidth: 0.24, furnaceFoot: 0.89, paperY: 0.27 };
+  // The furnace's height and inner radius as fire/furnace.js builds them.
+  const FURNACE_HEIGHT = 0.62;
+  const FURNACE_INNER = 1 - 0.085;
+  const CRUMPLE_SECONDS = 0.75;
+  // the phone's camera is close: the held paper is drawn smaller (B05)
+  const RITUAL_SCALE = compact ? CLOSED_SCALE * 0.66 : CLOSED_SCALE;
+  const PRECOMMIT = ["crumpling", "hovering", "dragging", "returning", "holding"];
+  let ritual = null;
+
+  const _ray = new THREE.Raycaster();
+  const _ndc = new THREE.Vector2();
+  const _p = new THREE.Vector3();
+  const _q = new THREE.Vector3();
+  const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -FLOOR_VISUAL_Y);
+
+  function screenPoint(point) {
+    const { w, h } = size();
+    _p.copy(point).project(camera);
+    return { x: ((_p.x + 1) / 2) * w, y: ((1 - _p.y) / 2) * h };
+  }
+
+  // Furnace radius and floor anchor so its front foot lands at the target
+  // height and its width at the target fraction of the screen; then the
+  // hover point straight above it at the target height.
+  function ritualPlacement() {
+    const { w, h } = size();
+    let radius = compact ? 0.32 : 0.4;
+    const anchor = new THREE.Vector3(0, FLOOR_VISUAL_Y, 0.4);
+    for (let i = 0; i < 6; i++) {
+      // the floor point under the target foot height, minus one radius
+      _ndc.set(0, 1 - 2 * RITUAL_FRAME.furnaceFoot);
+      _ray.setFromCamera(_ndc, camera);
+      if (_ray.ray.intersectPlane(floorPlane, _p)) anchor.set(0, FLOOR_VISUAL_Y, _p.z - radius);
+      // width across the rim at the anchor's depth
+      const left = screenPoint(_q.set(-radius, FLOOR_VISUAL_Y + radius * FURNACE_HEIGHT, anchor.z)).x;
+      const right = screenPoint(_q.set(radius, FLOOR_VISUAL_Y + radius * FURNACE_HEIGHT, anchor.z)).x;
+      const width = Math.max(1, right - left);
+      radius *= (RITUAL_FRAME.furnaceWidth * w) / width;
+    }
+    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -anchor.z);
+    const hover = new THREE.Vector3(0, FLOOR_VISUAL_Y + 1, anchor.z);
+    _ndc.set(0, 1 - 2 * RITUAL_FRAME.paperY);
+    _ray.setFromCamera(_ndc, camera);
+    _ray.ray.intersectPlane(plane, hover);
+    // never so low that the paper would touch the rim
+    hover.y = Math.max(hover.y, FLOOR_VISUAL_Y + radius * FURNACE_HEIGHT + collisionRadius * 2.2);
+    void h;
+    return { anchor, hover, plane, radius };
+  }
+
+  function ritualLayout() {
+    const r = ritual;
+    const { anchor, hover, radius } = r.place;
+    _camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
+    const paperBottom = screenPoint(_q.copy(hover).addScaledVector(_camUp, -collisionRadius * 1.1)).y;
+    const furnaceTop = screenPoint(_q.set(anchor.x, FLOOR_VISUAL_Y + radius * FURNACE_HEIGHT, anchor.z - radius)).y;
+    const furnaceBottom = screenPoint(_q.set(anchor.x, FLOOR_VISUAL_Y, anchor.z + radius)).y;
+    return { paperBottom, furnaceTop, furnaceBottom };
+  }
+
+  function emitRitualLayout() {
+    if (ritual) options.onRitualLayout?.(ritualLayout());
+  }
+
+  // Sets where the paper's crumpled centre is; the mesh hangs off it.
+  function placeCentre(paper, centre) {
+    const off = crumpleWorldOffset(paper.mesh.scale.x, paper.mesh.quaternion);
+    paper.mesh.position.copy(centre).sub(off);
+    paper.body.position.set(centre.x, centre.y, centre.z);
+  }
+
+  // B01 keeps the furnace and the space above it clear: papers lying in its
+  // footprint, in front of it, or behind it where they would show between
+  // the furnace and the hovering paper, roll aside to the nearer side and
+  // stay there.
+  // Measured on screen: a paper far back sits close to the middle of the
+  // picture even when it is well to one side in the room. The column is the
+  // furnace's on-screen width plus a paper's; a paper is moved sideways until
+  // it clears it, even if that leaves it partly past the edge of the view.
+  function clearRitualColumn(r) {
+    const { anchor, radius } = r.place;
+    const { w } = size();
+    const half = (x, z) => Math.abs(screenPoint(_q.set(x, restCenterY, z)).x - w / 2);
+    const furnaceHalf = half(anchor.x + radius, anchor.z);
+    for (const p of livePapers()) {
+      if (p === r.paper || !isGrabbable(p) || p.explore) continue;
+      const at = p.body.position;
+      const paperR = half(at.x + collisionRadius, at.z) - half(at.x, at.z);
+      const needed = furnaceHalf + Math.abs(paperR) * 1.6 + 12;
+      if (half(at.x, at.z) >= needed) continue;
+      const dir = at.x >= anchor.x ? 1 : -1;
+      let low = Math.abs(at.x);
+      let high = Math.max(low, halfWidthAt(at.z)) + collisionRadius * 6;
+      for (let i = 0; i < 18; i++) {
+        const mid = (low + high) / 2;
+        if (half(dir * mid, at.z) < needed) low = mid;
+        else high = mid;
+      }
+      const to = new THREE.Vector3(dir * high, 0, at.z);
+      const from = p.mesh.position.clone();
+      to.y = from.y;
+      to.z = from.z - (at.z - to.z);
+      to.x = from.x + (to.x - at.x);
+      // held there (the stage bounds would roll it back) until the ritual ends
+      p.parked = true;
+      setPaperBodyDynamic(p, false);
+      if (reduceMotion()) {
+        p.mesh.position.copy(to);
+        syncBodyToMesh(p);
+        continue;
+      }
+      p.state = "entering";
+      p.explore = { from, to, time: 0, delay: randomRange(0, 0.12) };
+    }
+  }
+
+  function addFurnace(r) {
+    const f = fire.module.createFurnace(camera, fire.textures, { radius: r.place.radius, position: r.place.anchor });
+    scene.add(f.group);
+    f.show();
+    if (r.reduced) f.update(1);
+    r.furnace = f;
+    emitRitualLayout();
+    if (r.pendingIgnite) {
+      const pending = r.pendingIgnite;
+      r.pendingIgnite = null;
+      ignite(pending);
+    }
+  }
+
+  // The rim point a placed paper waits at until the server has confirmed.
+  function rimPoint(r, out) {
+    const top = r.furnace ? r.furnace.rimY : FLOOR_VISUAL_Y + r.place.radius * FURNACE_HEIGHT;
+    return out.set(r.place.anchor.x, top + collisionRadius * 0.95, r.place.anchor.z);
+  }
+
+  const _rim = new THREE.Vector3();
+  const _bob = new THREE.Vector3();
+  function updateRitual(dt) {
+    const r = ritual;
+    r.time += dt;
+    r.furnace?.update(dt);
+    const paper = r.paper;
+    switch (r.phase) {
+      case "crumpling": {
+        // the opened sheet balls itself up again on its way to the hover
+        const t = clamp01(r.time / (r.reduced ? 0.15 : CRUMPLE_SECONDS));
+        const e = easeOutCubic(t);
+        paper.mesh.quaternion.slerpQuaternions(r.start.quaternion, r.quaternion, e);
+        paper.mesh.scale.setScalar(lerp(r.start.scale, RITUAL_SCALE, e));
+        paper.frameIdx = lerp(r.start.frameIdx, animData.frameCount - 1, e);
+        updatePaperFrame(paper, animData, paper.frameIdx);
+        const target = _p.copy(r.place.hover).sub(crumpleWorldOffset(RITUAL_SCALE, r.quaternion));
+        paper.mesh.position.lerpVectors(r.start.position, target, e);
+        if (t >= 1) {
+          r.phase = "hovering";
+          r.time = 0;
+          r.centre.copy(r.place.hover);
+          placeCentre(paper, r.centre);
+          options.onRitual?.({ type: "ready" });
+        }
+        return;
+      }
+      case "hovering": {
+        // a breath of movement, so it reads as held in the air; none with
+        // reduced motion
+        const bob = r.reduced ? 0 : Math.sin(r.time * 1.4) * collisionRadius * 0.05;
+        r.centre.copy(_bob.copy(r.place.hover).setY(r.place.hover.y + bob));
+        placeCentre(paper, r.centre);
+        return;
+      }
+      case "dragging":
+        r.centre.lerp(r.target, 1 - Math.exp(-dt * 18));
+        placeCentre(paper, r.centre);
+        return;
+      case "returning":
+        r.centre.lerp(r.place.hover, 1 - Math.exp(-dt * (r.reduced ? 40 : 8)));
+        placeCentre(paper, r.centre);
+        if (r.centre.distanceToSquared(r.place.hover) < 1e-6) {
+          r.phase = "hovering";
+          r.time = 0;
+        }
+        return;
+      case "holding":
+        r.centre.lerp(rimPoint(r, _rim), 1 - Math.exp(-dt * (r.reduced ? 40 : 10)));
+        placeCentre(paper, r.centre);
+        return;
+      case "burning":
+        if (r.effect) {
+          r.effect.update(dt);
+          if (r.effect.done) {
+            r.phase = "ashes";
+            options.onRitual?.({ type: "ashes" });
+          }
+        } else if (r.fallbackAt !== undefined && r.time > r.fallbackAt) {
+          r.phase = "ashes";
+          options.onRitual?.({ type: "ashes" });
+        }
+        return;
+      case "ashes":
+        r.effect?.update(dt);
+        return;
+      case "ending":
+        if (!r.furnace || !r.furnace.visible) {
+          r.furnace?.dispose();
+          if (ritual === r) ritual = null;
+        }
+        return;
+    }
+  }
+
+  // Confirmed by the server: it settles into the hearth and burns from the
+  // bottom up (B02), then leaves its ash (B03). `remote` is the ending when
+  // someone else let it go first: it burns where it hangs, over the furnace.
+  function ignite({ seed, durationMs, remote }) {
+    const r = ritual;
+    if (!r || !r.paper) return;
+    releaseRitualPointer();
+    r.phase = "burning";
+    r.time = 0;
+    if (!fire || !r.furnace) {
+      if (fireLoad || !r.fireFailed) {
+        r.pendingIgnite = { seed, durationMs, remote };
+        return;
+      }
+      // the fire couldn't load: the paper darkens and goes, as before
+      startFade(r.paper, true);
+      r.paper = null;
+      r.fallbackAt = 1.5;
+      options.onRitual?.({ type: "burning" });
+      return;
+    }
+    const f = r.furnace;
+    r.effect = fire.module.createBurnEffect({
+      scene,
+      camera,
+      mesh: r.paper.mesh,
+      textures: fire.textures,
+      mode: remote ? "remote" : "furnace",
+      seed,
+      durationMs,
+      reducedMotion: r.reduced,
+      surfaceY: f.hearthPoint.y,
+      settleTo: remote ? undefined : f.hearthPoint,
+      furnace: f,
+      viewportHeight: size().h,
+    });
+    options.onRitual?.({ type: "burning" });
+  }
+
+  function releaseRitualPointer() {
+    const r = ritual;
+    if (!r || r.pointerId === null) return;
+    try {
+      canvas.releasePointerCapture(r.pointerId);
+    } catch {
+      // already released
+    }
+    r.pointerId = null;
+    canvas.style.cursor = "";
+  }
+
+  // The furnace goes and the ritual ends once it has; the paper (if any) is
+  // no longer the ritual's.
+  function endFurnace(r) {
+    // papers moved aside drift back into the stage on their own
+    for (const p of livePapers()) {
+      if (!p.parked) continue;
+      p.parked = false;
+      if (!p.explore && p.state === "closed") setPaperBodyDynamic(p, true);
+    }
+    r.phase = "ending";
+    r.paper = null;
+    r.pendingIgnite = null;
+    if (r.furnace) r.furnace.hide();
+    else ritual = null;
+    if (activePaper && activePaper.state === "ritual") activePaper = null;
+  }
+
+  function hitsRitualPaper(e) {
+    const r = ritual;
+    updatePointer(e);
+    raycaster.setFromCamera(pointer, camera);
+    if (raycaster.intersectObject(r.paper.mesh).length) return true;
+    // a generous margin: a crumpled ball has gaps a finger can fall through
+    const centre = screenPoint(r.centre);
+    _camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
+    const edge = screenPoint(_q.copy(r.centre).addScaledVector(_camUp, collisionRadius));
+    const radius = Math.abs(edge.y - centre.y) * 1.35 + 8;
+    const rect = canvas.getBoundingClientRect();
+    return Math.hypot(e.clientX - rect.left - centre.x, e.clientY - rect.top - centre.y) < radius;
+  }
+
+  // On a vertical plane through the furnace's centre facing the camera: the
+  // paper moves left, right, up and down, and straight down is into the
+  // furnace. Over the furnace it rides on the rim rather than through it.
+  function ritualDragTarget(e) {
+    const r = ritual;
+    updatePointer(e);
+    raycaster.setFromCamera(pointer, camera);
+    if (!raycaster.ray.intersectPlane(r.place.plane, grabHitPoint)) return;
+    const { anchor, radius } = r.place;
+    const top = FLOOR_VISUAL_Y + radius * FURNACE_HEIGHT;
+    const overFurnace = Math.abs(grabHitPoint.x - anchor.x) < radius + collisionRadius * 0.6;
+    const floor = overFurnace ? top + collisionRadius * 0.3 : FLOOR_VISUAL_Y + collisionRadius;
+    const halfWidth = Math.max(radius * 2, halfWidthAt(anchor.z) + collisionRadius);
+    r.target.set(clampAbs(grabHitPoint.x, halfWidth), Math.max(grabHitPoint.y, floor), anchor.z);
+  }
+
+  function ritualPointerDown(e) {
+    const r = ritual;
+    if (!r || !r.paper || (r.phase !== "hovering" && r.phase !== "returning") || r.pointerId !== null) return;
+    if (!hitsRitualPaper(e)) return;
+    r.pointerId = e.pointerId;
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {
+      // synthetic events may carry no valid pointerId
+    }
+    r.phase = "dragging";
+    ritualDragTarget(e);
+    canvas.style.cursor = "grabbing";
+  }
+
+  function ritualPointerMove(e) {
+    const r = ritual;
+    if (!r) return;
+    if (r.phase === "dragging" && e.pointerId === r.pointerId) {
+      ritualDragTarget(e);
+      return;
+    }
+    if (r.pointerId === null && r.paper && r.phase === "hovering") canvas.style.cursor = hitsRitualPaper(e) ? "grab" : "";
+  }
+
+  // Only letting go inside the opening places it; anywhere else it floats
+  // back. Passing over the opening on the way is not placing it.
+  function ritualPointerUp(e) {
+    const r = ritual;
+    if (!r || e.pointerId !== r.pointerId) return;
+    releaseRitualPointer();
+    if (r.phase !== "dragging") return;
+    if (r.furnace && r.furnace.contains(r.target)) {
+      r.phase = "holding";
+      options.onRitual?.({ type: "dropped" });
+    } else r.phase = "returning";
+  }
+
+  // A cancelled or lost pointer never places anything.
+  function ritualPointerCancel(e) {
+    const r = ritual;
+    if (!r || r.pointerId === null || e.pointerId !== r.pointerId) return;
+    r.pointerId = null;
+    canvas.style.cursor = "";
+    if (r.phase === "dragging") r.phase = "returning";
+  }
+
+  function relayoutRitual() {
+    const r = ritual;
+    if (!PRECOMMIT.includes(r.phase)) return;
+    // a resize mid-drag drops the drag, never the paper into the furnace
+    if (r.phase === "dragging") {
+      releaseRitualPointer();
+      r.phase = "returning";
+    }
+    const place = ritualPlacement();
+    // the furnace is built at one size; it moves, and keeps its radius
+    place.radius = r.furnace ? r.place.radius : place.radius;
+    r.place = place;
+    if (r.furnace) r.furnace.group.position.copy(place.anchor);
+    emitRitualLayout();
+  }
+
+  // Someone else's let-go, at a closed paper this page shows: it burns where
+  // it lies (B04) and its ash stays a few seconds, then fades. A ghost: no
+  // button, no body, not part of the window any more.
+  const ghosts = new Set();
+  const MAX_GHOST_BURNS = compact ? 2 : 3;
+
+  function updateGhosts(dt) {
+    for (const ghost of ghosts) {
+      if (!ghost.effect) continue;
+      ghost.effect.update(dt);
+      if (ghost.effect.finished) removePaper(ghost.paper);
+    }
+  }
+
+  function igniteGhost(paper, seed, durationMs) {
+    if (pointerState && pointerState.paper === paper) {
+      pointerState.paper = null;
+      pointerState.grabbing = false;
+      canvas.style.cursor = "";
+    }
+    if (!paper.bodyRemoved) physicsWorld.removeBody(paper.body);
+    paper.bodyRemoved = true;
+    if (ghosts.size >= MAX_GHOST_BURNS) {
+      // more at once than this device should draw: the rest simply go
+      startFade(paper, false);
+      return;
+    }
+    paper.ghost = true;
+    paper.state = "ghost";
+    paper.button.hidden = true;
+    const ghost = { paper, effect: null };
+    ghosts.add(ghost);
+    loadFire()
+      .then(({ module, textures }) => {
+        if (disposed || !ghosts.has(ghost)) return;
+        ghost.effect = module.createBurnEffect({
+          scene,
+          camera,
+          mesh: paper.mesh,
+          textures,
+          mode: "remote",
+          seed,
+          durationMs,
+          reducedMotion: reduceMotion(),
+          surfaceY: FLOOR_VISUAL_Y,
+          viewportHeight: size().h,
+        });
+      })
+      .catch(() => {
+        if (!ghosts.has(ghost)) return;
+        ghosts.delete(ghost);
+        paper.ghost = false;
+        startFade(paper, false);
+      });
+  }
+
   // Screen rectangle (CSS px, relative to the container) of the open sheet,
   // from its projected bounding box: the reading layer is laid over it.
   function openRect(paper) {
@@ -1072,6 +1561,7 @@ export function createPaperScene(container, buttonLayer, options) {
     measureFog();
     renderer.setSize(w, h);
     composer.setSize(w, h);
+    if (ritual) relayoutRitual();
     if (activePaper && activePaper.state === "open") {
       const pose = computeOpenPose();
       activePaper.mesh.position.copy(pose.position);
@@ -1147,7 +1637,8 @@ export function createPaperScene(container, buttonLayer, options) {
       paper.onUnfolded = (rect) => {
         onUnfolded(rect);
         later(() => {
-          if (activePaper === paper) paper.mesh.visible = false;
+          // (not if it was released in the meantime: it is needed again)
+          if (activePaper === paper && paper.state === "open") paper.mesh.visible = false;
         }, 300);
       };
       startOpen(paper);
@@ -1194,6 +1685,150 @@ export function createPaperScene(container, buttonLayer, options) {
       else pendingThrows.push(run);
     },
 
+    /** Starts loading the fire ahead of need (a reader who may let go). */
+    prefetchFire() {
+      loadFire().catch(() => {});
+    },
+
+    /**
+     * "Release it": the open paper balls up again and hangs over the furnace
+     * that comes in below it. Nothing is destroyed or sent. False if there is
+     * no such open paper to prepare.
+     */
+    prepareRitual(id) {
+      const paper = activePaper;
+      if (!animData || ritual || !paper || paper.id !== id || (paper.state !== "open" && paper.state !== "opening")) return false;
+      paper.onUnfolded = null;
+      paper.mesh.visible = true;
+      paper.mesh.castShadow = true;
+      setPaperBodyDynamic(paper, false);
+      const place = ritualPlacement();
+      const r = {
+        paper,
+        phase: "crumpling",
+        time: 0,
+        reduced: reduceMotion(),
+        start: captureTransform(paper),
+        quaternion: closedOrientation(place.hover),
+        place,
+        centre: place.hover.clone(),
+        target: place.hover.clone(),
+        furnace: null,
+        effect: null,
+        pointerId: null,
+        pendingIgnite: null,
+        fireFailed: false,
+      };
+      ritual = r;
+      paper.state = "ritual";
+      clearRitualColumn(r);
+      loadFire()
+        .then(() => {
+          if (ritual === r && r.phase !== "ending" && !disposed) addFurnace(r);
+        })
+        .catch(() => {
+          r.fireFailed = true;
+          if (ritual === r && r.pendingIgnite) {
+            const pending = r.pendingIgnite;
+            r.pendingIgnite = null;
+            ignite(pending);
+          }
+        });
+      emitRitualLayout();
+      return true;
+    },
+
+    /** The keyboard (and touch) way to place it: it goes to the rim and waits. */
+    placeRitual() {
+      const r = ritual;
+      if (!r || !r.paper || !["crumpling", "hovering", "dragging", "returning"].includes(r.phase)) return false;
+      releaseRitualPointer();
+      if (r.phase === "crumpling") {
+        r.paper.frameIdx = animData.frameCount - 1;
+        updatePaperFrame(r.paper, animData, r.paper.frameIdx);
+        r.paper.mesh.quaternion.copy(r.quaternion);
+        r.paper.mesh.scale.setScalar(RITUAL_SCALE);
+        r.centre.copy(r.place.hover);
+      }
+      r.phase = "holding";
+      return true;
+    },
+
+    /** The server refused: the paper floats back up, still here. */
+    returnRitual() {
+      const r = ritual;
+      if (!r || !r.paper || r.phase !== "holding") return;
+      r.phase = "returning";
+    },
+
+    /** Confirmed gone: it settles into the hearth and burns. */
+    igniteRitual({ seed, durationMs }) {
+      if (!ritual || !ritual.paper || !PRECOMMIT.includes(ritual.phase)) return;
+      if (ritual.phase === "crumpling") this.placeRitual();
+      ignite({ seed, durationMs, remote: false });
+    },
+
+    /** Someone else let it go before it was placed: it burns where it hangs. */
+    burnRitualRemotely({ seed, durationMs }) {
+      if (!ritual || !ritual.paper || !PRECOMMIT.includes(ritual.phase)) return;
+      ignite({ seed, durationMs, remote: true });
+    },
+
+    /** Taken out for safety (or found gone on reconnect): it simply goes. */
+    clearRitual() {
+      const r = ritual;
+      if (!r) return;
+      releaseRitualPointer();
+      r.effect?.dispose();
+      r.effect = null;
+      if (r.paper) removePaper(r.paper);
+      endFurnace(r);
+    },
+
+    /** Cancel before placing: the paper drops back into the space, unharmed. */
+    cancelRitual() {
+      const r = ritual;
+      if (!r || !r.paper || !PRECOMMIT.includes(r.phase)) return;
+      releaseRitualPointer();
+      const paper = r.paper;
+      paper.frameIdx = animData.frameCount - 1;
+      updatePaperFrame(paper, animData, paper.frameIdx);
+      paper.mesh.scale.setScalar(CLOSED_SCALE);
+      syncBodyToMesh(paper);
+      setPaperBodyDynamic(paper, true);
+      // toward the back of the stage, where it can be found again
+      paper.body.velocity.set(randomRange(-0.3, 0.3), 0.4, -randomRange(0.9, 1.3));
+      paper.state = "rolling";
+      paper.time = 0;
+      paper.throw = { settleTimer: 0 };
+      activePaper = null;
+      endFurnace(r);
+    },
+
+    /** "Back to the space": the furnace leaves and its ash with it. */
+    endRitual() {
+      const r = ritual;
+      if (!r) return;
+      releaseRitualPointer();
+      r.effect?.dispose();
+      r.effect = null;
+      if (r.paper) removePaper(r.paper);
+      endFurnace(r);
+    },
+
+    /**
+     * Someone else let a paper go. If this page shows it closed, it burns
+     * where it lies; false if there is nothing here to burn (it then just
+     * leaves with the window, or the reader keeps it).
+     */
+    burnRemote(id, { seed, durationMs }) {
+      const paper = papers.get(id);
+      if (!paper || paper === activePaper || paper.ghost) return false;
+      if (!["closed", "rolling", "grabbed"].includes(paper.state)) return false;
+      igniteGhost(paper, seed, durationMs);
+      return true;
+    },
+
     resize: onResize,
 
     dispose() {
@@ -1205,6 +1840,12 @@ export function createPaperScene(container, buttonLayer, options) {
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointercancel", onPointerCancel);
+      canvas.removeEventListener("lostpointercapture", ritualPointerCancel);
+      if (ritual) {
+        ritual.effect?.dispose();
+        ritual.furnace?.dispose();
+        ritual = null;
+      }
       for (const p of livePapers()) removePaper(p);
       papers.clear();
       floorGeometry.dispose();
