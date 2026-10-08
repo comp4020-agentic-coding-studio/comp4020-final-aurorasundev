@@ -1,6 +1,7 @@
 import express from "express";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { extname, resolve } from "node:path";
+import { gzipSync } from "node:zlib";
 import { openDb } from "./db.ts";
 import { closeAllStreams, eventsRouter } from "./events.ts";
 import { identityRouter } from "./identity.ts";
@@ -38,8 +39,40 @@ app.get("/readme/", (_req, res) => {
 const docs = resolve(root, "docs");
 if (existsSync(docs)) app.use("/readme/docs", express.static(docs));
 
+// The paper's crumple model (.fbx) is 1.25 MB raw and about 140 KB gzipped,
+// but Fly's edge only compresses known text types, so it went out raw on
+// every first visit. It is gzipped once here at startup and sent encoded to
+// any browser that accepts gzip. (The .exr beside it is already compressed.)
+const vatDir = resolve(dist, "vat/geo");
+const gzipped = new Map<string, Buffer>();
+if (existsSync(vatDir)) {
+  for (const name of readdirSync(vatDir)) {
+    if (extname(name) === ".fbx") gzipped.set(`/vat/geo/${name}`, gzipSync(readFileSync(resolve(vatDir, name)), { level: 9 }));
+  }
+}
+app.get("/vat/geo/:file", (req, res, next) => {
+  const body = gzipped.get(req.path);
+  if (!body || !req.acceptsEncodings("gzip")) return next();
+  res.set({
+    "Content-Type": "application/octet-stream",
+    "Content-Encoding": "gzip",
+    Vary: "Accept-Encoding",
+    "Cache-Control": "public, max-age=604800",
+  });
+  res.send(body);
+});
+
+// Vite's hashed bundles never change under one name, so browsers keep them
+// for a year; the crumple model is the demo's fixed asset, kept a week. The
+// page and other public files (textures) are revalidated on each visit.
+function cacheHeaders(res: express.Response, path: string): void {
+  if (path.includes("/assets/")) res.set("Cache-Control", "public, max-age=31536000, immutable");
+  else if (path.includes("/vat/")) res.set("Cache-Control", "public, max-age=604800");
+  else res.set("Cache-Control", "no-cache");
+}
+
 if (existsSync(dist)) {
-  app.use(express.static(dist, { index: "index.html" }));
+  app.use(express.static(dist, { index: "index.html", setHeaders: cacheHeaders }));
 } else {
   app.get("/", (_req, res) => {
     res.type("html").send("<!doctype html><title>Throwaway</title><p>Client not built: run pnpm build, or use pnpm dev.</p>");
