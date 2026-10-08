@@ -12,6 +12,7 @@ import {
   type PaperState,
   type ReportReason,
 } from "../lib/api.ts";
+import { SAFETY_CHECKS } from "../lib/safety.ts";
 import type { PaperStatus } from "../lib/space.ts";
 import type { SheetRect } from "./PaperField.tsx";
 
@@ -348,7 +349,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
             </div>
             <div className="read-meta">
               <p className="read-origin">{paper.viewer.is_author ? "You left this here." : "Someone left this here."}</p>
-              {!reported && (
+              {SAFETY_CHECKS && !reported && (
                 <button type="button" className="text-button read-report-link" onClick={startReport} disabled={acting}>
                   Report this paper
                 </button>

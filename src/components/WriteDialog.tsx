@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { SAFETY_CHECKS } from "../lib/safety.ts";
 import { ApiError, countCodePoints, createPaper, MAX_CODE_POINTS, type Created, type PaperMode } from "../lib/api.ts";
 
 type Props = {
@@ -69,7 +70,8 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline }: Props) 
   }
 
   // Saving includes the automated safety check, which is most of the wait.
-  const submitLabel = saving ? "Checking this paper…" : offline ? "Reconnecting…" : unsettled ? "Try again" : "Crumple & throw";
+  const savingLabel = SAFETY_CHECKS ? "Checking this paper…" : "Saving…";
+  const submitLabel = saving ? savingLabel : offline ? "Reconnecting…" : unsettled ? "Try again" : "Crumple & throw";
 
   return (
     <dialog
@@ -124,10 +126,12 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline }: Props) 
           </label>
         </fieldset>
 
-        <p className="write-disclosure" id="write-disclosure">
-          Before it enters the space, your text is sent to OpenAI for automated safety checks. Do not include private
-          details. <a href="/readme/">How checks work</a>
-        </p>
+        {SAFETY_CHECKS && (
+          <p className="write-disclosure" id="write-disclosure">
+            Before it enters the space, your text is sent to OpenAI for automated safety checks. Do not include private
+            details. <a href="/readme/">How checks work</a>
+          </p>
+        )}
 
         <label className="choice choice-check">
           <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} disabled={locked} />
@@ -141,7 +145,7 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline }: Props) 
         )}
         {saving && (
           <p className="visually-hidden" role="status">
-            Checking this paper…
+            {savingLabel}
           </p>
         )}
         <div className="write-actions">
