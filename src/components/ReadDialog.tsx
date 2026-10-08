@@ -27,6 +27,22 @@ type Load =
   | { kind: "missing" }
   | { kind: "ready"; paper: OpenedPaper };
 
+// The reading sheet sits over the unfolded 3D sheet, a little wider for the
+// text. On a phone that sheet projects too short to read more than a few
+// lines (M03), so it grows to a readable height around the same centre,
+// staying clear of the header above and the count below.
+const SHEET_MIN = 620;
+const CLEAR_TOP = 108;
+const CLEAR_BOTTOM = 80;
+
+function sheetBox(rect: SheetRect): { left: number; top: number; width: number; height: number } {
+  const width = Math.min(rect.width * 1.2, window.innerWidth - 24);
+  const height = Math.max(rect.height, Math.min(SHEET_MIN, window.innerHeight - CLEAR_TOP - CLEAR_BOTTOM));
+  const centred = rect.top + rect.height / 2 - height / 2;
+  const top = height === rect.height ? rect.top : Math.max(CLEAR_TOP, Math.min(centred, window.innerHeight - CLEAR_BOTTOM - height));
+  return { left: rect.left - (width - rect.width) / 2, top, width, height };
+}
+
 export const witnessLine = (n: number): string | null =>
   n === 0 ? null : `${n.toLocaleString("en-AU")} ${n === 1 ? "person has" : "people have"} witnessed this.`;
 
@@ -127,7 +143,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, pendingOps,
     }
   }
 
-  const sheetWidth = rect ? Math.min(rect.width * 1.2, window.innerWidth - 24) : 0;
+  const box = rect ? sheetBox(rect) : null;
   const paper = load.kind === "ready" ? load.paper : null;
   const count = paper ? witnessLine(paper.witness_count) : null;
   const finalReading = !!ended && ended !== "quarantined" && !!paper;
@@ -140,7 +156,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, pendingOps,
     <dialog
       ref={dialogRef}
       className={`dialog read-dialog${revealed ? " is-revealed" : ""}${rect ? " over-scene" : ""}${finalReading ? " is-final" : ""}`}
-      style={rect ? { left: rect.left - (sheetWidth - rect.width) / 2, top: rect.top, width: sheetWidth, height: rect.height, margin: 0 } : undefined}
+      style={box ? { ...box, margin: 0 } : undefined}
       aria-label="A paper someone left"
       onCancel={(e) => {
         e.preventDefault();
