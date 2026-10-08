@@ -4,6 +4,7 @@ import { activeTotal, bumpRevision, currentRevision, requestDigest, serverSecret
 import { broadcast } from "./events.ts";
 import { keyState } from "./identity.ts";
 import { log } from "./log.ts";
+import type { Payload, Verdict } from "./moderation.ts";
 import { checkReceipt, issueReceipt } from "./receipt.ts";
 import { identityFor } from "./session.ts";
 
@@ -17,13 +18,9 @@ const fail = (status: number, code: string, error: string): Failure => ({ ok: fa
 
 export type Created = { id: string; version: number; status: string; revision: number; total: number; fresh: boolean };
 
-export function createPaper(
-  db: DB,
-  ownerId: string,
-  content: unknown,
-  submissionKey: unknown,
-  modeInput: unknown,
-): Result<Created> {
+type Submission = { content: string; submissionKey: string; mode: Mode; digest: string };
+
+export function validateSubmission(content: unknown, submissionKey: unknown, modeInput: unknown): Result<Submission> {
   if (typeof content !== "string" || content.trim() === "") {
     return fail(400, "invalid_input", "Write something before throwing it.");
   }
@@ -36,29 +33,45 @@ export function createPaper(
   if (modeInput !== "KEEP" && modeInput !== "RELEASE") {
     return fail(400, "invalid_input", "Choose how to leave it.");
   }
-  const mode: Mode = modeInput;
-  const digest = requestDigest(content, mode);
+  return { ok: true, value: { content, submissionKey, mode: modeInput, digest: requestDigest(content, modeInput) } };
+}
+
+// A submission this identity already made under this key, if any. Compared by
+// digest, not text: destruction clears the text, and a retry of a destroyed
+// paper must still be recognised, never saved again.
+function priorSubmission(db: DB, ownerId: string, submission: Submission): Result<Created> | null {
+  const prior = db
+    .prepare("SELECT id, version, status, request_digest FROM papers WHERE owner_identity_id = ? AND submission_key = ?")
+    .get(ownerId, submission.submissionKey) as { id: string; version: number; status: string; request_digest: string } | undefined;
+  if (!prior) return null;
+  if (prior.request_digest !== submission.digest) {
+    return fail(409, "submission_conflict", "This submission was already saved with different words or a different choice.");
+  }
+  const { request_digest: _, ...paper } = prior;
+  return { ok: true, value: { ...paper, revision: currentRevision(db), total: activeTotal(db), fresh: false } };
+}
+
+// Saves a submission that has already passed its safety check (or a retry of
+// one already saved). The check runs before this, outside any transaction.
+export function createPaper(
+  db: DB,
+  ownerId: string,
+  content: unknown,
+  submissionKey: unknown,
+  modeInput: unknown,
+): Result<Created> {
+  const valid = validateSubmission(content, submissionKey, modeInput);
+  if (!valid.ok) return valid;
+  const { mode, digest } = valid.value;
 
   return db.transaction((): Result<Created> => {
-    // Compared by digest, not text: destruction clears the text, and a retry
-    // of a destroyed paper must still be recognised, never saved again.
-    const prior = db
-      .prepare("SELECT id, version, status, request_digest FROM papers WHERE owner_identity_id = ? AND submission_key = ?")
-      .get(ownerId, submissionKey) as { id: string; version: number; status: string; request_digest: string } | undefined;
-    if (prior) {
-      if (prior.request_digest !== digest) {
-        return fail(409, "submission_conflict", "This submission was already saved with different words or a different choice.");
-      }
-      return {
-        ok: true,
-        value: { ...prior, revision: currentRevision(db), total: activeTotal(db), fresh: false },
-      };
-    }
+    const prior = priorSubmission(db, ownerId, valid.value);
+    if (prior) return prior;
     const id = randomUUID();
     db.prepare(
       `INSERT INTO papers (id, owner_identity_id, content, created_at, submission_key, mode, request_digest)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run(id, ownerId, content, new Date().toISOString(), submissionKey, mode, digest);
+    ).run(id, ownerId, valid.value.content, new Date().toISOString(), valid.value.submissionKey, mode, digest);
     const revision = bumpRevision(db);
     return { ok: true, value: { id, version: 1, status: "ACTIVE", revision, total: activeTotal(db), fresh: true } };
   })();
@@ -152,7 +165,23 @@ export function burnPaper(db: DB, paperId: string, identityId: string, opKey: st
   })();
 }
 
-export function papersRouter(db: DB): Router {
+const REFUSALS = {
+  rejected: "This paper cannot enter the space as written. Please revise it.",
+  review: "This paper needs clarification before it can enter the space. Please revise it.",
+  unavailable: "This paper could not be checked. Please try again.",
+};
+
+function moderationRefusal(verdict: Exclude<Verdict, { kind: "allow" }>) {
+  if (verdict.kind === "reject") {
+    return { status: 422, logReason: verdict.reason, body: { code: "moderation_rejected", error: REFUSALS.rejected, reason: verdict.reason } };
+  }
+  if (verdict.kind === "review") {
+    return { status: 422, logReason: verdict.reason, body: { code: "moderation_review_required", error: REFUSALS.review, reason: verdict.reason } };
+  }
+  return { status: 503, logReason: verdict.error.code, body: { code: "moderation_unavailable", error: REFUSALS.unavailable } };
+}
+
+export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise<Verdict>): Router {
   const router = Router();
 
   router.get("/papers", (_req, res) => {
@@ -243,7 +272,12 @@ export function papersRouter(db: DB): Router {
     res.json({ id: paperId, status: "destroyed", revision: result.revision, total: result.total });
   });
 
-  router.post("/papers", (req, res) => {
+  // Checks still running, by identity and submission key, so a double click
+  // or a retry during a slow check waits for the same answer instead of
+  // paying for a second one. One instance, so memory is enough.
+  const inFlight = new Map<string, { digest: string; verdict: Promise<Verdict> }>();
+
+  router.post("/papers", async (req, res) => {
     const ownerId = identityFor(db, req);
     if (!ownerId) {
       res.status(401).json({ code: "unauthenticated", error: "Your session has expired. Reload the page and try again." });
@@ -254,7 +288,48 @@ export function papersRouter(db: DB): Router {
       res.status(400).json({ code: "invalid_input", error: "Confirm that you understand before throwing it." });
       return;
     }
-    const result = createPaper(db, ownerId, req.body?.content, key, req.body?.mode);
+    const valid = validateSubmission(req.body?.content, key, req.body?.mode);
+    if (!valid.ok) {
+      log("create", { identity: ownerId, outcome: valid.code });
+      res.status(valid.status).json({ code: valid.code, error: valid.error });
+      return;
+    }
+    const submission = valid.value;
+
+    // A retry of a saved submission answers with its current state and never
+    // reaches the provider, even while the provider is down.
+    if (!priorSubmission(db, ownerId, submission)) {
+      const flightKey = `${ownerId}:${submission.submissionKey}`;
+      let flight = inFlight.get(flightKey);
+      if (flight && flight.digest !== submission.digest) {
+        log("create", { identity: ownerId, outcome: "submission_conflict" });
+        res.status(409).json({ code: "submission_conflict", error: "This submission is already being saved with different words or a different choice." });
+        return;
+      }
+      if (!flight) {
+        flight = {
+          digest: submission.digest,
+          verdict: checkContent({ paper_text: submission.content, report_reason: null, report_note: null }).finally(() =>
+            inFlight.delete(flightKey),
+          ),
+        };
+        inFlight.set(flightKey, flight);
+      }
+      const verdict = await flight.verdict;
+      if (verdict.kind !== "allow") {
+        const refusal = moderationRefusal(verdict);
+        log("create", { identity: ownerId, outcome: refusal.body.code, reason: refusal.logReason });
+        res.status(refusal.status).json(refusal.body);
+        return;
+      }
+      // the session may have ended while the check ran
+      if (identityFor(db, req) !== ownerId) {
+        res.status(401).json({ code: "unauthenticated", error: "Your session has expired. Reload the page and try again." });
+        return;
+      }
+    }
+
+    const result = createPaper(db, ownerId, submission.content, key, submission.mode);
     if (!result.ok) {
       log("create", { identity: ownerId, outcome: result.code });
       res.status(result.status).json({ code: result.code, error: result.error });
