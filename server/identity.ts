@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Router } from "express";
 import type { DB } from "./db.ts";
+import { clientAddress, windowCounter } from "./address.ts";
 import { log } from "./log.ts";
 import { identityFor, startSession } from "./session.ts";
 
@@ -36,21 +37,10 @@ const digest = (key: string): string => createHash("sha256").update(normalizeKey
 // Failed restore attempts per client address, kept in memory: enough to make
 // guessing pointless (keys carry 160 bits) without locking anyone out long.
 // Only failures count, so people sharing an address can still restore.
-const WINDOW_MS = 15 * 60 * 1000;
-const MAX_FAILURES = 10;
-const failures = new Map<string, { count: number; since: number }>();
-
-function blocked(address: string, now = Date.now()): boolean {
-  const entry = failures.get(address);
-  if (entry && now - entry.since > WINDOW_MS) failures.delete(address);
-  return (failures.get(address)?.count ?? 0) >= MAX_FAILURES;
-}
-
-function recordFailure(address: string, now = Date.now()): void {
-  const entry = failures.get(address);
-  if (entry) entry.count++;
-  else failures.set(address, { count: 1, since: now });
-}
+// Bounded, and keyed by the address Fly's edge reports (never a client-written
+// X-Forwarded-For header, which would let a guesser pick a fresh "address"
+// for every attempt).
+const failures = windowCounter(15 * 60 * 1000, 10);
 
 export const keyState = (db: DB, identityId: string): "none" | "issued" | "saved" =>
   ((db.prepare("SELECT state FROM return_keys WHERE identity_id = ?").get(identityId) as { state: "issued" | "saved" } | undefined)
@@ -152,8 +142,8 @@ export function identityRouter(db: DB): Router {
   // nothing about that identity: no papers, no history, no counts.
   router.post("/identity/restore", (req, res) => {
     res.set("Cache-Control", "no-store");
-    const address = req.ip ?? "unknown";
-    if (blocked(address)) {
+    const address = clientAddress(req);
+    if (failures.blocked(address)) {
       log("restore", { outcome: "rate_limited" });
       res.status(429).json({ code: "rate_limited", error: "Too many tries. Wait a few minutes and try again." });
       return;
@@ -164,7 +154,7 @@ export function identityRouter(db: DB): Router {
         ? (db.prepare("SELECT identity_id FROM return_keys WHERE digest = ?").get(digest(raw)) as { identity_id: string } | undefined)
         : undefined;
     if (!row) {
-      recordFailure(address);
+      failures.hit(address);
       log("restore", { outcome: "invalid" });
       res.status(400).json({ code: "invalid_key", error: "That key doesn't match. Check it and try again." });
       return;

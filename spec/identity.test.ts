@@ -168,10 +168,15 @@ describe("returning with a key", () => {
     expect(Object.keys(body).sort()).toEqual(["code", "error"]);
   });
 
-  it("slows down repeated wrong guesses", async () => {
+  it("slows down repeated wrong guesses, whatever forwarding header they claim", async () => {
     let limited = false;
     for (let i = 0; i < 12 && !limited; i++) {
-      const res = await post(null, "/api/identity/restore", { return_key: `guess-${randomUUID()}` });
+      // a fresh made-up client address on every guess must not reset the limit
+      const res = await fetch(url("/api/identity/restore"), {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-forwarded-for": `203.0.113.${i + 1}` },
+        body: JSON.stringify({ return_key: `guess-${randomUUID()}` }),
+      });
       limited = res.status === 429;
     }
     expect(limited).toBe(true);
