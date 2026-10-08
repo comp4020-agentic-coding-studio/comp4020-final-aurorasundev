@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "./components/Header.tsx";
 import { PaperField, type PaperFieldHandle, type SheetRect } from "./components/PaperField.tsx";
 import { ReadDialog, type Ended } from "./components/ReadDialog.tsx";
@@ -63,7 +63,6 @@ export function App() {
       dispatch({ type: "removed", id: m.id, revision: -1, total: 0, reading: null });
     } else field.current?.closePaper();
     setMode({ kind: "space" });
-    returnFocus.current?.focus();
   }, [dispatch]);
 
   // This page let it go: the server has committed, so it plays its own
@@ -91,7 +90,6 @@ export function App() {
 
   const cancelWriting = useCallback(() => {
     setMode({ kind: "space" });
-    returnFocus.current?.focus();
   }, []);
 
   // The server confirmed the save: only now does the paper crumple and fly.
@@ -118,10 +116,31 @@ export function App() {
 
   const closeKey = useCallback(() => {
     setMode({ kind: "space" });
-    returnFocus.current?.focus();
   }, []);
 
   const busy = mode.kind !== "space";
+
+  // Focus goes back to whatever opened the dialog once it can take it: the
+  // field is inert until the space re-renders, and a paper's button stays
+  // hidden while it crumples back into place (two seconds or more on a slow
+  // device). Gives up after six seconds, or once the visitor moves focus.
+  useEffect(() => {
+    if (busy) return;
+    const target = returnFocus.current;
+    returnFocus.current = null;
+    if (!target) return;
+    const until = performance.now() + 6000;
+    let frame = 0;
+    const tryFocus = () => {
+      if (!target.isConnected || performance.now() > until) return;
+      const idle = document.activeElement === document.body || document.activeElement === null;
+      if (!idle) return;
+      target.focus();
+      if (document.activeElement !== target) frame = requestAnimationFrame(tryFocus);
+    };
+    tryFocus();
+    return () => cancelAnimationFrame(frame);
+  }, [busy]);
   const ready = space.status === "ready";
 
   return (

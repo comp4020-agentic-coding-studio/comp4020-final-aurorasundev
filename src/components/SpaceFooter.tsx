@@ -14,11 +14,10 @@ export function SpaceFooter({ total, onWrite, busy, reconnecting }: Props) {
       <p className="space-count" aria-live="polite">
         {countLine(total)}
       </p>
-      {!busy && (
-        <button type="button" className="button button-primary space-write" onClick={onWrite}>
-          Leave something here
-        </button>
-      )}
+      {/* Hidden rather than unmounted, so focus can come back to it. */}
+      <button type="button" className="button button-primary space-write" onClick={onWrite} hidden={busy}>
+        Leave something here
+      </button>
       {(!busy || reconnecting) && (
         <p className="space-hint" role="status">
           {reconnecting ? (

@@ -246,6 +246,10 @@ textarea {
   font-size: 22px;
 }
 
+.button[hidden] {
+  display: none;
+}
+
 .space-hint {
   margin: 0;
   justify-self: end;
