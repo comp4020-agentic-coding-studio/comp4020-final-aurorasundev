@@ -915,10 +915,6 @@ export function createPaperScene(container, buttonLayer, options) {
       updateGhosts(dt);
       placeButtons();
     }
-    // SSAO's depth and normal passes draw every mesh whole, so they would
-    // keep shading the parts of a paper that have burned away. It pauses
-    // while anything burns (desktop only; phones never run it).
-    ssaoPass.enabled = !compact && !ritual?.effect && ghosts.size === 0;
     composer.render();
   }
 
@@ -1106,8 +1102,8 @@ export function createPaperScene(container, buttonLayer, options) {
   // foot and of the hovering paper's centre. The world placement is solved
   // from these for the current camera, so the composition holds at any size.
   const RITUAL_FRAME = compact
-    ? { furnaceWidth: 0.56, furnaceFoot: 0.79, paperY: 0.36 }
-    : { furnaceWidth: 0.3, furnaceFoot: 0.9, paperY: 0.32 };
+    ? { furnaceWidth: 0.56, furnaceFoot: 0.76, paperY: 0.33 }
+    : { furnaceWidth: 0.24, furnaceFoot: 0.89, paperY: 0.27 };
   // The furnace's height and inner radius as fire/furnace.js builds them.
   const FURNACE_HEIGHT = 0.62;
   const FURNACE_INNER = 1 - 0.085;
@@ -1175,6 +1171,34 @@ export function createPaperScene(container, buttonLayer, options) {
     const off = crumpleWorldOffset(paper.mesh.scale.x, paper.mesh.quaternion);
     paper.mesh.position.copy(centre).sub(off);
     paper.body.position.set(centre.x, centre.y, centre.z);
+  }
+
+  // B01 keeps the furnace and the space above it clear: papers lying in its
+  // footprint, or behind it where they would show between the furnace and
+  // the hovering paper, roll aside to the nearer side and stay there.
+  function clearRitualColumn(r) {
+    const { anchor, radius } = r.place;
+    const side = radius + collisionRadius * 1.9;
+    for (const p of livePapers()) {
+      if (p === r.paper || !isGrabbable(p) || p.explore) continue;
+      const at = p.body.position;
+      if (Math.abs(at.x - anchor.x) >= side || at.z > anchor.z + radius + collisionRadius) continue;
+      const dir = at.x >= anchor.x ? 1 : -1;
+      const to = new THREE.Vector3(anchor.x + dir * side, 0, at.z);
+      to.x = clampAbs(to.x, Math.max(side, halfWidthAt(at.z) - collisionRadius));
+      const from = p.mesh.position.clone();
+      to.y = from.y;
+      to.z = from.z - (at.z - to.z);
+      to.x = from.x + (to.x - at.x);
+      if (reduceMotion()) {
+        p.mesh.position.copy(to);
+        syncBodyToMesh(p);
+        continue;
+      }
+      setPaperBodyDynamic(p, false);
+      p.state = "entering";
+      p.explore = { from, to, time: 0, delay: randomRange(0, 0.12) };
+    }
   }
 
   function addFurnace(r) {
@@ -1671,6 +1695,7 @@ export function createPaperScene(container, buttonLayer, options) {
       };
       ritual = r;
       paper.state = "ritual";
+      clearRitualColumn(r);
       loadFire()
         .then(() => {
           if (ritual === r && r.phase !== "ending" && !disposed) addFurnace(r);
