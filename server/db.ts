@@ -80,6 +80,22 @@ const MIGRATIONS: ((db: DB) => void)[] = [
     `);
     db.prepare("INSERT INTO server_secrets (name, value) VALUES ('read_receipt', ?)").run(randomBytes(32));
   },
+
+  // 4: destruction outcomes by operation key, so a retry whose reply was lost
+  // gets the same answer instead of a second attempt. No paper text here.
+  (db) =>
+    db.exec(`
+      CREATE TABLE burn_operations (
+        identity_id TEXT NOT NULL REFERENCES identities(id),
+        op_key TEXT NOT NULL,
+        paper_id TEXT NOT NULL,
+        outcome TEXT NOT NULL,
+        revision INTEGER,
+        total INTEGER,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (identity_id, op_key)
+      );
+    `),
 ];
 
 export const serverSecret = (db: DB, name: string): Buffer =>

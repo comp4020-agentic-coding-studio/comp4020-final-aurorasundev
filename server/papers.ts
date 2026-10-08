@@ -113,6 +113,44 @@ export function witnessPaper(db: DB, paperId: string, identityId: string) {
   })();
 }
 
+type BurnOutcome = "destroyed" | "paper_gone" | "forbidden";
+export type Burned = { outcome: BurnOutcome; revision: number | null; total: number | null; fresh: boolean; version?: number };
+
+// One conditional transition out of ACTIVE, with the text cleared in the same
+// commit. Two people destroying at once get one transition: the second finds
+// it no longer ACTIVE. Rights are checked here, not trusted from the client.
+export function burnPaper(db: DB, paperId: string, identityId: string, opKey: string, confirmed: boolean): Burned {
+  return db.transaction((): Burned => {
+    const prior = db
+      .prepare("SELECT outcome, revision, total FROM burn_operations WHERE identity_id = ? AND op_key = ?")
+      .get(identityId, opKey) as { outcome: BurnOutcome; revision: number | null; total: number | null } | undefined;
+    if (prior) return { ...prior, fresh: false };
+
+    const record = (outcome: BurnOutcome, revision: number | null = null, total: number | null = null): Burned => {
+      db.prepare(
+        `INSERT INTO burn_operations (identity_id, op_key, paper_id, outcome, revision, total, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).run(identityId, opKey, paperId, outcome, revision, total, new Date().toISOString());
+      return { outcome, revision, total, fresh: outcome === "destroyed" };
+    };
+
+    const paper = paperRow(db, paperId);
+    if (!paper || paper.status !== "ACTIVE") return record("paper_gone");
+    if (!confirmed || !viewerState(db, paper, identityId).can_burn) return { outcome: "forbidden", revision: null, total: null, fresh: false };
+
+    const changed = db
+      .prepare(
+        `UPDATE papers SET status = 'DESTROYED', content = '', version = version + 1, ended_at = ?
+         WHERE id = ? AND status = 'ACTIVE'`,
+      )
+      .run(new Date().toISOString(), paperId).changes;
+    if (changed !== 1) return record("paper_gone");
+    const revision = bumpRevision(db);
+    const result = record("destroyed", revision, activeTotal(db));
+    return { ...result, version: paper.version + 1 };
+  })();
+}
+
 export function papersRouter(db: DB): Router {
   const router = Router();
 
@@ -163,6 +201,45 @@ export function papersRouter(db: DB): Router {
     log("witness", { identity: identityId, paper: paperId, outcome: fresh ? (counted ? "counted" : "author") : "repeat", revision });
     if (fresh) broadcast("paper:witnessed", { id: paperId, version: paper.version, revision });
     res.json(publicPaper(db, paper, identityId));
+  });
+
+  router.post("/papers/:id/burn", (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const identityId = identityFor(db, req);
+    const paperId = req.params.id;
+    const opKey = req.body?.op_key;
+    if (!identityId) {
+      res.status(401).json({ code: "unauthenticated", error: "Your session has expired. Reload the page and try again." });
+      return;
+    }
+    if (typeof opKey !== "string" || !/^[A-Za-z0-9_-]{8,64}$/.test(opKey)) {
+      res.status(400).json({ code: "invalid_input", error: "Missing operation key." });
+      return;
+    }
+    if (!checkReceipt(serverSecret(db, "read_receipt"), req.body?.read_receipt, paperId, identityId)) {
+      log("burn", { identity: identityId, paper: paperId, outcome: "forbidden_receipt" });
+      res.status(403).json({ code: "forbidden", error: "Open the paper before letting it go." });
+      return;
+    }
+    const result = burnPaper(db, paperId, identityId, opKey, req.body?.confirmed === true);
+    log("burn", {
+      identity: identityId,
+      paper: paperId,
+      outcome: result.fresh ? "destroyed" : result.outcome === "destroyed" ? "retry" : result.outcome,
+      revision: result.revision ?? undefined,
+    });
+    if (result.outcome === "forbidden") {
+      res.status(403).json({ code: "forbidden", error: "You can't let this paper go." });
+      return;
+    }
+    if (result.outcome === "paper_gone") {
+      res.status(410).json({ code: "paper_gone", error: "This paper is no longer here." });
+      return;
+    }
+    if (result.fresh) {
+      broadcast("paper:destroyed", { id: paperId, version: result.version, revision: result.revision, active_total: result.total, op: opKey });
+    }
+    res.json({ id: paperId, status: "destroyed", revision: result.revision, total: result.total });
   });
 
   router.post("/papers", (req, res) => {
