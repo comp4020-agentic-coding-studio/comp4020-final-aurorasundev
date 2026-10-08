@@ -274,12 +274,26 @@ textarea {
   background: transparent;
 }
 
+/* V4: the scene softens behind a focused sheet (D02/D03/D05) so the sheet
+   reads first, by one amount everywhere. Reading softens only once its HTML
+   sheet covers the unfolding paper, so the unfold itself stays crisp. Keyed
+   on the dialogs, not on the space: the furnace ritual drags inside this
+   canvas and must never be blurred. */
 .paper-field {
-  transition: filter 240ms ease;
+  --scene-defocus: 2.5px;
+  transition: filter 320ms ease;
 }
 
-.app.is-writing .paper-field {
-  filter: blur(5px);
+.app.is-writing .paper-field,
+.app:has(.read-dialog.is-revealed[open]) .paper-field,
+.app:has(.key-dialog[open]) .paper-field {
+  filter: blur(var(--scene-defocus));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paper-field {
+    transition: none;
+  }
 }
 
 /* A sheet is three layers, none stretched over the whole sheet (V3): a fill
