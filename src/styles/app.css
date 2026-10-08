@@ -254,9 +254,18 @@ textarea {
   overflow: visible;
 }
 
+/* The count stays readable beside an open sheet (D02/D03), so the backdrop
+   itself stays clear; writing blurs the scene canvas instead (.is-writing). */
 .dialog::backdrop {
-  background: rgb(231 228 222 / 0.7);
-  backdrop-filter: blur(2px);
+  background: transparent;
+}
+
+.paper-field {
+  transition: filter 240ms ease;
+}
+
+.app.is-writing .paper-field {
+  filter: blur(5px);
 }
 
 /* Keep the cut-out edge, but calm the folds beneath readable content. */
@@ -280,18 +289,34 @@ textarea {
 }
 
 /* writing (D02/M02) */
+/* The dialog scrolls on short screens, which clips anything outside its box;
+   the padding is room for the sheet's drop shadow so it isn't cut square. */
 .write-dialog {
-  width: min(820px, calc(100vw - 32px));
-  max-height: calc(100dvh - 64px);
+  width: min(880px, calc(100vw - 8px));
+  max-height: calc(100dvh - 16px);
+  padding: 20px 48px 56px 32px;
   overflow-y: auto;
 }
 
 .write-sheet {
-  padding: 64px 80px 60px;
+  padding: 56px 72px 52px;
+}
+
+.sheet-close {
+  position: absolute;
+  top: 26px;
+  right: 40px;
+  z-index: 1;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  font-size: 18px;
+  cursor: pointer;
 }
 
 .write-title {
-  margin: 0 0 28px;
+  margin: 32px 0 22px;
   font-family: var(--serif);
   font-weight: 400;
   font-size: clamp(30px, 2.6vw, 40px);
@@ -305,12 +330,12 @@ textarea {
 .write-field textarea {
   display: block;
   width: 100%;
-  height: clamp(180px, 32dvh, 360px);
-  padding: 22px 22px 44px;
+  height: clamp(150px, 26dvh, 250px);
+  padding: 18px 20px 40px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgb(250 248 244 / 0.78);
-  font-size: 20px;
+  font-size: 19px;
   line-height: 1.6;
   resize: none;
 }
@@ -342,11 +367,57 @@ textarea {
   font-weight: 600;
 }
 
-.write-notice {
+.write-modes {
   margin: 24px 0 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.write-modes legend {
+  margin-bottom: 12px;
+  padding: 0;
   font-size: 17px;
-  line-height: 1.55;
+}
+
+.choice {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 12px;
+  align-items: start;
+  cursor: pointer;
+}
+
+.choice input {
+  width: 22px;
+  height: 22px;
+  margin: 2px 0 0;
+  accent-color: var(--ink);
+  cursor: pointer;
+}
+
+.choice-label {
+  display: block;
+  font-size: 18px;
+}
+
+.choice-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 15px;
   color: var(--muted);
+}
+
+.choice-check {
+  margin-top: 22px;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+fieldset:disabled .choice,
+.choice:has(input:disabled) {
+  cursor: default;
 }
 
 .form-error {
@@ -357,9 +428,9 @@ textarea {
 
 .write-actions {
   display: grid;
-  grid-template-columns: 1fr 1.8fr;
-  gap: 22px;
-  margin-top: 32px;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 20px;
+  margin-top: 28px;
 }
 
 /* reading (D03/M03) */
@@ -380,26 +451,21 @@ textarea {
   opacity: 1;
 }
 
-.read-dialog::backdrop {
-  background: rgb(231 228 222 / 0.64);
-  backdrop-filter: blur(2px);
-}
 
 /* Center the wider reading surface over the unfolded sheet. Text appears
    only after the WebGL unfold has finished. */
+.read-dialog.over-scene .read-body {
+  margin-top: clamp(48px, 10dvh, 104px);
+}
+
 .read-dialog.over-scene .read-sheet {
   height: 100%;
   padding: 6% 12% 8%;
 }
 
-.read-close {
-  align-self: flex-end;
-  min-height: 44px;
-  padding: 0 4px;
-  border: 0;
-  background: none;
-  font-size: 20px;
-  cursor: pointer;
+.read-sheet .sheet-close {
+  top: 3%;
+  right: 7%;
 }
 
 .read-body {
@@ -419,10 +485,46 @@ textarea {
 
 .read-text {
   margin: 0;
-  font-size: 20px;
-  line-height: 1.75;
+  font-size: 22px;
+  line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.read-foot {
+  flex: none;
+}
+
+.read-count {
+  margin: 0 0 14px;
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.read-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.read-actions .button {
+  min-height: 50px;
+  padding: 0 16px;
+  font-size: 18px;
+}
+
+.read-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin-top: 36px;
+}
+
+.read-origin {
+  margin: 0;
+  font-size: 15px;
+  color: var(--muted);
 }
 
 .read-status {
@@ -438,11 +540,6 @@ textarea {
   margin: 0;
 }
 
-.read-footer {
-  margin: 0;
-  font-size: 15px;
-  color: var(--muted);
-}
 
 /* phone (M01–M03) */
 @media (max-width: 600px) {
@@ -486,27 +583,49 @@ textarea {
     display: block;
   }
 
+  /* M02: the sheet sits between the header and the count and scrolls inside
+     itself, rather than covering either. */
   .write-dialog {
-    width: calc(100vw - 24px);
-    max-height: calc(100dvh - 32px);
+    width: 100vw;
+    margin: 104px auto 0;
+    max-height: calc(100dvh - 168px);
+    padding: 0 12px 24px 8px;
   }
 
   .write-sheet {
-    padding: 40px 28px 36px;
+    padding: 28px 24px 28px;
   }
 
   .write-title {
-    font-size: 30px;
-    margin-bottom: 20px;
+    font-size: 26px;
+    margin: 30px 0 16px;
   }
 
   .write-field textarea {
-    height: clamp(160px, 30dvh, 300px);
-    font-size: 17px;
+    height: clamp(130px, 20dvh, 200px);
+    font-size: 16px;
   }
 
-  .write-notice {
+  .sheet-close {
+    top: 16px;
+    right: 20px;
+  }
+
+  .write-modes {
+    gap: 16px;
+  }
+
+  .choice-check {
     font-size: 15px;
+  }
+
+  .read-actions {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .read-meta {
+    margin-top: 28px;
   }
 
   .write-actions {
@@ -534,7 +653,7 @@ textarea {
   }
 
   .read-text {
-    font-size: 17px;
+    font-size: 18px;
   }
 }
 

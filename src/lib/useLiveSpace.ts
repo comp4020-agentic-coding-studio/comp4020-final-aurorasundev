@@ -10,6 +10,8 @@ type Options = {
   pendingOps: Set<string>;
   // a paper this page holds turned out to be gone (from an event or a snapshot)
   onGone: (id: string, status: Exclude<PaperStatus, "active">) => void;
+  // a paper's version moved (someone witnessed it); only its readers care
+  onChanged: (id: string, version: number) => void;
 };
 
 const RETRY_MS = [500, 1000, 2000, 4000, 8000];
@@ -18,11 +20,11 @@ const RETRY_MS = [500, 1000, 2000, 4000, 8000];
 // screen, and the snapshot that opens the stream says which still exist and
 // refills the rest of the window: missed events are recovered as current
 // facts, never replayed.
-export function useLiveSpace({ limit, reading, pendingOps, onGone }: Options) {
+export function useLiveSpace({ limit, reading, pendingOps, onGone, onChanged }: Options) {
   const [space, dispatch] = useReducer(spaceReducer, initialSpace);
   const [attempt, setAttempt] = useState(0);
-  const latest = useRef({ space, limit, reading, onGone });
-  latest.current = { space, limit, reading, onGone };
+  const latest = useRef({ space, limit, reading, onGone, onChanged });
+  latest.current = { space, limit, reading, onGone, onChanged };
 
   useEffect(() => {
     let source: EventSource | null = null;
@@ -63,6 +65,12 @@ export function useLiveSpace({ limit, reading, pendingOps, onGone }: Options) {
           const { limit, reading } = latest.current;
           act({ type: "arrived", id: d.id, revision: d.revision, total: d.active_total, limit, reading: reading() });
         }
+      });
+
+      source.addEventListener("paper:witnessed", (e) => {
+        const d = JSON.parse((e as MessageEvent<string>).data) as { id: string; version: number; revision: number };
+        act({ type: "revised", revision: d.revision });
+        latest.current.onChanged(d.id, d.version);
       });
 
       // EventSource would retry by itself with the same URL, which carries a

@@ -15,6 +15,8 @@ const visibleLimit = (): number => (window.matchMedia("(max-width: 600px)").matc
 
 export function App() {
   const [mode, setMode] = useState<Mode>({ kind: "space" });
+  // newest version announced live for the paper being read
+  const [readingVersion, setReadingVersion] = useState(0);
   const field = useRef<PaperFieldHandle>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const modeRef = useRef(mode);
@@ -27,10 +29,14 @@ export function App() {
     reading: () => (modeRef.current.kind === "reading" ? modeRef.current.id : null),
     pendingOps,
     onGone: () => {},
+    onChanged: (id, version) => {
+      if (modeRef.current.kind === "reading" && modeRef.current.id === id) setReadingVersion((v) => Math.max(v, version));
+    },
   });
 
   const openPaper = useCallback((id: string) => {
     returnFocus.current = document.activeElement as HTMLElement | null;
+    setReadingVersion(0);
     setMode({ kind: "reading", id, revealed: false, rect: null });
     field.current?.openPaper(id, (rect) =>
       setMode((m) => (m.kind === "reading" && m.id === id ? { ...m, revealed: true, rect } : m)),
@@ -72,7 +78,7 @@ export function App() {
   const ready = space.status === "ready";
 
   return (
-    <div className="app">
+    <div className={`app${mode.kind === "writing" ? " is-writing" : ""}`}>
       <Header />
       {ready && <PaperField ref={field} ids={space.ids} onOpen={openPaper} onOpenRect={moveSheet} inert={busy} />}
       {space.status === "loading" && <p className="space-status">Finding the space…</p>}
@@ -95,7 +101,7 @@ export function App() {
           offline={space.connection === "reconnecting"}
         />
       )}
-      {mode.kind === "reading" && <ReadDialog id={mode.id} revealed={mode.revealed} rect={mode.rect} onClose={closePaper} />}
+      {mode.kind === "reading" && <ReadDialog id={mode.id} revealed={mode.revealed} rect={mode.rect} liveVersion={readingVersion} onClose={closePaper} />}
     </div>
   );
 }

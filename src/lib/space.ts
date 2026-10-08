@@ -26,6 +26,7 @@ export type SpaceAction =
   | { type: "snapshot"; snapshot: Snapshot; limit: number; reading: string | null }
   | { type: "arrived"; id: string; revision: number; total: number; limit: number; reading: string | null }
   | { type: "counted"; revision: number; total: number }
+  | { type: "revised"; revision: number }
   | { type: "removed"; id: string; revision: number; total: number; reading: string | null }
   | { type: "connection"; connection: Space["connection"] }
   | { type: "failed" };
@@ -65,6 +66,8 @@ export function spaceReducer(space: Space, action: SpaceAction): Space {
       if (!newer(space, action.revision)) return { ...space, ids };
       return { ...space, ids, total: action.total, revision: action.revision };
     }
+    case "revised":
+      return newer(space, action.revision) ? { ...space, revision: action.revision } : space;
     case "connection":
       return { ...space, connection: action.connection };
     case "failed":
