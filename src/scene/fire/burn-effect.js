@@ -21,6 +21,7 @@ import * as THREE from "three";
 import { createAsh } from "./ash.js";
 import { createBurnMaterial, fixBurnFrame } from "./burn-material.js";
 import { createFlames } from "./flames.js";
+import { skipOverridePasses } from "./override-skip.js";
 import { createParticles } from "./particles.js";
 
 const smooth = (a, b, x) => {
@@ -140,6 +141,13 @@ export function createBurnEffect(options) {
   const ash = createAsh(textures, { count: flakeCount, seed, flakeSize: diameter * 0.085 });
   const bed = new THREE.Vector3();
   scene.add(flames.mesh, particles.group, ash.group);
+  // none of it, nor the burning paper, may leave a ghost in the space's SSAO
+  const unskip = [skipOverridePasses(mesh)];
+  for (const root of [flames.mesh, particles.group, ash.group]) {
+    root.traverse((o) => {
+      if (o.isMesh || o.isSprite) unskip.push(skipOverridePasses(o));
+    });
+  }
   if (options.viewportHeight && camera.isPerspectiveCamera) {
     particles.setPixelScale(options.viewportHeight / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)));
   }
@@ -334,6 +342,7 @@ export function createBurnEffect(options) {
     dispose() {
       if (disposed) return;
       disposed = true;
+      for (const restore of unskip) restore();
       flames.dispose();
       particles.dispose();
       ash.dispose();
