@@ -278,3 +278,41 @@ Facts only, added as the work lands.
   sheet at 1672 and 390 wide with no sideways page scroll; without WebGL the
   fallback still receives a paper thrown elsewhere and opens it; with
   reduced motion a throw still lands and the count moves.
+
+
+## 2026-10-10 — visual and ritual release
+
+The user approved deploying the interface and furnace corrections first,
+while keeping the existing paper publication flow. OpenAI moderation and
+report processing remain local pending credential configuration; they are
+not part of this release. Their original staged files are preserved.
+
+- [6f098db](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/6f098db)
+  restores matte paper folds and fibres, continuous read/write sheet texture,
+  the straight cast-iron furnace and its lower camera. It fixes late release
+  replies, stale fallback timers, stalled/damaged HTTP responses, effect
+  failures and slow-renderer burn timing. Ash holds for three seconds before
+  the visible return button becomes available. ADR 003 records the tradeoff.
+- A consistent live SQLite backup was made before pushing, at
+  `/data/backup-pre-material-pass-2026-10-10.sqlite`, with a private local copy.
+  It passed `integrity_check`, was schema version 6 and contained four active
+  papers. This selected release makes no schema or publication API change.
+- The isolated release passed type checking and all 63 tests in nine files:
+  the existing 55 plus eight release-recovery regressions. Vite build passed
+  with the existing large Three.js bundle warning. Process evidence resolves.
+- Browser plugin was unavailable, so regular Playwright checked Chromium at
+  1672×941 and 420×685 using the Mac GPU. An actual local submission returned
+  201, its words read back, witnessing enabled release, the furnace prepared,
+  and cancellation left the paper available (200). Both sheets had a filled,
+  continuous texture. Normal flows had no console errors or warnings.
+- A first browser attempt reached the build placeholder because its test
+  service had started before the build existed; restarting after the build
+  resolved that setup problem. A sandboxed test attempt could not reach the
+  local service; the authorized local-network run passed without test changes.
+- No physical phone or Safari check was performed. The local Docker daemon
+  is unavailable; the GitHub check job builds and tests the deployment image
+  before its dependent Fly deploy job. Live verification follows that run.
+- Machine-local credential files are excluded from both Git and remote build
+  contexts, including the existing misspelled local configuration filename.
+  No reflections, course tags, paid-provider requests or live paper content
+  were changed by this release preparation.

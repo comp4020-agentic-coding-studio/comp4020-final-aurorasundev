@@ -79,3 +79,22 @@ or reference the URL.
 - Small commits that grow with the work; PROCESS.md cites them.
 - Don't write the user's reflections or claim experiences they didn't report.
 - Never move a `crit-<n>` tag after its cutoff.
+
+## 2026-10-10 material and ritual release
+
+Use B01–B05 and the approved 01-space/02-write references: a squat matte
+cast-iron cylinder with a worn rim, paper folds and fine tooth, and wrinkled
+reading/writing sheets with a continuous quiet centre. Preserve the original
+paper-crumple-demo model and animation. The generated sheet texture provenance
+is in docs/generated-assets.md.
+
+HTTP/SSE confirmations and fallback timers belong to one paper and operation
+key. A burn request times out after eight seconds and retries the same key.
+An old result must never ignite a later ritual. Fire asset failure switches
+to drawn paper/furnace/ash; the visible return button holds ash for three
+seconds. See ADR 003.
+
+The user chose to deploy visual and ritual corrections first. The real
+moderation/report service is deferred until credentials are configured.
+Keep the existing publication contract and truthful SAFETY_CHECKS=false
+disclosure for this release; never deploy the local fixture provider.
