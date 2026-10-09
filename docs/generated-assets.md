@@ -1,9 +1,10 @@
 # Generated assets
 
-Every image asset that reproduces a reference look comes from the course
-image-generation endpoint (`POST https://strproxy.comp.anu.edu.au/api/images/generations`).
-Each entry records the model, the exact prompt, and how the download was
-post-processed before it was committed. No user text ever goes into a texture.
+Earlier image assets came from the course image-generation endpoint
+(`POST https://strproxy.comp.anu.edu.au/api/images/generations`).
+Each entry records its generation method and processing. The later material
+pass used Codex's built-in generator, documented separately below.
+No user text ever goes into a texture.
 
 ## Track V
 
@@ -95,3 +96,22 @@ Prompts of the kept images:
 Rejected: iron1 and iron2 (grey, camouflage-like blotches, nothing like
 B01's dark iron), ash1 (fine powder without the flakes B03 shows), flakes1
 (too few, touching flakes), ashbed3 (read as charcoal lumps, not paper ash).
+
+## Material fidelity pass — 2026-10-09
+
+### `public/textures/sheet-creases-v2.jpg` — 768×768 JPEG, 182,707 B
+
+- **Generator:** Codex built-in ImageGen, invoked for the user's approved
+  B01, space and write reference material pass. The tool does not expose an
+  exact underlying model identifier.
+- **Prompt brief:** square orthographic photograph of real matte paper that
+  has been crumpled and flattened, fine fibres, an almost-white quiet central
+  55% for legible writing, sharper irregular wrinkles along the outer 20%,
+  natural rough edges, grayscale shading, no UI, text, props or coloured marks.
+- **Processing:** converted to JPEG at quality 82 and resized to 768×768 with
+  macOS sips. No new dependency or image manipulation library was added.
+- **Use:** nine-sliced edge folds on write/read sheets, broad normal relief
+  alongside the existing fibre texture in the Three.js paper material, and
+  the drawn no-WebGL paper. The existing iron texture is retained and given
+  rough normal relief on a rebuilt cylinder; no rendered reference mockup
+  is pasted into the live furnace. Paper content stays in HTML.

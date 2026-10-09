@@ -168,7 +168,7 @@ export function createBurnEffect(options) {
   function placeBed() {
     const c = worldCentre();
     bed.set(c.x, surfaceY, c.z);
-    ash.setBed(bed, diameter * (mode === "furnace" ? 0.72 : 0.42), diameter * (mode === "furnace" ? 0.1 : 0.05));
+    ash.setBed(bed, diameter * (mode === "furnace" ? 0.72 : 0.42), diameter * (mode === "furnace" ? 0.16 : 0.08));
   }
   placeBed();
 
@@ -259,7 +259,7 @@ export function createBurnEffect(options) {
     base.set(c.x, surfaceY, c.z);
     // in the furnace the fire licks along the char (B02); on the open floor
     // one tall tongue climbs well clear of the paper (B04)
-    const flameBox = height * (mode === "furnace" ? 1.75 : 2.4);
+    const flameBox = height * (mode === "furnace" ? 2.1 : 2.4);
     const front = Math.min(0.6, (frontY - surfaceY) / flameBox);
     // the tongues stand on the burning edge: a crumpled ball is narrow at its
     // foot and widest at its middle, then everything draws in as it slumps
@@ -322,13 +322,14 @@ export function createBurnEffect(options) {
     get elapsed() {
       return time;
     },
-    /** @param {number} dt seconds since the last frame (clamp it on the caller's side after a tab switch) */
+    /** Wall-clock duration; particle motion is capped separately from the burn front. */
     update(dt) {
       if (disposed) return;
       time += dt;
-      if (reduced) stepReduced(dt);
-      else stepNormal(dt);
-      ash.update(reduced ? 0 : dt, time);
+      const motionDt = Math.min(dt, 0.05);
+      if (reduced) stepReduced(motionDt);
+      else stepNormal(motionDt);
+      ash.update(reduced ? 0 : motionDt, time);
       if (mode === "remote" && time > doneAt) {
         const after = time - doneAt;
         if (after > REMOTE_HOLD) {

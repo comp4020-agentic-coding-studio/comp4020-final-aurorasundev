@@ -10,11 +10,20 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, { credentials: "same-origin", ...init });
-  const body = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
-  if (!res.ok) throw new ApiError(res.status, body.code ?? "unknown", body.error ?? "Something went wrong.");
-  return body as T;
+async function request<T>(path: string, init?: RequestInit, timeoutMs?: number): Promise<T> {
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
+  try {
+    const res = await fetch(path, { credentials: "same-origin", ...init, ...(controller ? { signal: controller.signal } : {}) });
+    const body = (await res.json().catch((err: unknown) => {
+      if (res.ok || controller?.signal.aborted) throw err;
+      return {};
+    })) as { error?: string; code?: string };
+    if (!res.ok) throw new ApiError(res.status, body.code ?? "unknown", body.error ?? "Something went wrong.");
+    return body as T;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export const countCodePoints = (text: string): number => Array.from(text).length;
@@ -56,7 +65,7 @@ export type Burned = {
 
 // The op key is reused for a retry, so a lost reply gets the first outcome.
 export const burnPaper = (id: string, receipt: string, opKey: string): Promise<Burned> =>
-  request(paperPath(id, "/burn"), postJson({ read_receipt: receipt, op_key: opKey, confirmed: true }));
+  request(paperPath(id, "/burn"), postJson({ read_receipt: receipt, op_key: opKey, confirmed: true }), 8000);
 
 // A lost response can't tell "not saved" from "saved, reply dropped", so a
 // network failure is retried with the same submission key: the server answers

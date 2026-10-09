@@ -25,16 +25,17 @@ export function furnaceAnchor(camera, ndcY, floorY) {
 function profile(R, H, wall, hearth) {
   // (radius, height) points, outside bottom → rim → inside → hearth centre
   const p = [];
-  const rr = wall * 0.5; // rim rounding
+  const rr = wall * 0.12; // worn cast edge rather than a rounded ceramic lip
   p.push(new THREE.Vector2(0.001, 0));
   p.push(new THREE.Vector2(R - 0.012, 0));
   p.push(new THREE.Vector2(R, 0.012));
-  p.push(new THREE.Vector2(R + 0.004, H * 0.5));
+  p.push(new THREE.Vector2(R, H * 0.5));
   p.push(new THREE.Vector2(R, H - rr));
   for (let i = 1; i < 8; i++) {
     const a = (i / 8) * Math.PI;
     p.push(new THREE.Vector2(R - rr + Math.cos(a) * rr, H - rr + Math.sin(a) * rr));
   }
+  p.push(new THREE.Vector2(R - wall + rr, H));
   p.push(new THREE.Vector2(R - wall, H - rr));
   p.push(new THREE.Vector2(R - wall - 0.002, hearth + 0.03));
   p.push(new THREE.Vector2(R - wall - 0.02, hearth + 0.004));
@@ -62,11 +63,11 @@ ${NOISE_GLSL}
  */
 export function createFurnace(camera, textures, { radius = 0.42, position = new THREE.Vector3() } = {}) {
   const R = radius;
-  const H = radius * 0.62;
-  const wall = radius * 0.085;
+  const H = radius * 0.64;
+  const wall = radius * 0.10;
   // high enough that a paper set on it, and later its ash, show over the
   // front rim from the space's camera (B02/B03)
-  const hearthY = H * 0.55;
+  const hearthY = H * 0.82;
   const geometry = new THREE.LatheGeometry(profile(R, H, wall, hearthY), 96);
   geometry.computeVertexNormals();
 
@@ -80,9 +81,11 @@ export function createFurnace(camera, textures, { radius = 0.42, position = new 
   };
   const material = new THREE.MeshStandardMaterial({
     color: new THREE.Color("#ffffff"),
-    roughness: 0.74,
-    metalness: 0.18,
-    envMapIntensity: 0.55,
+    bumpMap: iron,
+    bumpScale: R * 0.04,
+    roughness: 0.96,
+    metalness: 0.12,
+    envMapIntensity: 0.25,
   });
   uniforms.uIron = { value: iron };
   material.onBeforeCompile = (shader) => {
@@ -115,13 +118,13 @@ export function createFurnace(camera, textures, { radius = 0.42, position = new 
           vec2 flatUv = vFLocal.xz / ${(R * 1.1).toFixed(4)};
           float flatness = smoothstep(0.55, 0.85, abs(normalize(cross(dFdx(vFLocal), dFdy(vFLocal))).y));
           vec3 ironCol = mix(texture2D(uIron, wallUv).rgb, texture2D(uIron, flatUv + 0.37).rgb, flatness);
-          diffuseColor.rgb *= ironCol * vec3(2.6, 2.35, 2.1);
+          diffuseColor.rgb *= ironCol * vec3(1.7, 1.65, 1.58);
           fInside = 1.0 - smoothstep(${(R - wall * 0.6).toFixed(4)}, ${(R - wall * 0.3).toFixed(4)}, r);
           fInside *= 1.0 - smoothstep(${(H - wall * 0.7).toFixed(4)}, ${(H - wall * 0.2).toFixed(4)}, vFLocal.y);
           // soot inside and on the hearth, worn a little lighter on the rim's crown
-          diffuseColor.rgb *= mix(1.0, 0.48, fInside);
+          diffuseColor.rgb *= mix(1.0, 0.32, fInside);
           float crown = smoothstep(${(H - wall * 0.35).toFixed(4)}, ${H.toFixed(4)}, vFLocal.y);
-          diffuseColor.rgb *= 1.0 + crown * 0.28;
+          diffuseColor.rgb *= 1.0 + crown * 0.13;
           float mottle = snoise(vFLocal * 7.0) * 0.5 + 0.5;
           diffuseColor.rgb *= mix(0.84, 1.1, mottle);
         }`,
@@ -144,7 +147,7 @@ export function createFurnace(camera, textures, { radius = 0.42, position = new 
         }`,
       );
   };
-  material.customProgramCacheKey = () => "throwaway-furnace-v2";
+  material.customProgramCacheKey = () => "throwaway-furnace-v3";
 
   const group = new THREE.Group();
   group.position.copy(position);
@@ -208,7 +211,7 @@ export function createFurnace(camera, textures, { radius = 0.42, position = new 
       group.visible = reveal > 0;
       group.updateMatrixWorld(true);
       api.hearthPoint.set(0, hearthY, 0).applyMatrix4(group.matrixWorld);
-      api.rimY = group.position.y + H;
+      api.rimY = local.set(0, H, 0).applyMatrix4(group.matrixWorld).y;
     },
     dispose() {
       geometry.dispose();

@@ -79,6 +79,16 @@ export function App() {
   const ritualRef = useRef<Ritual | null>(null);
   const [ritualLayout, setRitualLayout] = useState<RitualLayout | null>(null);
   const sceneAvailable = useRef(true);
+  const fallbackTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      clearTimeout(fallbackTimer.current);
+    };
+  }, []);
 
   // The paper being read, or held over the furnace: never evicted, always
   // reconciled.
@@ -87,6 +97,15 @@ export function App() {
 
   const setRitual = useCallback((patch: Partial<Extract<Mode, { kind: "ritual" }>>) => {
     setMode((m) => (m.kind === "ritual" ? { ...m, ...patch } : m));
+  }, []);
+
+  const finishFallback = useCallback((r: Ritual) => {
+    clearTimeout(fallbackTimer.current);
+    fallbackTimer.current = setTimeout(() => {
+      if (ritualRef.current === r) {
+        setMode((m) => m.kind === "ritual" && m.id === r.id ? { ...m, stage: "ashes" } : m);
+      }
+    }, reducedMotion() ? 400 : 1800);
   }, []);
 
   const { space, dispatch, retry, current } = useLiveSpace({
@@ -104,8 +123,9 @@ export function App() {
           field.current?.clearRitual();
           setRitual({ outcome: why === "quarantined" ? "removed" : "other", stage: "ashes", error: null });
         } else {
-          field.current?.burnRitualRemotely({ seed: seedOf(ending.effect_seed, id), durationMs: ending.burn_duration_ms ?? BURN_DEFAULT_MS });
           setRitual({ outcome: "other", stage: "burning", error: null });
+          if (m.fallback) finishFallback(r);
+          else field.current?.burnRitualRemotely({ seed: seedOf(ending.effect_seed, id), durationMs: ending.burn_duration_ms ?? BURN_DEFAULT_MS });
         }
         return;
       }
@@ -133,9 +153,15 @@ export function App() {
   // The server has confirmed it, by its reply or by the stream, whichever
   // came first: it leaves the shared space now, and burns here once.
   const confirmRitual = useCallback(
-    (ending: { revision: number; total: number; effect_seed?: string; burn_duration_ms?: number }) => {
+    (ending: { id: string; op?: string; revision: number; total: number; effect_seed?: string; burn_duration_ms?: number }) => {
       const r = ritualRef.current;
-      if (!r || r.ignited) return;
+      if (!r || r.id !== ending.id || r.opKey !== ending.op) {
+        const m = modeRef.current;
+        dispatch({ type: "removed", id: ending.id, revision: ending.revision, total: ending.total, reading: m.kind === "reading" || m.kind === "ritual" ? m.id : null });
+        if (ending.op) pendingOps.delete(ending.op);
+        return;
+      }
+      if (r.ignited) return;
       r.ignited = true;
       r.committing = false;
       dispatch({ type: "removed", id: r.id, revision: ending.revision, total: ending.total, reading: null });
@@ -149,7 +175,7 @@ export function App() {
       setRitual({ stage: "burning", error: null });
       if (m.fallback) {
         // the drawn paper chars and falls to ash, then the quiet ending
-        setTimeout(() => setRitual({ stage: "ashes" }), reducedMotion() ? 400 : 1800);
+        finishFallback(r);
       } else {
         field.current?.igniteRitual({
           seed: seedOf(ending.effect_seed, r.id),
@@ -157,7 +183,7 @@ export function App() {
         });
       }
     },
-    [dispatch, pendingOps, setRitual],
+    [dispatch, pendingOps, setRitual, finishFallback],
   );
 
   // "Release it": the reading closes, the paper balls up over the furnace.
@@ -165,6 +191,7 @@ export function App() {
   const startRitual = useCallback((receipt: string) => {
     const m = modeRef.current;
     if (m.kind !== "reading" || m.ended) return;
+    clearTimeout(fallbackTimer.current);
     const prepared = sceneAvailable.current && (field.current?.prepareRitual(m.id) ?? false);
     ritualRef.current = { id: m.id, receipt, opKey: crypto.randomUUID(), committing: false, ignited: false };
     setRitualLayout(null);
@@ -190,16 +217,19 @@ export function App() {
     r.committing = true;
     pendingOps.add(r.opKey);
     setRitual({ stage: "committing", error: null });
-    for (let attempt = 0; ritualRef.current === r && !r.ignited; attempt++) {
+    for (let attempt = 0; mounted.current && !r.ignited; attempt++) {
       try {
         const burned = await burnPaper(r.id, r.receipt, r.opKey);
-        confirmRitual(burned);
+        if (mounted.current) confirmRitual(burned);
+        r.ignited = true;
+        pendingOps.delete(r.opKey);
         return;
       } catch (err) {
-        if (ritualRef.current !== r || r.ignited) return;
+        if (!mounted.current || r.ignited) return;
         if (err instanceof ApiError && err.status < 500) {
           r.committing = false;
           pendingOps.delete(r.opKey);
+          if (ritualRef.current !== r) return;
           if (err.code === "paper_gone") {
             // someone else let it go first (ours would have answered as ours)
             r.ignited = true;
@@ -221,7 +251,7 @@ export function App() {
           return;
         }
         // unknown outcome: never claim it wasn't released; ask again
-        setRitual({ stage: "checking" });
+        if (ritualRef.current === r) setRitual({ stage: "checking" });
         await sleep(Math.min(8000, 1000 * 2 ** attempt));
       }
     }
@@ -238,13 +268,18 @@ export function App() {
     (event: RitualEvent) => {
       const m = modeRef.current;
       if (m.kind !== "ritual") return;
-      if (event.type === "ready" && m.stage === "preparing") setRitual({ stage: "ready" });
+      if (event.type === "fallback") {
+        setRitualLayout(null);
+        setRitual({ fallback: true, stage: m.stage === "preparing" ? "ready" : m.stage });
+        const r = ritualRef.current;
+        if (r?.ignited) finishFallback(r);
+      } else if (event.type === "ready" && m.stage === "preparing") setRitual({ stage: "ready" });
       else if (event.type === "dropped") {
         if (m.canPlace && (m.stage === "ready" || m.stage === "preparing")) void commitRitual();
         else field.current?.returnRitual();
       } else if (event.type === "ashes" && (m.stage === "burning" || m.stage === "committing")) setRitual({ stage: "ashes" });
     },
-    [commitRitual, setRitual],
+    [commitRitual, setRitual, finishFallback],
   );
 
   // Cancel (or Escape) before placing: the paper drops back into the space.
@@ -254,6 +289,7 @@ export function App() {
     const r = ritualRef.current;
     if (m.kind !== "ritual" || !r || r.committing || r.ignited) return;
     if (m.stage !== "preparing" && m.stage !== "ready") return;
+    clearTimeout(fallbackTimer.current);
     field.current?.cancelRitual();
     ritualRef.current = null;
     setMode({ kind: "space" });
@@ -265,7 +301,9 @@ export function App() {
     const m = modeRef.current;
     const r = ritualRef.current;
     if (m.kind !== "ritual") return;
-    field.current?.endRitual();
+    clearTimeout(fallbackTimer.current);
+    if (r && !r.ignited && m.outcome === "own") field.current?.cancelRitual();
+    else field.current?.endRitual();
     if (r && r.ignited) {
       pendingOps.delete(r.opKey);
       ritualRef.current = null;

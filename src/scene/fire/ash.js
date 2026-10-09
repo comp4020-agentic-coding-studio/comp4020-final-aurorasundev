@@ -133,7 +133,7 @@ export function createAsh(textures, { count, seed, flakeSize }) {
         vec2 c = vMapUv - 0.5;
         float lobes = sin(atan(c.y, c.x) * 5.0 + uSeed) * 0.07 + sin(atan(c.y, c.x) * 11.0 - uSeed * 1.3) * 0.04;
         float edge = length(c) * 2.0 + lobes + (0.5 - diffuseColor.g) * 0.5;
-        diffuseColor.a *= smoothstep(1.0, 0.62, edge);
+        diffuseColor.a *= (1.0 - smoothstep(0.62, 1.0, edge));
       }
       diffuseColor.rgb = diffuseColor.rgb * 0.55 + vec3(0.07, 0.066, 0.062);
       // drifts of paler powder between the flakes, so it is not one grey
@@ -197,7 +197,7 @@ export function createAsh(textures, { count, seed, flakeSize }) {
       varying float vGlow;
       void main() {
         float d = length(gl_PointCoord - 0.5) * 2.0;
-        float a = smoothstep(1.0, 0.0, d) * vGlow;
+        float a = (1.0 - smoothstep(0.0, 1.0, d)) * vGlow;
         if (a < 0.01) discard;
         gl_FragColor = vec4(mix(vec3(0.9, 0.16, 0.03), vec3(1.0, 0.5, 0.14), vGlow) * a * 1.4, a);
       }`,

@@ -303,7 +303,7 @@ textarea {
    (docs/generated-assets.md), so a wide write sheet and a narrow phone
    sheet share the same deckle and folds without distorting them. */
 .paper-sheet {
-  --sheet-fill: #f4f0e7;
+  --sheet-fill: #f4f1ea;
   --sheet-edge: 44px;
   --sheet-folds: 112px;
   position: relative;
@@ -332,8 +332,9 @@ textarea {
   z-index: -1;
   box-sizing: border-box;
   border: var(--sheet-folds) solid transparent;
-  border-image: url("/textures/sheet-folds.jpg") 120 round;
-  mix-blend-mode: soft-light;
+  border-image: url("/textures/sheet-creases-v2.jpg") 170 fill stretch;
+  mix-blend-mode: multiply;
+  opacity: 0.28;
 }
 
 /* writing (D02/M02) */
@@ -1040,10 +1041,12 @@ fieldset:disabled .choice,
 }
 
 .ritual-words {
+  --ritual-end-min: 180px;
+  --ritual-end-offset: 180px;
   position: absolute;
   top: 56%;
   left: 50%;
-  width: min(640px, calc(100vw - 2 * var(--gutter)));
+  width: min(600px, calc(100vw - 2 * var(--gutter)));
   margin: 0;
   transform: translate(-50%, -50%);
   text-align: center;
@@ -1117,7 +1120,8 @@ fieldset:disabled .choice,
   width: 120px;
   height: 120px;
   border-radius: 46% 54% 50% 48%;
-  background: radial-gradient(circle at 38% 34%, #fbf8f1, var(--paper) 55%, #ddd5c7);
+  background: url("/textures/sheet-creases-v2.jpg") center / cover, var(--paper);
+  background-blend-mode: multiply;
   box-shadow: 0 26px 30px -18px rgb(0 0 0 / 0.25);
   transition:
     top 0.5s ease,
@@ -1128,8 +1132,9 @@ fieldset:disabled .choice,
   top: 64%;
   width: min(300px, 62vw);
   height: 110px;
-  border-radius: 0 0 22px 22px;
-  background: linear-gradient(#3b3631, #2a2622);
+  border-radius: 0 0 12% 12%;
+  background: linear-gradient(90deg, rgb(0 0 0 / 0.2), transparent 35%, rgb(0 0 0 / 0.3)), url("/textures/fire/iron.jpg") center / 220px;
+  box-shadow: 0 16px 22px -14px rgb(28 24 20 / 0.38);
 }
 
 .ritual-drawn-furnace::before {
@@ -1138,7 +1143,7 @@ fieldset:disabled .choice,
   inset: -22px 0 auto;
   height: 44px;
   border-radius: 50%;
-  background: radial-gradient(ellipse at 50% 60%, #171513 55%, #4a443d 58%);
+  background: radial-gradient(ellipse at 50% 50%, #171615 59%, transparent 61%), url("/textures/fire/iron.jpg") center / 220px;
 }
 
 .ritual-drawn.is-committing .ritual-drawn-paper,
@@ -1199,6 +1204,10 @@ fieldset:disabled .choice,
 @media (max-width: 600px) {
   /* B05: sans-serif words between paper and furnace; the two controls on a
      row above the count */
+  .ritual-words {
+    --ritual-end-min: 152px;
+    --ritual-end-offset: 110px;
+  }
   .ritual-lead {
     font-family: var(--sans);
     font-size: 19px;

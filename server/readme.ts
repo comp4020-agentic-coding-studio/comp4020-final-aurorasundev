@@ -27,7 +27,8 @@ export function renderReadmePage(readmePath: string): string {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>About Throwaway</title>
+  <title>About Throwaway</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <style>
       :root {
         --bg: #e7e4de;

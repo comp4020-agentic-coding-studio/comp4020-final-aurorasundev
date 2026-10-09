@@ -25,7 +25,7 @@ export type PaperFieldHandle = {
 };
 
 export type Burn = { seed: number; durationMs: number };
-export type RitualEvent = { type: "ready" | "dropped" | "burning" | "ashes" };
+export type RitualEvent = { type: "ready" | "dropped" | "burning" | "ashes" | "fallback" };
 export type RitualLayout = { paperBottom: number; furnaceTop: number; furnaceBottom: number };
 
 type Props = {

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RitualLayout } from "./PaperField.tsx";
 
 // The furnace ritual's words and controls (B01–B03, B05). The paper and the
@@ -48,6 +48,7 @@ function words(stage: RitualStage, outcome: RitualOutcome, fallback: boolean): {
 
 export function RitualOverlay({ stage, outcome, error, canPlace, fallback, layout, onCancel, onPlace, onBack }: Props) {
   const title = useRef<HTMLHeadingElement>(null);
+  const [ashReady, setAshReady] = useState(false);
   const precommit = PRECOMMIT.includes(stage) && outcome === "own";
   const { lead, note } = words(stage, outcome, fallback);
   const ended = stage === "ashes" || outcome !== "own";
@@ -57,12 +58,19 @@ export function RitualOverlay({ stage, outcome, error, canPlace, fallback, layou
     title.current?.focus();
   }, []);
 
+  useEffect(() => {
+    setAshReady(false);
+    if (stage !== "ashes") return;
+    const timer = setTimeout(() => setAshReady(true), 3000);
+    return () => clearTimeout(timer);
+  }, [stage]);
+
   // between the hovering paper and the furnace's rim, wherever the scene put
   // them; centred lower down when there is no scene to measure
   // (kept clear of the rim: the two lines take about 90px)
-  const between = layout && precommit ? Math.min((layout.paperBottom + layout.furnaceTop) / 2, layout.furnaceTop - 56) : null;
+  const between = layout && precommit ? (layout.paperBottom + layout.furnaceTop) / 2 : null;
   // above the rim and the paper burning in it (B02/B03)
-  const above = layout && !precommit ? layout.furnaceTop - 100 : null;
+  const above = layout && !precommit ? `max(var(--ritual-end-min), calc(${layout.furnaceTop}px - var(--ritual-end-offset)))` : null;
   const style = between !== null ? { top: between } : above !== null ? { top: above, transform: "translate(-50%, -100%)" } : undefined;
 
   return (
@@ -101,7 +109,7 @@ export function RitualOverlay({ stage, outcome, error, canPlace, fallback, layou
           </>
         )}
         {(ended || stage === "checking") && (
-          <button type="button" className="button button-secondary ritual-back" onClick={onBack}>
+          <button type="button" className="button button-secondary ritual-back" onClick={onBack} disabled={stage === "ashes" && !ashReady}>
             Back to the space
           </button>
         )}

@@ -162,7 +162,7 @@ export function createFlames(camera, { seed = 1 } = {}) {
   const tongues = Array.from({ length: TONGUES }, (_, i) => ({
     angle: ((i + random() * 0.6) / TONGUES) * Math.PI * 2,
     // mostly small licks along the edge
-    tall: 0.38 + random() * 0.34,
+    tall: 0.48 + random() * 0.34,
     surge: 0,
     surgeRate: 1.3 + random() * 0.8,
     rate: 2.2 + random() * 2.6,

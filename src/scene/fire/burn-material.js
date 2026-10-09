@@ -51,8 +51,8 @@ const VERTEX_MAIN = /* glsl */ `
     float span = uHMax - uHMin;
     float h = (dot(aBurnPos, uAxis) - uHMin) / max(span, 1e-4) - dot(aBurnPos - uCenter, uTilt) + snoise(aBurnPos * uNoiseScale + uSeed) * 0.14;
     float d = h - uProgress;
-    float burnt = smoothstep(0.0, -0.3, d);
-    float lip = smoothstep(0.01, -0.05, d) * smoothstep(-0.22, -0.07, d);
+    float burnt = (1.0 - smoothstep(-0.3, 0.0, d));
+    float lip = (1.0 - smoothstep(-0.05, 0.01, d)) * smoothstep(-0.22, -0.07, d);
     vec3 fromAxis = transformed - uCenter;
     vec3 radial = fromAxis - uAxis * dot(fromAxis, uAxis);
     float w1 = snoise(aBurnPos * uNoiseScale * 2.1 + uSeed * 1.7);
@@ -80,11 +80,11 @@ const FRAGMENT_MAIN = /* glsl */ `
     // torn holes open in the charcoal before the rest falls away
     float tear = snoise(vBurnPos * uNoiseScale * 3.3 - uSeed * 2.3) * 0.5 + 0.5;
     if (bD < -0.07 && tear > 1.02 + (bD + 0.07) * 2.4) discard;
-    bChar = smoothstep(0.0, -0.045, bD);
+    bChar = (1.0 - smoothstep(-0.045, 0.0, bD));
     bEdge = smoothstep(-0.055, -0.008, bD) * (1.0 - smoothstep(-0.004, 0.014, bD));
-    bScorch = smoothstep(0.16, 0.0, bD) * (1.0 - bChar);
-    bStain = smoothstep(0.045, 0.0, bD) * (1.0 - bChar);
-    bAshRim = smoothstep(-lag + 0.07, -lag + 0.005, bD);
+    bScorch = (1.0 - smoothstep(0.0, 0.16, bD)) * (1.0 - bChar);
+    bStain = (1.0 - smoothstep(0.0, 0.045, bD)) * (1.0 - bChar);
+    bAshRim = (1.0 - smoothstep(-lag + 0.005, -lag + 0.07, bD));
     bHeat = smoothstep(-0.32, -0.02, bD) * bChar;
   }
 `;
@@ -100,7 +100,7 @@ const FRAGMENT_COLOR = /* glsl */ `
     vec3 stain = vec3(0.50, 0.27, 0.10);
     diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * dryBrown, bScorch * 0.55);
     diffuseColor.rgb = mix(diffuseColor.rgb, stain, bStain * 0.75);
-    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.06, 0.045, 0.035), smoothstep(-0.004, -0.03, bD) * (1.0 - bChar * 0.4));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.06, 0.045, 0.035), (1.0 - smoothstep(-0.03, -0.004, bD)) * (1.0 - bChar * 0.4));
     diffuseColor.rgb = mix(diffuseColor.rgb, charred, bChar);
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.46, 0.45, 0.43), bAshRim * 0.75);
   }
@@ -147,7 +147,10 @@ export function createBurnMaterial(source, { charMap, seed }) {
 
   const material = source.clone();
   material.side = THREE.DoubleSide;
-  material.onBeforeCompile = (shader) => {
+  material.onBeforeCompile = (shader, renderer) => {
+    // Keep the unburned part's paper fibres and folds while the char front
+    // climbs; Material.clone does not copy shader callbacks.
+    source.onBeforeCompile(shader, renderer);
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", `#include <common>\n${COMMON}\n${VERTEX_PARS}\nvarying vec2 vBurnUv;`)
