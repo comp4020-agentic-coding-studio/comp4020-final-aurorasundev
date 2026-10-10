@@ -51,26 +51,26 @@ app.get("/readme/", (_req, res) => {
 const docs = resolve(root, "docs");
 if (existsSync(docs)) app.use("/readme/docs", express.static(docs));
 
-// The paper's crumple model (.fbx) is 1.25 MB raw and about 140 KB gzipped,
-// but Fly's edge only compresses known text types, so it went out raw on
-// every first visit. It is gzipped once here at startup and sent encoded to
-// any browser that accepts gzip. (The .exr beside it is already compressed.)
-const vatDir = resolve(dist, "vat/geo");
+// Compress fixed assets once at startup. SSE is deliberately uncompressed
+// so its changes are flushed immediately; private API replies are not cached.
 const gzipped = new Map<string, Buffer>();
-if (existsSync(vatDir)) {
-  for (const name of readdirSync(vatDir)) {
-    if (extname(name) === ".fbx") gzipped.set(`/vat/geo/${name}`, gzipSync(readFileSync(resolve(vatDir, name)), { level: 9 }));
+for (const [folder, extensions] of [["assets", [".js", ".css"]], ["vat/geo", [".fbx"]]] as const) {
+  const directory = resolve(dist, folder);
+  if (!existsSync(directory)) continue;
+  for (const name of readdirSync(directory)) {
+    if ((extensions as readonly string[]).includes(extname(name))) {
+      gzipped.set(`/${folder}/${name}`, gzipSync(readFileSync(resolve(directory, name)), { level: 9 }));
+    }
   }
 }
-app.get("/vat/geo/:file", (req, res, next) => {
+app.get(/^\/(?:assets|vat\/geo)\/[^/]+$/, (req, res, next) => {
   const body = gzipped.get(req.path);
-  if (!body || !req.acceptsEncodings("gzip")) return next();
-  res.set({
-    "Content-Type": "application/octet-stream",
-    "Content-Encoding": "gzip",
-    Vary: "Accept-Encoding",
-    "Cache-Control": "public, max-age=604800",
-  });
+  if (!body) return next();
+  res.vary("Accept-Encoding");
+  if (!req.acceptsEncodings("gzip")) return next();
+  res.type(extname(req.path) === ".fbx" ? "application/octet-stream" : extname(req.path));
+  res.set("Content-Encoding", "gzip");
+  cacheHeaders(res, resolve(dist, `.${req.path}`));
   res.send(body);
 });
 

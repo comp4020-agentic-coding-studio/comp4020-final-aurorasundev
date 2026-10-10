@@ -49,7 +49,7 @@ const postJson = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
-export const getPaper = (id: string): Promise<OpenedPaper> => request(paperPath(id));
+export const getPaper = (id: string): Promise<OpenedPaper> => request(paperPath(id), undefined, 8000);
 
 export const witnessPaper = (id: string, receipt: string): Promise<PaperState> =>
   request(paperPath(id, "/witness"), postJson({ read_receipt: receipt }));

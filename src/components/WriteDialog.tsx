@@ -20,9 +20,11 @@ const SETTLED = new Set(["moderation_unavailable"]);
 
 export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, safetyLoading = false, onRetrySafety }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const confirmationRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [mode, setMode] = useState<PaperMode | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [confirmationError, setConfirmationError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Set when a save's outcome is unknown (the reply never came). The words and
@@ -41,11 +43,16 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
   const blank = text.trim() === "";
   const tooLong = count > MAX_CODE_POINTS;
   const locked = saving || unsettled;
-  const ready = !blank && !tooLong && mode !== null && confirmed && !offline && !!safety?.provider;
+  const ready = !blank && !tooLong && mode !== null && !offline && !!safety?.provider;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (saving || !ready || mode === null) return;
+    if (!confirmed) {
+      setConfirmationError(true);
+      confirmationRef.current?.focus();
+      return;
+    }
     const same = submission.current && submission.current.text === text && submission.current.mode === mode;
     if (!same) submission.current = { text, mode, key: crypto.randomUUID() };
     const key = submission.current!.key;
@@ -141,9 +148,26 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
         </p>
 
         <label className="choice choice-check">
-          <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} disabled={locked} />
+          <input
+            ref={confirmationRef}
+            type="checkbox"
+            checked={confirmed}
+            onChange={(e) => {
+              setConfirmed(e.target.checked);
+              if (e.target.checked) setConfirmationError(false);
+            }}
+            disabled={locked}
+            aria-invalid={confirmationError || undefined}
+            aria-describedby={confirmationError ? "write-confirm-error" : undefined}
+          />
           <span>I understand: once thrown, this paper cannot be edited or found in a personal history.</span>
         </label>
+
+        {confirmationError && (
+          <p id="write-confirm-error" className="form-error write-confirm-error" role="alert">
+            Please tick “I understand” before throwing this paper.
+          </p>
+        )}
 
         {error && (
           <p className="form-error" role="alert">

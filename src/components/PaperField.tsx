@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { createPaperScene } from "../scene/vendor/paper-scene.js";
+import type { createPaperScene } from "../scene/vendor/paper-scene.js";
 
 export type SheetRect = { left: number; top: number; width: number; height: number };
 export type ExploreEdge = "left" | "right" | "back" | "front";
@@ -53,6 +53,7 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
   const stage = useRef<HTMLDivElement>(null);
   const buttons = useRef<HTMLDivElement>(null);
   const scene = useRef<Scene | null>(null);
+  const queuedThrows = useRef<string[]>([]);
   const [status, setStatus] = useState<Status>("loading");
   const [attempt, setAttempt] = useState(0);
   const latest = useRef({ ids, onOpen, onOpenRect, onExplore, onRitual, onRitualLayout, onAvailable });
@@ -60,8 +61,12 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
 
   useEffect(() => {
     setStatus("loading");
-    let created: Scene;
-    try {
+    let disposed = false;
+    let created: Scene | null = null;
+    let observer: ResizeObserver | null = null;
+    // The space and its live count can render before downloading Three.js.
+    void import("../scene/vendor/paper-scene.js").then(({ createPaperScene }) => {
+      if (disposed) return;
       created = createPaperScene(stage.current!, buttons.current!, {
         vatBase: "/vat/",
         compact: compact(),
@@ -69,29 +74,31 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
         onExplore: (edge: ExploreEdge) => latest.current.onExplore(edge),
         onRitual: (event: RitualEvent) => latest.current.onRitual(event),
         onRitualLayout: (layout: RitualLayout) => latest.current.onRitualLayout(layout),
-        onReady: () => setStatus("ready"),
+        onReady: () => { if (!disposed) setStatus("ready"); },
         onError: (err: Error) => {
+          if (disposed) return;
           console.error("paper scene failed", err.message);
           setStatus("failed");
         },
       });
-    } catch (err) {
+      scene.current = created;
+      created.setPapers(latest.current.ids);
+      for (const id of queuedThrows.current.splice(0)) created.throwCreatedPaper(id);
+      observer = new ResizeObserver(() => {
+        const rect = created?.resize();
+        if (rect) latest.current.onOpenRect(rect);
+      });
+      observer.observe(stage.current!);
+    }).catch((err: unknown) => {
+      if (disposed) return;
       console.error("paper scene failed", err instanceof Error ? err.message : err);
       setStatus("failed");
-      return;
-    }
-    scene.current = created;
-    created.setPapers(latest.current.ids);
-
-    const observer = new ResizeObserver(() => {
-      const rect = created.resize();
-      if (rect) latest.current.onOpenRect(rect);
     });
-    observer.observe(stage.current!);
     return () => {
-      observer.disconnect();
-      created.dispose();
-      scene.current = null;
+      disposed = true;
+      observer?.disconnect();
+      created?.dispose();
+      if (scene.current === created) scene.current = null;
     };
   }, [attempt]);
 
@@ -115,7 +122,10 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
       burnOpenPaper: () => scene.current?.burnOpenPaper(),
       removeOpenPaper: () => scene.current?.removeOpenPaper(),
       setEntryEdge: (edge) => scene.current?.setEntryEdge(edge),
-      throwCreatedPaper: (id) => scene.current?.throwCreatedPaper(id),
+      throwCreatedPaper: (id) => {
+        if (scene.current) scene.current.throwCreatedPaper(id);
+        else if (!failed) queuedThrows.current.push(id);
+      },
       prefetchFire: () => scene.current?.prefetchFire(),
       prepareRitual: (id) => (!failed && scene.current ? scene.current.prepareRitual(id) : false),
       placeRitual: () => scene.current?.placeRitual(),

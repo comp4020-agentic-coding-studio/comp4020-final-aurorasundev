@@ -1,5 +1,5 @@
 // The furnace for the local ritual (B01/B05): one squat, open cast-iron
-// chamber with a thick rounded rim and a raised hearth inside, so a paper
+// chamber with a thick bevelled rim and a raised hearth inside, so a paper
 // set into it, and later its ash, stay visible over the front rim from the
 // space's camera. No legs, handles or chimney.
 //
@@ -25,21 +25,17 @@ export function furnaceAnchor(camera, ndcY, floorY) {
 function profile(R, H, wall, hearth) {
   // (radius, height) points, outside bottom → rim → inside → hearth centre
   const p = [];
-  const rr = wall * 0.12; // worn cast edge rather than a rounded ceramic lip
+  const edge = wall * 0.16;
   p.push(new THREE.Vector2(0.001, 0));
-  p.push(new THREE.Vector2(R - 0.012, 0));
-  p.push(new THREE.Vector2(R, 0.012));
-  p.push(new THREE.Vector2(R, H * 0.5));
-  p.push(new THREE.Vector2(R, H - rr));
-  for (let i = 1; i < 8; i++) {
-    const a = (i / 8) * Math.PI;
-    p.push(new THREE.Vector2(R - rr + Math.cos(a) * rr, H - rr + Math.sin(a) * rr));
-  }
-  p.push(new THREE.Vector2(R - wall + rr, H));
-  p.push(new THREE.Vector2(R - wall, H - rr));
-  p.push(new THREE.Vector2(R - wall - 0.002, hearth + 0.03));
-  p.push(new THREE.Vector2(R - wall - 0.02, hearth + 0.004));
-  p.push(new THREE.Vector2(R - wall - 0.05, hearth));
+  p.push(new THREE.Vector2(R - edge, 0));
+  p.push(new THREE.Vector2(R, edge));
+  p.push(new THREE.Vector2(R, H - edge));
+  // Small bevels around a broad, flat crown: a heavy cast ring, not a bowl.
+  p.push(new THREE.Vector2(R - edge, H));
+  p.push(new THREE.Vector2(R - wall + edge, H));
+  p.push(new THREE.Vector2(R - wall, H - edge));
+  p.push(new THREE.Vector2(R - wall, hearth + edge));
+  p.push(new THREE.Vector2(R - wall - edge, hearth));
   p.push(new THREE.Vector2(0.001, hearth));
   return p;
 }
@@ -67,9 +63,22 @@ export function createFurnace(camera, textures, { radius = 0.42, position = new 
   const wall = radius * 0.10;
   // high enough that a paper set on it, and later its ash, show over the
   // front rim from the space's camera (B02/B03)
-  const hearthY = H * 0.82;
+  const hearthY = H * 0.65;
   const geometry = new THREE.LatheGeometry(profile(R, H, wall, hearthY), 96);
   geometry.computeVertexNormals();
+  // Colour, relief and roughness share physical UVs. Lathe's default UVs
+  // stretch one image over the entire profile, flattening the cast grain.
+  const positions = geometry.attributes.position;
+  const normals = geometry.attributes.normal;
+  const uv = geometry.attributes.uv;
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
+    if (Math.abs(normals.getY(i)) > 0.7) {
+      uv.setXY(i, x / (R * 0.8), z / (R * 0.8));
+    } else {
+      uv.setXY(i, uv.getX(i) * 8, y / (R * 0.8));
+    }
+  }
 
   const iron = textures.iron;
   const uniforms = {
@@ -81,11 +90,13 @@ export function createFurnace(camera, textures, { radius = 0.42, position = new 
   };
   const material = new THREE.MeshStandardMaterial({
     color: new THREE.Color("#ffffff"),
+    map: iron,
     bumpMap: iron,
-    bumpScale: R * 0.04,
-    roughness: 0.96,
-    metalness: 0.12,
-    envMapIntensity: 0.25,
+    bumpScale: R * 0.012,
+    roughness: 0.82,
+    metalness: 0.78,
+    envMapIntensity: 0.85,
+    fog: false,
   });
   uniforms.uIron = { value: iron };
   material.onBeforeCompile = (shader) => {
@@ -109,25 +120,51 @@ export function createFurnace(camera, textures, { radius = 0.42, position = new 
         "#include <map_fragment>",
         `
         float fInside;
+        float fCrown;
         {
-          // cylindrical mapping on the walls, planar on the hearth and rim
-          // top, so the iron never streaks the way lathe UVs would
           float r = length(vFLocal.xz);
-          float around = atan(vFLocal.z, vFLocal.x) / 6.2831853;
-          vec2 wallUv = vec2(around * ${(Math.PI * 2 * R / (R * 1.1)).toFixed(3)}, vFLocal.y / ${(R * 1.1).toFixed(4)});
-          vec2 flatUv = vFLocal.xz / ${(R * 1.1).toFixed(4)};
-          float flatness = smoothstep(0.55, 0.85, abs(normalize(cross(dFdx(vFLocal), dFdy(vFLocal))).y));
-          vec3 ironCol = mix(texture2D(uIron, wallUv).rgb, texture2D(uIron, flatUv + 0.37).rgb, flatness);
-          diffuseColor.rgb *= ironCol * vec3(1.7, 1.65, 1.58);
+          vec3 ironCol = texture2D(uIron, vMapUv).rgb;
+          // Lift dark iron's metallic reflectance without painting white highlights.
+          float ironValue = dot(ironCol, vec3(0.2126, 0.7152, 0.0722));
+          diffuseColor.rgb *= vec3(ironValue * 3.0);
           fInside = 1.0 - smoothstep(${(R - wall * 0.6).toFixed(4)}, ${(R - wall * 0.3).toFixed(4)}, r);
           fInside *= 1.0 - smoothstep(${(H - wall * 0.7).toFixed(4)}, ${(H - wall * 0.2).toFixed(4)}, vFLocal.y);
           // soot inside and on the hearth, worn a little lighter on the rim's crown
-          diffuseColor.rgb *= mix(1.0, 0.32, fInside);
-          float crown = smoothstep(${(H - wall * 0.35).toFixed(4)}, ${H.toFixed(4)}, vFLocal.y);
-          diffuseColor.rgb *= 1.0 + crown * 0.13;
+          diffuseColor.rgb *= mix(1.0, 0.10, fInside);
+          fCrown = smoothstep(${(H - wall * 0.35).toFixed(4)}, ${H.toFixed(4)}, vFLocal.y);
+          diffuseColor.rgb *= 1.0 + fCrown * 0.6;
           float mottle = snoise(vFLocal * 7.0) * 0.5 + 0.5;
           diffuseColor.rgb *= mix(0.84, 1.1, mottle);
         }`,
+      )
+      .replace(
+        "#include <normal_fragment_maps>",
+        `#include <normal_fragment_maps>
+        // Cast pits change the lighting, not just the painted colour. The
+        // worn crown has less relief than the rough, sand-cast outer wall.
+        vec3 castPoint = vFLocal / ${R.toFixed(5)};
+        float castHeight = (snoise(castPoint * 90.0) * 0.6 + snoise(castPoint * 220.0) * 0.25) * ${(R * 0.002).toFixed(6)};
+        vec2 castSlope = vec2(dFdx(castHeight), dFdy(castHeight));
+        castSlope *= 1.0 - fCrown * 0.65;
+        // World-sized relief: retain the derivatives' lengths so the cast
+        // grain is visible at the furnace's actual scale on small screens too.
+        vec3 castDx = dFdx(-vViewPosition), castDy = dFdy(-vViewPosition);
+        vec3 castR1 = cross(castDy, normal), castR2 = cross(normal, castDx);
+        float castDet = dot(castDx, castR1) * faceDirection;
+        vec3 castGrad = sign(castDet) * (castSlope.x * castR1 + castSlope.y * castR2);
+        normal = normalize(abs(castDet) * normal - castGrad);`,
+      )
+      .replace(
+        "#include <roughnessmap_fragment>",
+        `#include <roughnessmap_fragment>
+        float castGrain = texture2D(uIron, vMapUv).g;
+        roughnessFactor = mix(0.92, 0.68, smoothstep(0.02, 0.3, castGrain));
+        roughnessFactor = mix(roughnessFactor - fCrown * 0.16, 0.98, fInside);`,
+      )
+      .replace(
+        "#include <metalnessmap_fragment>",
+        `#include <metalnessmap_fragment>
+        metalnessFactor *= mix(1.0, 0.2, fInside);`,
       )
       .replace(
         "#include <emissivemap_fragment>",
@@ -147,7 +184,7 @@ export function createFurnace(camera, textures, { radius = 0.42, position = new 
         }`,
       );
   };
-  material.customProgramCacheKey = () => "throwaway-furnace-v3";
+  material.customProgramCacheKey = () => "throwaway-furnace-v5";
 
   const group = new THREE.Group();
   group.position.copy(position);

@@ -22,10 +22,8 @@ import { createPaper, updatePaperFrame } from "./paper.js";
 import { loadVATData } from "./paper-vat.js";
 
 const BACKGROUND = "#d0c3b6";
-// Wall and floor render to D01's one warm grey (about 209,203,196) under
-// ACES and the exposure below; the values are what lands there, not the
-// target itself.
-const WALL_COLOR = "#d0c3b6";
+// A warm plaster wall and lighter floor keep the demo's room depth.
+const WALL_COLOR = "#d1d0cd";
 const FLOOR_COLOR = "#cfc6bd";
 const PAPER_COLOR = "#f2ece1";
 
@@ -34,7 +32,7 @@ const WALL_Z = -1.1;
 
 const OPEN_DISTANCE = 1.5;
 const CLOSED_SCALE = 0.82;
-const OPEN_DURATION = 1.15;
+const OPEN_DURATION = 0.85;
 const DISCARD_DURATION = 1.25;
 const ROLL_LINEAR_RESISTANCE = 2.6;
 const ROLL_ANGULAR_RESISTANCE = 4.5;
@@ -131,6 +129,45 @@ export function createPaperScene(container, buttonLayer, options) {
     measureStageEdges();
   }
 
+  let cameraMove = null;
+  const captureCamera = () => ({ position: camera.position.clone(), quaternion: camera.quaternion.clone(), fov: camera.fov });
+  function moveCamera(to, duration, from = captureCamera()) {
+    cameraMove = { from, to, duration, time: 0 };
+    camera.position.copy(from.position);
+    camera.quaternion.copy(from.quaternion);
+    camera.fov = from.fov;
+    camera.updateProjectionMatrix();
+  }
+  function updateCamera(dt) {
+    if (!cameraMove) return;
+    const m = cameraMove;
+    m.time += dt;
+    const t = clamp01(m.time / m.duration);
+    const e = t * t * (3 - 2 * t);
+    camera.position.lerpVectors(m.from.position, m.to.position, e);
+    camera.quaternion.slerpQuaternions(m.from.quaternion, m.to.quaternion, e);
+    camera.fov = lerp(m.from.fov, m.to.fov, e);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld(true);
+    if (t === 1) {
+      cameraMove = null;
+      measureStageEdges();
+      if (ritual) emitRitualLayout();
+    }
+  }
+  function burnCamera(r) {
+    const view = camera.clone();
+    const centre = r.place.anchor.clone().add(new THREE.Vector3(0, r.place.radius * FURNACE_HEIGHT * 0.5, 0));
+    const distance = r.readyView.position.distanceTo(centre) * 0.88;
+    const angle = THREE.MathUtils.degToRad(42);
+    view.position.copy(centre).add(new THREE.Vector3(0, Math.sin(angle) * distance, Math.cos(angle) * distance));
+    view.fov = r.readyView.fov;
+    view.lookAt(centre);
+    // Keep the hearth below the caption as the camera rises around it.
+    view.rotateX(Math.atan((compact ? 0.28 : 0.40) * Math.tan(THREE.MathUtils.degToRad(view.fov / 2))));
+    return { position: view.position.clone(), quaternion: view.quaternion.clone(), fov: view.fov };
+  }
+
   // How far left/right a paper can sit at a given depth and still be in
   // view: wide at the back, narrower near the camera. Spawning, physics and
   // dragging all use it, so papers spread across the frame (D01) without
@@ -172,8 +209,7 @@ export function createPaperScene(container, buttonLayer, options) {
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = 0.5;
 
-  // A continuous studio floor fades into the background. The physical back
-  // boundary remains, but no visible wall leaves an SSAO crease at the horizon.
+  // The visible wall meets the floor at the demo's physical back boundary.
   const floorGeometry = new THREE.PlaneGeometry(64, 64);
   // The environment map lights the floor the same everywhere, shadow or not
   // (it isn't blocked by the shadow map), so it's turned down hard here —
@@ -191,32 +227,22 @@ export function createPaperScene(container, buttonLayer, options) {
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // The references' ground fades into the background with no hard seam. Fog
-  // does that here. three.js fogs by depth along the camera's view direction,
-  // so both ends are measured that way: it starts halfway back across the
-  // stage and is complete where the floor meets the wall, so the back half
-  // of the floor drifts into the wall's colour while the front stays as lit.
-  // Papers ignore it. (A band only past the last paper was too narrow to
-  // read as anything but a line; a fog set by eye washed out the floor.)
   const viewDepth = (point) => {
     const forward = camera.getWorldDirection(new THREE.Vector3());
     return point.clone().sub(camera.position).dot(forward);
   };
-  function measureFog() {
-    const seam = viewDepth(new THREE.Vector3(0, FLOOR_VISUAL_Y, WALL_Z));
-    const midStage = (stageBounds.minZ + stageBounds.maxZ) / 2;
-    scene.fog.near = viewDepth(new THREE.Vector3(0, FLOOR_VISUAL_Y, midStage));
-    scene.fog.far = seam - 0.12;
-  }
-  scene.fog = new THREE.Fog(new THREE.Color(WALL_COLOR), 4, 5);
-  measureFog();
 
   const wallHeight = 12;
   const wallGeometry = new THREE.PlaneGeometry(24, wallHeight);
-  const wallMat = new THREE.MeshBasicMaterial({ color: WALL_COLOR });
+  const wallMat = new THREE.MeshStandardMaterial({
+    color: WALL_COLOR,
+    roughness: 1,
+    metalness: 0,
+    envMapIntensity: 0.2,
+  });
   const wall = new THREE.Mesh(wallGeometry, wallMat);
   wall.position.set(0, FLOOR_VISUAL_Y + wallHeight / 2, WALL_Z);
-  wall.visible = false;
+  wall.receiveShadow = true;
   scene.add(wall);
 
   // Lights
@@ -643,7 +669,10 @@ export function createPaperScene(container, buttonLayer, options) {
         if (!wantedIds.includes(id)) return;
         const position = randomSpawnPosition();
         // with reduced motion it is simply there, without the drop
-        if (reduceMotion()) spawnPaper(id, position, false);
+        if (ritual && !["ending", "restoring"].includes(ritual.phase)) {
+          spawnPaper(id, position, false);
+          clearRitualColumn(ritual);
+        } else if (reduceMotion()) spawnPaper(id, position, false);
         else spawnPaper(id, position, true, arrivalDropHeight(position));
       }, delay);
     }
@@ -939,6 +968,7 @@ export function createPaperScene(container, buttonLayer, options) {
     prevTime = now;
 
     if (animData) {
+      updateCamera(dt);
       physicsWorld.step(PHYSICS_STEP, dt, 3);
       applyPhysicsBounds(dt);
       for (const p of papers.values()) if (p) updatePaperMotion(p, dt);
@@ -1005,6 +1035,10 @@ export function createPaperScene(container, buttonLayer, options) {
     // the ritual and the burns move these themselves, their crumple fixed
     if (paper.state === "ritual" || paper.state === "ghost") return;
     const maxFrame = animData.frameCount - 1;
+    if (paper.parked && paper.state !== "fading") {
+      updateParkedPaper(paper, dt);
+      return;
+    }
     if (paper.explore) {
       updateExploreMotion(paper, dt);
       return;
@@ -1212,37 +1246,89 @@ export function createPaperScene(container, buttonLayer, options) {
     paper.body.position.set(centre.x, centre.y, centre.z);
   }
 
-  // B01/B05: reserve the whole reading column, and arrange the other papers
-  // in visible side lanes. Smaller background papers fit a narrow phone;
-  // no paper needs to be pushed through the edge of the viewport.
-  function clearRitualColumn(r) {
-    const background = livePapers().filter((p) => p !== r.paper && (isGrabbable(p) || p.parked));
-    const rows = compact ? [0.25, 0.63, 0.40] : [0.44, 0.64, 0.76, 0.53];
+  // Keep the actual papers and save their original size and pose. Move them
+  // into the available floor around the chamber instead of hiding extras.
+  function clearRitualColumn(r, relayout = false) {
+    const background = livePapers().filter((p) => p !== r.paper && (isGrabbable(p) || p.state === "entering" || p.parked));
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -restCenterY);
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-    background.forEach((p, i) => {
-      const side = i % 2;
-      const row = rows[Math.floor(i / 2) % rows.length];
-      _ndc.set((side ? 0.84 : 0.16) * 2 - 1, 1 - row * 2);
-      _ray.setFromCamera(_ndc, camera);
+    const occupied = [];
+    const overhead = camera.clone();
+    const burnView = burnCamera(r);
+    overhead.position.copy(burnView.position);
+    overhead.quaternion.copy(burnView.quaternion);
+    overhead.updateMatrixWorld(true);
+    const overheadUp = new THREE.Vector3(0, 1, 0).applyQuaternion(overhead.quaternion);
+    background.forEach((p) => {
+      if (p.parked && !relayout) { occupied.push(p.parked.centre); return; }
+      p.parked ??= { origin: captureTransform(p), centre: new THREE.Vector3() };
+      const origin = p.parked.origin;
+      let side = origin.position.x < 0 ? -1 : 1;
+      if (occupied.filter((at) => Math.sign(at.x) === side).length >= Math.ceil(background.length / 2)) side *= -1;
+      const depth = clamp01((origin.position.z - stageBounds.minZ) / (stageBounds.maxZ - stageBounds.minZ));
+      const spread = Math.sin(origin.position.x * 7 + origin.position.z * 11) * 0.5 + 0.5;
+      const scale = origin.scale * (compact ? 0.42 : 0.66);
+      plane.constant = -(FLOOR_VISUAL_Y + collisionRadius * (scale / CLOSED_SCALE) * 1.08);
+      const rows = compact && size().h < 600 ? 0.13 : 0.18;
       const centre = new THREE.Vector3();
-      if (!_ray.ray.intersectPlane(plane, centre)) return;
-      const from = p.mesh.position.clone();
-      const leftPx = screenPoint(_q.copy(centre).addScaledVector(right, -collisionRadius)).x;
-      const rightPx = screenPoint(_q.copy(centre).addScaledVector(right, collisionRadius)).x;
-      const diameter = compact ? (row > 0.5 ? 40 : 28) : size().w * (row > 0.7 ? 0.13 : 0.085);
-      p.mesh.scale.setScalar(CLOSED_SCALE * Math.min(0.85, diameter / Math.max(1, rightPx - leftPx)));
-      const to = centre.sub(crumpleWorldOffset(p.mesh.scale.x, p.mesh.quaternion));
-      p.parked = true;
-      setPaperBodyDynamic(p, false);
-      if (reduceMotion()) {
-        p.mesh.position.copy(to);
-        syncBodyToMesh(p);
-        return;
+      const best = new THREE.Vector3();
+      let bestRoom = -1;
+      for (let attempt = 0; attempt < 18; attempt++) {
+        const row = 0.56 + ((depth * 0.16 + Math.floor(attempt / 3) * 0.045) % rows);
+        const column = side * (compact ? 0.65 + (attempt % 3 - 1) * 0.03 : 0.54 + spread * 0.12 + (attempt % 3 - 1) * 0.08);
+        _ndc.set(column, 1 - row * 2);
+        _ray.setFromCamera(_ndc, camera);
+        if (!_ray.ray.intersectPlane(plane, centre)) return;
+        // Leave the header clear in both the ready and the overhead view.
+        const top = centre.clone().addScaledVector(overheadUp, collisionRadius * (scale / CLOSED_SCALE) * 1.4).project(overhead);
+        if (top.y > 0.76) continue;
+        const room = Math.min(Infinity, ...occupied.map((at) => at.distanceToSquared(centre)));
+        if (room > bestRoom) { bestRoom = room; best.copy(centre); }
       }
-      p.state = "entering";
-      p.explore = { from, to, time: 0, delay: randomRange(0, 0.12) };
+      centre.copy(best);
+      p.parked.centre.copy(centre);
+      occupied.push(centre.clone());
+      p.explore = null;
+      p.state = "closed";
+      setPaperBodyDynamic(p, false);
+      const to = centre.clone().sub(crumpleWorldOffset(scale, p.mesh.quaternion));
+      p.shift = { from: p.mesh.position.clone(), to, fromScale: p.mesh.scale.x, toScale: scale, time: 0, returning: false };
+      if (r.reduced) updateParkedPaper(p, 1);
     });
+  }
+
+  function updateParkedPaper(p, dt) {
+    const m = p.shift;
+    if (!m) return;
+    m.time += dt;
+    const t = clamp01(m.time / 0.9);
+    const e = t * t * (3 - 2 * t);
+    p.mesh.position.lerpVectors(m.from, m.to, e);
+    p.mesh.scale.setScalar(lerp(m.fromScale, m.toScale, e));
+    if (m.returning) p.mesh.quaternion.slerpQuaternions(m.fromQuaternion, p.parked.origin.quaternion, e);
+    syncBodyToMesh(p);
+    if (t < 1) return;
+    p.shift = null;
+    if (m.returning) {
+      p.mesh.quaternion.copy(p.parked.origin.quaternion);
+      syncBodyToMesh(p);
+      p.parked = null;
+      setPaperBodyDynamic(p, true);
+    }
+  }
+
+  function restoreRitualPapers(r) {
+    ritualView = false;
+    // A resize may have changed the stage; solve its normal view afresh.
+    const from = captureCamera();
+    applyCamera();
+    moveCamera(captureCamera(), r.reduced ? 0.01 : 0.9, from);
+    for (const p of livePapers()) {
+      if (!p.parked) continue;
+      p.shift = { from: p.mesh.position.clone(), to: p.parked.origin.position.clone(), fromScale: p.mesh.scale.x, toScale: p.parked.origin.scale, fromQuaternion: p.mesh.quaternion.clone(), time: 0, returning: true };
+      if (r.reduced) updateParkedPaper(p, 1);
+    }
+    r.phase = "restoring";
+    r.time = 0;
   }
 
   function addFurnace(r) {
@@ -1331,7 +1417,14 @@ export function createPaperScene(container, buttonLayer, options) {
       case "ending":
         if (!r.furnace || !r.furnace.visible) {
           r.furnace?.dispose();
+          r.furnace = null;
+          restoreRitualPapers(r);
+        }
+        return;
+      case "restoring":
+        if (r.time >= (r.reduced ? 0.01 : 0.95)) {
           if (ritual === r) ritual = null;
+          syncPapers();
         }
         return;
     }
@@ -1356,6 +1449,7 @@ export function createPaperScene(container, buttonLayer, options) {
       return;
     }
     const f = r.furnace;
+    if (!remote) moveCamera(burnCamera(r), r.reduced ? 0.01 : 1.15);
     r.effect = fire.module.createBurnEffect({
       scene,
       camera,
@@ -1388,22 +1482,12 @@ export function createPaperScene(container, buttonLayer, options) {
   // The furnace goes and the ritual ends once it has; the paper (if any) is
   // no longer the ritual's.
   function endFurnace(r) {
-    ritualView = false;
-    applyCamera();
-    measureFog();
-    // papers moved aside drift back into the stage on their own
-    for (const p of livePapers()) {
-      if (!p.parked) continue;
-      p.parked = false;
-      p.mesh.scale.setScalar(CLOSED_SCALE);
-      syncBodyToMesh(p);
-      if (!p.explore && p.state === "closed") setPaperBodyDynamic(p, true);
-    }
+    // Hold the surrounding papers still until the chamber has fully left.
+    cameraMove = null;
     r.phase = "ending";
     r.paper = null;
     r.pendingIgnite = null;
     if (r.furnace) r.furnace.hide();
-    else ritual = null;
     if (activePaper && activePaper.state === "ritual") activePaper = null;
   }
 
@@ -1498,7 +1582,8 @@ export function createPaperScene(container, buttonLayer, options) {
       r.furnace.group.position.copy(place.anchor);
       r.furnace.group.scale.setScalar(place.radius / r.furnace.radius);
     }
-    clearRitualColumn(r);
+    clearRitualColumn(r, true);
+    r.readyView = captureCamera();
     emitRitualLayout();
   }
 
@@ -1583,8 +1668,14 @@ export function createPaperScene(container, buttonLayer, options) {
 
   function onResize() {
     const { w, h } = size();
+    cameraMove = null;
     applyCamera();
-    measureFog();
+    if (ritual && ["burning", "ashes"].includes(ritual.phase)) {
+      const view = burnCamera(ritual);
+      camera.position.copy(view.position);
+      camera.quaternion.copy(view.quaternion);
+      camera.updateMatrixWorld(true);
+    }
     renderer.setSize(w, h);
     composer.setSize(w, h);
     if (ritual) relayoutRitual();
@@ -1728,9 +1819,9 @@ export function createPaperScene(container, buttonLayer, options) {
       paper.mesh.visible = true;
       paper.mesh.castShadow = true;
       setPaperBodyDynamic(paper, false);
+      const spaceView = captureCamera();
       ritualView = true;
       applyCamera();
-      measureFog();
       const place = ritualPlacement();
       const r = {
         paper,
@@ -1738,6 +1829,8 @@ export function createPaperScene(container, buttonLayer, options) {
         time: 0,
         reduced: reduceMotion(),
         start: captureTransform(paper),
+        readyView: captureCamera(),
+        returnPaper: paper.start,
         quaternion: closedOrientation(place.hover),
         place,
         centre: place.hover.clone(),
@@ -1751,13 +1844,14 @@ export function createPaperScene(container, buttonLayer, options) {
       ritual = r;
       paper.state = "ritual";
       clearRitualColumn(r);
+      moveCamera(r.readyView, r.reduced ? 0.01 : 0.75, spaceView);
       loadFire()
         .then(() => {
-          if (ritual === r && r.phase !== "ending" && !disposed) addFurnace(r);
+          if (ritual === r && !["ending", "restoring"].includes(r.phase) && !disposed) addFurnace(r);
         })
         .catch(() => {
           r.fireFailed = true;
-          if (ritual === r && r.phase !== "ending") {
+          if (ritual === r && !["ending", "restoring"].includes(r.phase)) {
             r.pendingIgnite = null;
             r.paper.mesh.visible = false;
             options.onRitual?.({ type: "fallback" });
@@ -1824,13 +1918,10 @@ export function createPaperScene(container, buttonLayer, options) {
       paper.frameIdx = animData.frameCount - 1;
       updatePaperFrame(paper, animData, paper.frameIdx);
       paper.mesh.scale.setScalar(CLOSED_SCALE);
-      syncBodyToMesh(paper);
-      setPaperBodyDynamic(paper, true);
-      // toward the back of the stage, where it can be found again
-      paper.body.velocity.set(randomRange(-0.3, 0.3), 0.4, -randomRange(0.9, 1.3));
-      paper.state = "rolling";
-      paper.time = 0;
-      paper.throw = { settleTimer: 0 };
+      setPaperBodyDynamic(paper, false);
+      paper.state = "closed";
+      paper.parked = { origin: r.returnPaper ?? captureTransform(paper), centre: r.centre.clone() };
+      paper.shift = null;
       activePaper = null;
       endFurnace(r);
     },

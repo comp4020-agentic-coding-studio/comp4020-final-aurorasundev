@@ -118,3 +118,37 @@ it("retries an unconfirmed publication with the original draft and key", async (
   expect(control.create.mock.calls[1]).toEqual(control.create.mock.calls[0]);
   expect(thrown).toHaveBeenCalledTimes(1);
 });
+
+
+it("asks for understanding below the checkbox before sending, then clears the hint when checked", async () => {
+  control.create.mockResolvedValueOnce({ paper: { id: "saved", status: "ACTIVE", version: 1 }, total: 1, revision: 1, offer_return_key: false });
+  const thrown = vi.fn();
+  await act(async () => root.render(createElement(WriteDialog, { safety: { provider: "fixture", reports: true }, offline: false,
+    onCancel: vi.fn(), onThrown: thrown, pendingOps: new Set<string>() })));
+  await input(host.querySelector("textarea")!, "My unfinished thought.");
+  await act(async () => host.querySelector<HTMLInputElement>('input[value="KEEP"]')!.click());
+  expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(false);
+  await click("Crumple & throw");
+  const checkbox = host.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+  const hint = host.querySelector('#write-confirm-error')!;
+  expect(hint.textContent).toContain('Please tick “I understand”');
+  expect(checkbox.closest("label")!.nextElementSibling).toBe(hint);
+  expect(checkbox.getAttribute("aria-describedby")).toBe(hint.id);
+  expect(document.activeElement).toBe(checkbox);
+  expect(control.create).not.toHaveBeenCalled();
+  await act(async () => checkbox.click());
+  expect(host.querySelector('#write-confirm-error')).toBeNull();
+  await click("Crumple & throw");
+  expect(control.create).toHaveBeenCalledTimes(1);
+  expect(thrown).toHaveBeenCalledTimes(1);
+});
+
+
+it("closes the read sheet through its accessible icon button", async () => {
+  const onClose = vi.fn();
+  await act(async () => root.render(createElement(ReadDialog, { ...readProps, onClose })));
+  const close = host.querySelector<HTMLButtonElement>('button[aria-label="Close"]');
+  expect(close).not.toBeNull();
+  await act(async () => close!.click());
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
