@@ -517,3 +517,39 @@ changes are included; the paper model and material remain unchanged.
   from the build context. No schema, Fly secret or reflection change is part
   of this release. The dependent GitHub checks/deploy workflow must finish
   and the live assets must match before deployment is claimed complete.
+
+## 2026-10-10 — reading reveal artifacts and initial focus
+
+The owner reported straight translucent strips above/below the reading sheet
+during opening, and a persistent initial circle around its close icon.
+
+- [d8a0d68](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/d8a0d68)
+  replaces the 300 ms delayed hiding of the flat WebGL paper with an immediate
+  handoff to the HTML sheet, whose scene-backed surface now appears without
+  an opacity fade. The rectangular mesh no longer protrudes around torn edges;
+  closing still restores the mesh for crumpling.
+- Isolated the cause locally by disabling HTML shadows, hiding the canvas
+  and disabling the reveal transition separately. Removing HTML shadows
+  retained the strip; hiding the canvas removed it. The initial close circle
+  was the global focus-visible outline triggered by button autofocus.
+- Initial focus now goes to the native reading dialog, with no dialog outline.
+  Tab still reaches the close icon and displays its keyboard focus indicator.
+  React's dialog autoFocus prop did not set the native attribute in the
+  browser; replaced that attempt with explicit native focus after showModal.
+- Browser-plugin tools were unavailable; Playwright/Chrome checked desktop
+  1672 x 1040, phone 390 x 844, reduced motion and forced no-WebGL fallback.
+  Each ran three open/close cycles, including Escape and Tab. First-reveal
+  and subsequent screenshots were captured through 2200 ms. The strips and
+  initial ring disappeared, totals stayed unchanged, and there were no paper
+  publication, witnessing or destruction requests. Normal cases had no
+  console errors/warnings; forced no-WebGL produced only the expected context
+  errors and unused-preload warnings. Safari and physical touch were untested.
+- Production build and all 115 checks in fifteen files passed against a fresh
+  isolated fixture database. An intermediate recheck against a reused fixture
+  database and stale startup asset cache was discarded; restarting against a
+  fresh database after the final build restored the valid test conditions.
+  The existing deferred Three.js chunk-size warning remains.
+- This follow-up release uses the existing main-to-Fly workflow. No schema,
+  moderation configuration, credentials, paper material or reflection changed.
+  Live deployment verification must compare the workflow and served assets;
+  local browser evidence alone is not a claim about production.
