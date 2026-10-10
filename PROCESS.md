@@ -480,3 +480,40 @@ so the newly fail-closed publishing path would remain usable.
   check the machine image, safety configuration, readable existing content
   and database preservation. General moderation accuracy remains limited
   by the small synthetic smoke sample.
+
+## 2026-10-10 — loading and furnace choreography release
+
+The owner requested faster loading, a simple reading close icon, neutral
+cast iron, a smooth low-to-overhead burn viewpoint and preservation of the
+surrounding paper population. The earlier checkbox reminder and room depth
+changes are included; the paper model and material remain unchanged.
+
+- [75e3256](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/75e3256)
+  defers the Three.js scene behind the usable app, preloads model data and
+  compresses fixed scripts/styles once at server startup. SSE stays
+  uncompressed and private API replies keep their existing cache policy.
+- The furnace uses neutral cast-iron relief and a thick bevelled rim. Its
+  camera moves overhead only after confirmed destruction. Existing papers
+  move aside with their original poses retained; the furnace disappears
+  before the papers return, then physics resumes. New arrivals are handled
+  during the ritual rather than dropped belatedly afterward.
+- Final production build, type checking and all 115 tests in fifteen files
+  passed against an isolated local fixture database. Added regressions for
+  gzip/identity cache variants, the accessible reading close button and
+  unchecked confirmation without publication. No production test data was
+  created. The existing deferred Three.js chunk-size warning remains.
+- Browser-plugin tools were unavailable, so Playwright used Chrome with
+  hardware GPU rendering. Desktop mouse drag, phone Place, cancellation,
+  server refusal, a short phone viewport, reduced motion and no-WebGL
+  fallback were checked. Paper counts persisted during preparation and
+  restoration matched the saved positions; the furnace retreat preceded
+  the return animation. Physical touch devices and Safari were not tested.
+- Three cold local runs under identical throttling measured median live-count
+  display at 1466 ms versus 4554 ms before, and first paper at 10058 ms versus
+  13482 ms. These are controlled local comparisons, not Fly latency claims.
+  Individual reading fetches showed no meaningful speed improvement.
+- The owner then authorized commit, push and deployment. Configured
+  credentials were scanned without disclosure and remain ignored/excluded
+  from the build context. No schema, Fly secret or reflection change is part
+  of this release. The dependent GitHub checks/deploy workflow must finish
+  and the live assets must match before deployment is claimed complete.
