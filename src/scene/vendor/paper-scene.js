@@ -1748,15 +1748,12 @@ export function createPaperScene(container, buttonLayer, options) {
       }
       activePaper = paper;
       paper.mesh.castShadow = false;
-      // The HTML reading sheet fades in over the flat mesh (260ms) and is cut
-      // to a torn outline the rectangular mesh would show around, so the mesh
-      // hides once covered and comes back for the crumple on close.
+      // Hand the surface to the HTML sheet as soon as the unfold finishes.
+      // Keeping the flat mesh during a fade exposes its straight edges outside
+      // the HTML sheet's torn outline. Close restores it for the crumple.
       paper.onUnfolded = (rect) => {
+        paper.mesh.visible = false;
         onUnfolded(rect);
-        later(() => {
-          // (not if it was released in the meantime: it is needed again)
-          if (activePaper === paper && paper.state === "open") paper.mesh.visible = false;
-        }, 300);
       };
       startOpen(paper);
     },

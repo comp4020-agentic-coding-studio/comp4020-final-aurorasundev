@@ -135,6 +135,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
   useEffect(() => {
     const dialog = dialogRef.current!;
     dialog.showModal();
+    dialog.focus({ preventScroll: true });
     return () => dialog.close();
   }, []);
 
@@ -217,7 +218,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
       }}
     >
       <article className="paper-sheet read-sheet">
-        <button type="button" className="sheet-close sheet-close-icon" aria-label="Close" onClick={onClose} autoFocus>
+        <button type="button" className="sheet-close sheet-close-icon" aria-label="Close" onClick={onClose}>
           <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
             <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>

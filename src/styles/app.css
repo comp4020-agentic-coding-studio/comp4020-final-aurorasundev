@@ -590,8 +590,8 @@ fieldset:disabled .choice,
 }
 
 
-/* Center the wider reading surface over the unfolded sheet. Text appears
-   only after the WebGL unfold has finished. */
+/* Center the wider reading surface over the unfolded sheet. Reveal the
+   surface immediately when it replaces the WebGL mesh, without a gap. */
 .read-dialog.over-scene .read-body {
   margin-top: clamp(48px, 10dvh, 104px);
 }
@@ -599,6 +599,12 @@ fieldset:disabled .choice,
 .read-dialog.over-scene .read-sheet {
   height: 100%;
   padding: 6% 12% 8%;
+  transition: none;
+}
+
+/* Initial focus belongs to the dialog; Tab still outlines its controls. */
+.read-dialog:focus {
+  outline: none;
 }
 
 .read-sheet .sheet-close {
