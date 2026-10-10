@@ -33,8 +33,9 @@ mean something. What should the others holding it see?
 - If the destruction arrives before the words do, or a GET answers late, the
   paper is not revived: "This paper is no longer here."
 - The visitor who let it go is not a passive reader. Their page plays its own
-  ending (the sheet crumples, darkens and fades) from the HTTP reply.
-- Safety quarantine (planned, P5) gets no final reading: its text is cleared
+  ending after server confirmation. ADR 003 extends that presentation to
+  crumpling, furnace placement and fire without changing the final-reading rule.
+- Safety quarantine gets no final reading: its text is cleared
   from the screen at once.
 
 ## Consequences

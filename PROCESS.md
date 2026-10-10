@@ -279,6 +279,50 @@ Facts only, added as the work lands.
   fallback still receives a paper thrown elsewhere and opens it; with
   reduced motion a throw still lands and the count moves.
 
+## 2026-10-09 — furnace fidelity and audit corrections
+
+This is a local, uncommitted implementation pass requested after review of
+Claude's furnace work. The user supplied B01, 01-space and 02-write and asked
+for a better iron furnace and restored matte paper folds, together with the
+audit fixes. Existing staged safety work was preserved; no reflection was
+written, no production paper was changed, and no push or deploy was performed.
+
+- The furnace now has straight iron walls, a thick worn crown, pitted normal
+  relief, a lower ritual camera and visible layered ash. Desktop preparation
+  uses depth of field; mobile uses smaller side papers and a short-screen
+  composition. Edge wrinkles use one newly generated paper texture, with a
+  quieter reading centre. The original paper-crumple-demo animation remains.
+- The audit reproductions became regressions: an old HTTP result must match
+  its paper and operation; fallback timers belong to one ritual; eight-second
+  request timeouts cover stalled or damaged response bodies; effects failures switch to
+  drawn paper/furnace/ash; remote no-WebGL endings finish; shader edge ordering
+  is defined; report decisions are bounded even when more reports arrive
+  during a check, and multiple notes go to human review without being erased.
+- Submission disclosure and the report entry now follow the server's public
+  safety configuration. ADR 003 records placement and recovery; ADR 004 records
+  OpenAI checks, privacy, review limits, uncertain cases and the operator CLI.
+  These document local implementation, not proof of live moderation quality.
+- Validation: a fresh temporary database and freshly started service passed
+  type checking and all 99 tests in 12 files. Build passed. An earlier rerun
+  against an already-used service hit intentional rate limits and its cached
+  older README; restarting a clean test service resolved those environment
+  failures without weakening the limits or the README test.
+- Regular Playwright was used because the Browser plugin was not available.
+  Chromium reported the Apple M4 Pro Metal renderer, so this pass used the
+  Mac GPU rather than software rendering. Checked 1672×941, 1920×1080, 390×844
+  and 390×480. Normal screens had no console errors or warnings; deliberately
+  broken WebGL/textures produced expected errors and usable fallback endings.
+- The five earlier browser failures passed their reproductions. Pointer drag
+  into the real opening completed; outside drag and resizing before placement
+  left the paper intact. Other-session count delivery measured 124 ms locally,
+  with combustion at the original position and no observer furnace. Reduced
+  motion completed in about 1.9 s. Local ash persisted, with the return button
+  enabled after three seconds. Screenshots and temporary browser scripts remain
+  outside the repository.
+- Limits: no paid real-provider request, live credential verification, physical
+  phone or Safari test was performed. Docker's daemon was unavailable, so the
+  container build was not verified. CI/deployment remains a separate step.
+
 
 ## 2026-10-10 — visual and ritual release
 
@@ -316,3 +360,123 @@ not part of this release. Their original staged files are preserved.
   contexts, including the existing misspelled local configuration filename.
   No reflections, course tags, paid-provider requests or live paper content
   were changed by this release preparation.
+
+
+- Deployment verification: [checks and deploy run 37937921675](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/actions/runs/37937921675)
+  passed the Docker build, specs, evidence and secret scans, then deployed
+  commit d324ca2 as Fly release 29. Fly's machine image label matches that
+  commit. The original 15 staged moderation files retain their exact blob
+  contents on top of this release; they remain unpushed pending credentials.
+- Live browser verification then passed at 1672×941 and 420×685: HTTP 200,
+  the new CSS and paper texture matched the checked release, both completed
+  read/write sheets used a filled texture, and publication controls remained
+  enabled. Console errors/warnings were zero. Existing papers were only read;
+  no live paper was submitted, witnessed or destroyed during verification.
+  Read-only database verification reported schema 6, integrity ok and all four
+  original active papers unchanged.
+
+## 2026-10-10 — local moderation and operator verification
+
+The user asked to continue the retained moderation work and explicitly chose
+local development/testing because no OpenAI key is configured. This step is
+uncommitted, unpushed and undeployed; production remains the earlier visual
+release. The existing staged moderation files are preserved for review.
+
+- Added bounded publication/report requests and kept the original payload for
+  an unknown-outcome retry. A failed safety configuration fetch can be retried
+  from the open writing sheet without losing its draft.
+- Tightened report operation-key matching: an original empty note no longer
+  permits replacement context before the retention deadline. After expiry,
+  retries can still return the original receipt without retaining old notes.
+- Bounded internal worker failures at three attempts with identifier-only logs.
+  A queued operator decision takes precedence over a late automatic result.
+  Conflicting context arriving during a check follows the same human routing
+  as context present at its start.
+- Added thirteen regressions. A fresh schema-7 database and fixture server
+  passed type checking and all 112 tests in fourteen files. The client build
+  passed with the existing large Three.js bundle warning. An extra test run
+  mistakenly reused a rate-limited server and ran the whole suite because of
+  argument forwarding; restarting on a fresh database resolved the setup
+  failure, without relaxing the rate limits or changing HTTP assertions.
+- Browser plugin was unavailable, so regular Playwright checked Chromium
+  with the Mac GPU at 1672×941, 390×844 and 390×480. Correct page content,
+  primary controls, absence of framework overlays, console output,
+  interactions and rendered screenshots were checked. Normal report/draft
+  flows had zero errors and warnings; deliberate HTTP refusal and lost-reply
+  tests produced their expected network errors and no JavaScript exceptions.
+- Browser tests refused a draft without publishing, allowed revision, and
+  lost all three publication replies after the save reached the server. The
+  subsequent manual retry used the same key and left just one paper. A lost
+  report reply held its reason/note and the retry received the original
+  receipt. Desktop and short-phone report notes remained reachable by scroll,
+  buttons remained usable, cancellation worked and the sheet texture stayed
+  continuous. Screenshots waited for the sheet's reveal transition to finish.
+- Two readers lost quarantined words in 37 ms locally, without fire. A
+  separate no-key server blocked publication, retained an editable draft and
+  kept existing reading available. Its report entered human review; private
+  CLI list/inspect/resolve worked against synthetic data. Operator quarantine
+  cleared both readers and lowered the total once to zero.
+- Added docs/moderation-runbook.md for private key loading, future staged Fly
+  secret configuration and human review duties. The OpenAI adapter contract
+  was checked against official moderation and structured-output documentation.
+  Fixtures prove mechanics only: no real moderation quality, paid request,
+  live credential or deployment is claimed. Docker remains unavailable;
+  physical phone and Safari were not tested. Reflection files were untouched.
+
+## 2026-10-10 — local real-provider smoke check
+
+The owner configured OPENAI_API_KEY in ignored mise.local.toml after the
+local-only implementation. Mise loaded the key without displaying it. The
+file is excluded from Git and Docker, its permissions were restricted to
+the owner, and the client build contains no copy of the key.
+
+- Checked the OpenAI Docs moderation and structured-output contracts. The
+  pinned model's metadata query returned 403, but actual category and policy
+  requests succeeded; the key was not broadened merely to query metadata.
+- Five small real-service checks used only synthetic text in an isolated
+  local SQLite database. An ordinary emotional statement was allowed; safe
+  HTTP publication returned 201 and read back correctly. A synthetic scam
+  returned 422 without increasing the count. Report review used the real
+  OpenAI provider and quarantined a synthetic legacy scam.
+- The temporary smoke harness initially expected `total` in an SSE event
+  whose documented field is `active_total`. Database inspection confirmed
+  the first quarantine succeeded. The harness was corrected and only the
+  report case was repeated: both sessions received the correct event, the
+  total decreased once from two to one, words were cleared, and reopening
+  returned 404. Review plus event receipt took 2006 ms; this is external
+  review duration, not a measured post-commit SSE propagation time.
+- Updated the operations runbook to use mise for local startup and distinguish
+  local credentials from future Fly secret configuration. Existing staged
+  changes remain intact. No push, deployment, Fly secret change, production
+  paper modification or reflection editing occurred. This tiny smoke sample
+  establishes access and integration, not broad classifier accuracy.
+
+## 2026-10-10 — moderation release preparation
+
+The user explicitly requested commit and push. Since main automatically
+deploys, this also required configuring the real server secret for the release
+so the newly fail-closed publishing path would remain usable.
+
+- [351439c](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/351439c)
+  commits the retained Claude moderation implementation, its corrected review
+  races and retry boundaries, server-driven disclosure/report UI and thirteen
+  additional regressions. No local credential files or reflections are included.
+- Reran type checking and all 112 tests in fourteen files against a fresh
+  isolated fixture server, then the client build and process-evidence check.
+  All passed; the existing Three.js bundle-size warning remains. Docker's
+  local daemon is unavailable, so container validation belongs to the
+  mandatory GitHub check job before its dependent deployment.
+- Created /data/backup-pre-moderation-2026-10-10.sqlite and an owner-only local
+  copy. Integrity was ok, schema version six and four papers were ACTIVE.
+  Migrating a separate copy to schema seven preserved every existing column
+  and row in all eight original tables; integrity remained ok.
+- Staged only OPENAI_API_KEY and MODERATION_PROVIDER=openai in Fly secrets
+  using stdin. The old machine was not restarted at that stage. Scanned the
+  staged code for the actual configured credentials without displaying them;
+  none were present. Private configuration remained excluded.
+- The [checks and deploy workflow](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/actions/workflows/checks.yml)
+  records the container, secret-scan and Fly deployment result for this push.
+  A pushed revision alone is not deployment proof. Live verification must
+  check the machine image, safety configuration, readable existing content
+  and database preservation. General moderation accuracy remains limited
+  by the small synthetic smoke sample.
