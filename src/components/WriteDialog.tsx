@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { SAFETY_CHECKS } from "../lib/safety.ts";
-import { ApiError, countCodePoints, createPaper, MAX_CODE_POINTS, type Created, type PaperMode } from "../lib/api.ts";
+import { ApiError, countCodePoints, createPaper, MAX_CODE_POINTS, type Created, type PaperMode, type SafetyConfig } from "../lib/api.ts";
 
 type Props = {
+  safety: SafetyConfig | null;
+  safetyLoading?: boolean;
+  onRetrySafety?: () => void;
   onCancel: () => void;
   onThrown: (created: Created) => void;
   // keys being saved here, so the page knows its own paper's SSE echo
@@ -16,7 +18,7 @@ const formatCount = (n: number): string => n.toLocaleString("en-AU");
 // Server answers that mean nothing was saved, even though they are 5xx.
 const SETTLED = new Set(["moderation_unavailable"]);
 
-export function WriteDialog({ onCancel, onThrown, pendingOps, offline }: Props) {
+export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, safetyLoading = false, onRetrySafety }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [text, setText] = useState("");
   const [mode, setMode] = useState<PaperMode | null>(null);
@@ -39,7 +41,7 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline }: Props) 
   const blank = text.trim() === "";
   const tooLong = count > MAX_CODE_POINTS;
   const locked = saving || unsettled;
-  const ready = !blank && !tooLong && mode !== null && confirmed && !offline;
+  const ready = !blank && !tooLong && mode !== null && confirmed && !offline && !!safety?.provider;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -70,7 +72,7 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline }: Props) 
   }
 
   // Saving includes the automated safety check, which is most of the wait.
-  const savingLabel = SAFETY_CHECKS ? "Checking this paper…" : "Saving…";
+  const savingLabel = "Checking this paper…";
   const submitLabel = saving ? savingLabel : offline ? "Reconnecting…" : unsettled ? "Try again" : "Crumple & throw";
 
   return (
@@ -126,12 +128,17 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline }: Props) 
           </label>
         </fieldset>
 
-        {SAFETY_CHECKS && (
-          <p className="write-disclosure" id="write-disclosure">
-            Before it enters the space, your text is sent to OpenAI for automated safety checks. Do not include private
-            details. <a href="/readme/">How checks work</a>
-          </p>
-        )}
+        <p className="write-disclosure" id="write-disclosure" role={!safety?.provider ? "status" : undefined}>
+          {safety?.provider === "openai"
+            ? "Before it enters the space, your text is sent to OpenAI for automated safety checks. Do not include private details. "
+            : safety?.provider === "fixture"
+              ? "Automated safety checks run before this paper enters the space. "
+              : "Safety checks are unavailable. Your words stay here until checks can run. "}
+          <a href="/readme/">How checks work</a>
+          {!safety?.provider && onRetrySafety && <> {" "}<button type="button" className="text-button" onClick={onRetrySafety} disabled={safetyLoading}>
+            {safetyLoading ? "Connecting to checks…" : "Retry checks"}
+          </button></>}
+        </p>
 
         <label className="choice choice-check">
           <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} disabled={locked} />

@@ -9,8 +9,8 @@ import {
   type OpenedPaper,
   type PaperState,
   type ReportReason,
+  type SafetyConfig,
 } from "../lib/api.ts";
-import { SAFETY_CHECKS } from "../lib/safety.ts";
 import type { PaperStatus } from "../lib/space.ts";
 import type { SheetRect } from "./PaperField.tsx";
 
@@ -28,6 +28,7 @@ const REASONS: { value: ReportReason; label: string }[] = [
 const REPORTED = "Report received. It will be checked against the space's safety rules.";
 
 type Props = {
+  safety: SafetyConfig | null;
   id: string;
   // false while the paper is still unfolding: the words wait for a flat sheet
   revealed: boolean;
@@ -73,7 +74,7 @@ function sheetBox(rect: SheetRect): { left: number; top: number; width: number; 
 export const witnessLine = (n: number): string | null =>
   n === 0 ? null : `${n.toLocaleString("en-AU")} ${n === 1 ? "person has" : "people have"} witnessed this.`;
 
-export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnecting, onRelease, onReleasable, onEnded, onClose }: Props) {
+export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnecting, onRelease, onReleasable, onEnded, onClose, safety }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [load, setLoad] = useState<Load>({ kind: "loading" });
   const [view, setView] = useState<"read" | "report">("read");
@@ -83,6 +84,8 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
   // one key per report attempt, kept across retries so a lost reply can't
   // file it twice
   const reportKey = useRef<string | null>(null);
+  const reportDraft = useRef<{ reason: ReportReason; note: string; key: string } | null>(null);
+  const [unsettledReport, setUnsettledReport] = useState(false);
   const [acting, setActing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   // Once the paper has left the space, no late answer may bring it back.
@@ -156,7 +159,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
 
   function startReport() {
     reportKey.current ??= crypto.randomUUID();
-    setActionError(null);
+    if (!unsettledReport) setActionError(null);
     setView("report");
   }
 
@@ -168,12 +171,21 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
     setActing(true);
     setActionError(null);
     try {
-      await reportPaper(id, load.paper.read_receipt, reason, note, reportKey.current);
+      if (!unsettledReport) reportDraft.current = { reason, note, key: reportKey.current };
+      const draft = reportDraft.current!;
+      await reportPaper(id, load.paper.read_receipt, draft.reason, draft.note, draft.key);
+      setUnsettledReport(false);
       setReported(true);
       setView("read");
     } catch (err) {
       if (err instanceof ApiError && err.code === "paper_gone") onEnded("destroyed");
-      else setActionError(err instanceof ApiError ? err.message : "That didn't reach the space. Try again.");
+      else if (err instanceof ApiError && err.status < 500) {
+        setUnsettledReport(false);
+        setActionError(err.message);
+      } else {
+        setUnsettledReport(true);
+        setActionError("We couldn't confirm your report was received. Try again: it won't be sent twice.");
+      }
     } finally {
       setActing(false);
     }
@@ -217,7 +229,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
               <p className="read-report-lead">
                 Reporting starts an automated check. It does not give you permission to destroy this paper.
               </p>
-              <fieldset className="report-reasons" disabled={acting}>
+              <fieldset className="report-reasons" disabled={acting || unsettledReport}>
                 <legend>What concerns you?</legend>
                 {REASONS.map((r) => (
                   <label key={r.value} className="choice">
@@ -237,7 +249,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
                 className="report-note"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                readOnly={acting}
+                readOnly={acting || unsettledReport}
                 aria-describedby="report-note-hint report-note-count"
                 rows={3}
               />
@@ -262,7 +274,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
                   className="button button-primary"
                   disabled={!reason || noteCount > MAX_REPORT_NOTE || acting || reconnecting || !paper.read_receipt}
                 >
-                  {acting ? "Sending…" : "Send report"}
+                  {acting ? "Sending…" : unsettledReport ? "Try again" : "Send report"}
                 </button>
               </div>
             </div>
@@ -332,7 +344,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
             </div>
             <div className="read-meta">
               <p className="read-origin">{paper.viewer.is_author ? "You left this here." : "Someone left this here."}</p>
-              {SAFETY_CHECKS && !reported && (
+              {safety?.reports && !reported && (
                 <button type="button" className="text-button read-report-link" onClick={startReport} disabled={acting}>
                   Report this paper
                 </button>

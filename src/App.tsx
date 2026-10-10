@@ -13,7 +13,7 @@ import { ReturnKeyDialog } from "./components/ReturnKeyDialog.tsx";
 import { RitualOverlay, type RitualOutcome, type RitualStage } from "./components/RitualOverlay.tsx";
 import { SpaceFooter } from "./components/SpaceFooter.tsx";
 import { WriteDialog } from "./components/WriteDialog.tsx";
-import { ApiError, burnPaper, getPaper, samplePapers, type Created } from "./lib/api.ts";
+import { ApiError, burnPaper, getPaper, getSafetyConfig, samplePapers, type Created, type SafetyConfig } from "./lib/api.ts";
 import { useLiveSpace, type Ending } from "./lib/useLiveSpace.ts";
 
 type Mode =
@@ -79,16 +79,34 @@ export function App() {
   const ritualRef = useRef<Ritual | null>(null);
   const [ritualLayout, setRitualLayout] = useState<RitualLayout | null>(null);
   const sceneAvailable = useRef(true);
+  const [safety, setSafety] = useState<SafetyConfig | null>(null);
+  const [safetyLoading, setSafetyLoading] = useState(true);
   const fallbackTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mounted = useRef(true);
 
   useEffect(() => {
     mounted.current = true;
+    let live = true;
+    getSafetyConfig().then((config) => { if (live) setSafety(config); }).catch(() => {}).finally(() => { if (live) setSafetyLoading(false); });
     return () => {
+      live = false;
       mounted.current = false;
       clearTimeout(fallbackTimer.current);
     };
   }, []);
+
+  async function retrySafety() {
+    if (safetyLoading) return;
+    setSafetyLoading(true);
+    try {
+      const config = await getSafetyConfig();
+      if (mounted.current) setSafety(config);
+    } catch {
+      // The draft stays here; a later retry can recover the configuration.
+    } finally {
+      if (mounted.current) setSafetyLoading(false);
+    }
+  }
 
   // The paper being read, or held over the furnace: never evicted, always
   // reconciled.
@@ -560,11 +578,12 @@ export function App() {
         />
       )}
       {mode.kind === "writing" && (
-        <WriteDialog onCancel={cancelWriting} onThrown={thrown} pendingOps={pendingOps} offline={reconnecting} />
+        <WriteDialog onCancel={cancelWriting} onThrown={thrown} pendingOps={pendingOps} offline={reconnecting} safety={safety} safetyLoading={safetyLoading} onRetrySafety={retrySafety} />
       )}
       {mode.kind === "key" && <ReturnKeyDialog variant={mode.variant} onClose={closeKey} onRestored={restored} />}
       {mode.kind === "reading" && (
         <ReadDialog
+          safety={safety}
           id={mode.id}
           revealed={mode.revealed}
           rect={mode.rect}

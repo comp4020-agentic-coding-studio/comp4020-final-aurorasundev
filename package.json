@@ -11,6 +11,9 @@
     "typecheck": "tsc --noEmit",
     "check": "pnpm typecheck && pnpm test",
     "check:evidence": "node scripts/check-evidence.ts",
+    "moderation:list": "node scripts/moderation.ts list",
+    "moderation:inspect": "node scripts/moderation.ts inspect",
+    "moderation:resolve": "node scripts/moderation.ts resolve",
     "test": "vitest run"
   },
   "devDependencies": {

@@ -26,6 +26,9 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs?: number):
   }
 }
 
+export type SafetyConfig = { provider: "openai" | "fixture" | null; reports: boolean };
+export const getSafetyConfig = (): Promise<SafetyConfig> => request("/api/safety", undefined, 8000);
+
 export const countCodePoints = (text: string): number => Array.from(text).length;
 
 export const ensureSession = (): Promise<{ ok: true }> => request("/api/session", { method: "POST" });
@@ -79,7 +82,7 @@ export type Created = {
 
 export async function createPaper(content: string, mode: PaperMode, submissionKey: string): Promise<Created> {
   const send = (): Promise<Created> =>
-    request("/api/papers", postJson({ content, mode, confirmed: true, submission_key: submissionKey }));
+    request("/api/papers", postJson({ content, mode, confirmed: true, submission_key: submissionKey }), 15000);
   for (let attempt = 0; ; attempt++) {
     try {
       return await send();
@@ -131,6 +134,7 @@ export const reportPaper = (
   request(
     paperPath(id, "/report"),
     postJson({ read_receipt: receipt, reason, ...(note.trim() ? { note } : {}), operation_key: operationKey }),
+    8000,
   );
 
 export const restoreIdentity = (key: string): Promise<{ ok: true }> =>

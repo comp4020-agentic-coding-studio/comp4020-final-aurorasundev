@@ -5,8 +5,11 @@ import { gzipSync } from "node:zlib";
 import { openDb } from "./db.ts";
 import { closeAllStreams, eventsRouter } from "./events.ts";
 import { identityRouter } from "./identity.ts";
+import { check, providerFromEnv } from "./moderation.ts";
 import { papersRouter } from "./papers.ts";
 import { renderReadmePage } from "./readme.ts";
+import { reportsRouter } from "./reports.ts";
+import { createReviewWorker } from "./reviews.ts";
 import { ensureSession } from "./session.ts";
 
 const root = resolve(import.meta.dirname, "..");
@@ -14,6 +17,11 @@ const port = Number(process.env.PORT ?? 8080);
 const dbPath = process.env.DATABASE_PATH ?? "/data/throwaway.sqlite";
 
 const db = openDb(dbPath);
+// Refuses to start with the test double on Fly; without a key, publication
+// fails closed ("could not be checked") rather than passing anything.
+const provider = providerFromEnv();
+// The test double answers instantly, so its retries needn't wait minutes.
+const worker = createReviewWorker(db, provider, provider?.name === "fixture" ? { retryDelaysMs: [50, 100, 200] } : {});
 const readmeHtml = renderReadmePage(resolve(root, "README.md"));
 const dist = resolve(root, "dist");
 
@@ -26,7 +34,11 @@ app.post("/api/session", (req, res) => {
   ensureSession(db, req, res);
   res.json({ ok: true });
 });
-app.use("/api", papersRouter(db));
+app.get("/api/safety", (_req, res) => {
+  res.set("Cache-Control", "no-store").json({ provider: provider?.name ?? null, reports: true });
+});
+app.use("/api", papersRouter(db, (payload) => check(provider, payload)));
+app.use("/api", reportsRouter(db, () => void worker.wake()));
 app.use("/api", eventsRouter(db));
 app.use("/api", identityRouter(db));
 app.use("/api", (_req, res) => {
@@ -91,14 +103,18 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 
 const server = app.listen(port, "0.0.0.0", () => {
   console.log(`throwaway listening on 0.0.0.0:${port}, db ${dbPath}`);
+  // picks up reviews and operator decisions left from before a restart
+  void worker.wake();
 });
 
 // Open event streams would otherwise hold server.close() open forever.
 const shutdown = (): void => {
   closeAllStreams();
   server.close(() => {
-    db.close();
-    process.exit(0);
+    void worker.stop().finally(() => {
+      db.close();
+      process.exit(0);
+    });
   });
 };
 process.on("SIGTERM", shutdown);

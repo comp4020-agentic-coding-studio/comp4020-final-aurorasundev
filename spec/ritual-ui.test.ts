@@ -9,6 +9,7 @@ import type { RitualEvent } from "../src/components/PaperField.tsx";
 
 const control = vi.hoisted(() => ({
   burn: vi.fn(),
+  safety: vi.fn(),
   dispatch: vi.fn(),
   cancel: vi.fn(),
   end: vi.fn(),
@@ -19,6 +20,7 @@ const control = vi.hoisted(() => ({
 
 vi.mock("../src/lib/api.ts", async (original) => ({
   ...await original<typeof import("../src/lib/api.ts")>(),
+  getSafetyConfig: control.safety,
   getPaper: async (id: string) => ({
     id, mode: "keep", version: 1, witness_count: 0, content: "Words belonging to " + id,
     read_receipt: "receipt-" + id, viewer: { is_author: true, has_witnessed: false, can_burn: true },
@@ -78,6 +80,7 @@ beforeEach(async () => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   control.prepare = false;
+  control.safety.mockResolvedValue({ provider: "fixture", reports: true });
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   window.matchMedia = vi.fn().mockImplementation((media: string) => ({ matches: false, media, addEventListener() {}, removeEventListener() {} }));
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
@@ -154,4 +157,22 @@ it("holds the ash for three seconds before enabling the return button", async ()
   expect(host.querySelector<HTMLButtonElement>(".ritual-back")!.disabled).toBe(true);
   await act(async () => vi.advanceTimersByTimeAsync(3000));
   expect(host.querySelector<HTMLButtonElement>(".ritual-back")!.disabled).toBe(false);
+});
+
+it("recovers a failed safety configuration request without losing the open draft", async () => {
+  control.safety.mockRejectedValueOnce(new TypeError("configuration reply lost"))
+    .mockResolvedValue({ provider: "fixture", reports: true });
+  // Remount so the first request of this scenario fails.
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await act(async () => root.render(createElement(App)));
+  await click("Leave something here");
+  await act(async () => {
+    const input = host.querySelector("textarea")!;
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(input, "A retained draft.");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await click("Retry checks");
+  expect(host.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe("A retained draft.");
+  expect(host.textContent).not.toContain("Safety checks are unavailable.");
 });

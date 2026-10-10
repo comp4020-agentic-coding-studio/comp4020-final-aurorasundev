@@ -116,6 +116,63 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   // anything. Keys issued before this have none and can't be confirmed;
   // their owner is offered a fresh one. Saved keys are untouched.
   (db) => db.exec("ALTER TABLE return_keys ADD COLUMN issuance_id TEXT"),
+
+  // 7: reports and their review. Reports are private; a review is one job per
+  // paper and content digest, so a burst of reports costs one recheck. No copy
+  // of a paper's text is kept here: the worker reads it from the paper while
+  // it is still ACTIVE. Notes are purged after 30 days. maintenance_jobs hands
+  // an operator's decision from the private CLI to the running server, whose
+  // worker applies it so live sessions hear about it. A quarantined paper keeps
+  // only its id, times and a policy reason code.
+  (db) =>
+    db.exec(`
+      ALTER TABLE papers ADD COLUMN end_reason TEXT;
+      CREATE TABLE report_reviews (
+        id TEXT PRIMARY KEY,
+        paper_id TEXT NOT NULL REFERENCES papers(id),
+        content_digest TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (state IN
+          ('queued', 'running', 'retry_wait', 'human_review', 'dismissed', 'quarantined', 'obsolete')),
+        attempts INTEGER NOT NULL DEFAULT 0,
+        runs INTEGER NOT NULL DEFAULT 0,
+        next_attempt_at TEXT NOT NULL,
+        lease_until TEXT,
+        provider TEXT,
+        model TEXT,
+        policy_version TEXT,
+        outcome_reason TEXT,
+        error_code TEXT,
+        created_at TEXT NOT NULL,
+        reviewed_at TEXT,
+        UNIQUE (paper_id, content_digest)
+      );
+      CREATE INDEX report_reviews_due ON report_reviews (state, next_attempt_at);
+      CREATE TABLE reports (
+        id TEXT PRIMARY KEY,
+        paper_id TEXT NOT NULL REFERENCES papers(id),
+        review_id TEXT NOT NULL REFERENCES report_reviews(id),
+        reporter_identity_id TEXT NOT NULL REFERENCES identities(id),
+        reason TEXT NOT NULL CHECK (reason IN ('threats_abuse', 'private_information', 'sexual_graphic',
+          'harmful_instructions', 'spam_scam', 'something_else')),
+        note TEXT,
+        op_key TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        note_expires_at TEXT NOT NULL,
+        UNIQUE (reporter_identity_id, paper_id),
+        UNIQUE (reporter_identity_id, op_key)
+      );
+      CREATE INDEX reports_reporter_time ON reports (reporter_identity_id, created_at);
+      CREATE TABLE maintenance_jobs (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL CHECK (kind IN ('dismiss', 'quarantine')),
+        report_id TEXT NOT NULL REFERENCES reports(id),
+        reason TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('pending', 'done', 'skipped')),
+        outcome TEXT,
+        created_at TEXT NOT NULL,
+        done_at TEXT
+      );
+    `),
 ];
 
 export const serverSecret = (db: DB, name: string): Buffer =>
