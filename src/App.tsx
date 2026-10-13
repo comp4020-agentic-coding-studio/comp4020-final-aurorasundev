@@ -541,7 +541,7 @@ export function App() {
 
   return (
     <div className={`app${mode.kind === "writing" ? " is-writing" : ""}${mode.kind === "ritual" ? " is-ritual" : ""}`}>
-      <Header onReturnKey={openReturnKey} busy={mode.kind === "ritual"} />
+      <Header onReturnKey={openReturnKey} total={ready ? space.total : null} busy={mode.kind === "ritual"} />
       {ready && (
         <PaperField
           ref={field}
@@ -569,10 +569,10 @@ export function App() {
       )}
       {ready && (
         <SpaceFooter
-          total={space.total}
           onWrite={startWriting}
           onExplore={() => explore("right")}
           exploring={exploring}
+          canExplore={space.total > space.ids.length}
           busy={busy}
           reconnecting={reconnecting}
         />
