@@ -13,15 +13,15 @@ type Props = {
 export function SpaceFooter({ onWrite, onExplore, exploring, canExplore, busy, reconnecting }: Props) {
   return (
     <footer className={`space-footer${busy ? " is-busy" : ""}`}>
+      {/* Hidden rather than unmounted, so focus can come back to it. */}
+      <button type="button" className="button button-primary space-write" onClick={onWrite} hidden={busy}>
+        Leave something here
+      </button>
       {(!busy || reconnecting) && (
         <p className="space-hint" role="status">
           {reconnecting ? "Reconnecting…" : "Open a paper. Leave something if you want to."}
         </p>
       )}
-      {/* Hidden rather than unmounted, so focus can come back to it. */}
-      <button type="button" className="button button-primary space-write" onClick={onWrite} hidden={busy}>
-        Leave something here
-      </button>
       {!busy && canExplore && (
         <button type="button" className="text-button space-explore" onClick={onExplore} disabled={exploring}>
           Explore the space
