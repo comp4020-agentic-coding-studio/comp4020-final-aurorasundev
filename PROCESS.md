@@ -553,3 +553,47 @@ during opening, and a persistent initial circle around its close icon.
   moderation configuration, credentials, paper material or reflection changed.
   Live deployment verification must compare the workflow and served assets;
   local browser evidence alone is not a claim about production.
+
+## 2026-10-13 — fluid writing sheet, room contrast and deeper shadows
+
+The owner requested a writing sheet that scales continuously from a standard
+desktop window to a phone, darker paper shadows and a more refined room
+palette that remains connected to the paper ritual.
+
+- [47e36d4](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/47e36d4)
+  replaces fixed writing-sheet spacing and the abrupt 600 px layout switch
+  with fluid width, vertical clearance, type sizes, spacing and textarea
+  height. Textarea text never falls below 16 px and buttons remain at least
+  44 px tall. Very short viewports retain scroll access rather than unreadable
+  miniature controls. No form state, consent or publishing rule changed.
+- The room now frames warm ivory paper with cool mineral plaster and a
+  lighter stone floor; the Readme uses the same background family. A
+  floor-only shadow multiplier deepens contact/cast shadows while retaining
+  their soft edges. Paper material, model, lights and fire behavior are
+  unchanged. No image assets or dependencies were added.
+- Browser-plugin tools were unavailable, so Playwright/Chrome captured the
+  existing layout and actual revised views. Measured eleven sizes from
+  1920 x 1080 through laptops/tablets to 390 x 844 and 390 x 480. All ordinary
+  sizes showed zero default dialog overflow and visible action buttons,
+  including 1366 x 768 and 1280 x 720. At 601/600 px width the sheet geometry
+  remained continuous. The 390 x 480 case retained reachable scroll controls.
+- The browser used the longer production OpenAI disclosure for layout checks
+  by overriding only its local safety response; the local server still used
+  fixture moderation and no real provider call was made. A 2000-character
+  draft and mode selection survived resizing. Unchecked confirmation sent no
+  publication request, checking cleared the prompt, and local publication
+  increased the authoritative total once. The existing first-publication
+  return-key offer was handled before continuing to the space.
+- Reading retained its initial plain close icon. Local furnace preparation,
+  confirmed burning, ashes and returning to the space completed without
+  console errors or warnings. Save/destruction checks use the authoritative
+  total, rather than assuming the bounded rendered paper window has the
+  same size after each resize. The visual proof is local fixture evidence;
+  Safari and physical touch were not tested.
+- Final production build, type checking, all 115 tests in fifteen files and
+  the process-evidence check passed against a fresh isolated database. The
+  existing deferred Three.js chunk-size warning remains. The owner-written
+  untracked reflections/crit-9.md was preserved and excluded from this release.
+- The release follows the existing main-to-Fly deployment workflow. No
+  database schema, secrets or moderation configuration changes are needed.
+  Verify the workflow and served assets before claiming the live version.
