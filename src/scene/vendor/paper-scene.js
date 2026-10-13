@@ -48,7 +48,7 @@ const BOUNDS_PULL = 3.0;
 // Share of its speed a paper keeps off the edge of the stage. The demo's
 // 0.42 suits its wide stage; ours is about a third the size, so a throw met
 // the edge almost at once and died there.
-const WALL_BOUNCE = 0.7;
+const WALL_BOUNCE = 0.55;
 const ANIM_SPEED = 1.5;
 // Fully flat when open, so the HTML words sit on a flat sheet.
 const OPEN_FRAME = 0;
