@@ -21,10 +21,10 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { createPaper, updatePaperFrame } from "./paper.js";
 import { loadVATData } from "./paper-vat.js";
 
-const BACKGROUND = "#d0c3b6";
-// A warm plaster wall and lighter floor keep the demo's room depth.
-const WALL_COLOR = "#d1d0cd";
-const FLOOR_COLOR = "#cfc6bd";
+const BACKGROUND = "#c6cdcc";
+// Cool mineral plaster and a lighter stone floor frame the warm ivory paper.
+const WALL_COLOR = "#adb7b9";
+const FLOOR_COLOR = "#c4c9c7";
 const PAPER_COLOR = "#f2ece1";
 
 const FLOOR_VISUAL_Y = -0.1;
@@ -221,6 +221,13 @@ export function createPaperScene(container, buttonLayer, options) {
     metalness: 0,
     envMapIntensity: 0.3,
   });
+  // Deepen only the cast shadow on the ground, preserving the paper lighting.
+  floorMat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <shadowmap_pars_fragment>", "#include <shadowmap_pars_fragment>\n#include <shadowmask_pars_fragment>")
+      .replace("#include <opaque_fragment>", "outgoingLight *= mix(0.78, 1.0, getShadowMask());\n#include <opaque_fragment>");
+  };
+  floorMat.customProgramCacheKey = () => "throwaway-ground-shadow-v1";
   const floor = new THREE.Mesh(floorGeometry, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, FLOOR_VISUAL_Y, 1);

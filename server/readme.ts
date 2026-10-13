@@ -31,7 +31,7 @@ export function renderReadmePage(readmePath: string): string {
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <style>
       :root {
-        --bg: #e7e4de;
+        --bg: #c6cdcc;
         --ink: #292927;
         --muted: #5c5a55;
         --serif: Georgia, "Times New Roman", "Songti SC", serif;
