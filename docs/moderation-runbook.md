@@ -20,7 +20,7 @@ This small sample verifies integration, not general moderation accuracy.
 
 The server calls OpenAI directly: `omni-moderation-latest`, then
 `gpt-4.1-mini-2025-04-14` with strict structured output and
-`throwaway-safety-v1`. It sends text and relevant report context only. The
+`throwaway-safety-v2` (v1 before drawings). It sends the paper text, its drawing if any, and relevant report context only. The
 category request has four seconds, the context request six, and the complete
 check ten. A clear allow is required before a new paper is saved. Uncertain
 new submissions stay editable for revision; they do not create a queue of

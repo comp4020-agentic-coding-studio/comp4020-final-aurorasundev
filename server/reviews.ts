@@ -121,7 +121,7 @@ export function createReviewWorker(db: DB, provider: Provider | null, options: W
       set(job.id, { state: "human_review", lease_until: null, outcome_reason: "review_limit", reviewed_at: iso(now()) });
       return;
     }
-    const paper = db.prepare("SELECT content FROM papers WHERE id = ?").get(job.paper_id) as { content: string };
+    const paper = db.prepare("SELECT content, drawing FROM papers WHERE id = ?").get(job.paper_id) as { content: string; drawing: string | null };
     const reports = db.prepare("SELECT reason, note FROM reports WHERE review_id = ? ORDER BY created_at").all(job.id) as ReportRow[];
     const reasons = [...new Set(reports.map((r) => r.reason))];
     const notes = reports.map((r) => r.note).filter((n): n is string => !!n);
@@ -135,6 +135,7 @@ export function createReviewWorker(db: DB, provider: Provider | null, options: W
     }
     const payload: Payload = {
       paper_text: paper.content,
+      paper_image: paper.drawing,
       report_reason: reasons.join(","),
       report_note: notes.length === 1 ? notes[0] : null,
     };

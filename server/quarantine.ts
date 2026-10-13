@@ -13,7 +13,7 @@ export function quarantinePaper(db: DB, paperId: string, reason: string, source:
   const result = db.transaction((): Quarantined => {
     const row = db
       .prepare(
-        `UPDATE papers SET status = 'QUARANTINED', content = '', version = version + 1, ended_at = ?, end_reason = ?
+        `UPDATE papers SET status = 'QUARANTINED', content = '', drawing = NULL, version = version + 1, ended_at = ?, end_reason = ?
          WHERE id = ? AND status = 'ACTIVE' RETURNING version`,
       )
       .get(new Date().toISOString(), reason, paperId) as { version: number } | undefined;

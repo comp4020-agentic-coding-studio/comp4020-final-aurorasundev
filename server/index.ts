@@ -28,7 +28,7 @@ const dist = resolve(root, "dist");
 const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", true);
-app.use(express.json({ limit: "64kb" }));
+app.use(express.json({ limit: "512kb" }));
 
 app.post("/api/session", (req, res) => {
   ensureSession(db, req, res);

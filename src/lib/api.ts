@@ -40,7 +40,7 @@ export type Viewer = { is_author: boolean; has_witnessed: boolean; can_burn: boo
 // A paper's public facts plus this viewer's own state; the server never says
 // who the author is, only whether it is you.
 export type PaperState = { id: string; mode: "keep" | "release"; version: number; witness_count: number; viewer: Viewer };
-export type OpenedPaper = PaperState & { content: string; read_receipt: string | null };
+export type OpenedPaper = PaperState & { content: string; drawing: string | null; read_receipt: string | null };
 
 const paperPath = (id: string, action = ""): string => `/api/papers/${encodeURIComponent(id)}${action}`;
 const postJson = (body: unknown): RequestInit => ({
@@ -80,9 +80,13 @@ export type Created = {
   offer_return_key: boolean;
 };
 
-export async function createPaper(content: string, mode: PaperMode, submissionKey: string): Promise<Created> {
+// The sheet size the server accepts a drawing at (see server/papers.ts).
+export const DRAWING_WIDTH = 1200;
+export const DRAWING_HEIGHT = 500;
+
+export async function createPaper(content: string, drawing: string | null, mode: PaperMode, submissionKey: string): Promise<Created> {
   const send = (): Promise<Created> =>
-    request("/api/papers", postJson({ content, mode, confirmed: true, submission_key: submissionKey }), 15000);
+    request("/api/papers", postJson({ content, drawing, mode, confirmed: true, submission_key: submissionKey }), 15000);
   for (let attempt = 0; ; attempt++) {
     try {
       return await send();

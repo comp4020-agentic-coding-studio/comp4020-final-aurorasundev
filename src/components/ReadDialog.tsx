@@ -93,7 +93,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
   endedRef.current = ended;
 
   // Never let an older answer overwrite a newer one, whichever arrives last.
-  const merge = useCallback((state: PaperState, content?: { content: string; read_receipt: string | null }) => {
+  const merge = useCallback((state: PaperState, content?: { content: string; drawing: string | null; read_receipt: string | null }) => {
     if (endedRef.current) return;
     setLoad((current) => {
       if (current.kind !== "ready") return content ? { kind: "ready", paper: { ...state, ...content } } : current;
@@ -105,7 +105,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
   const fetchPaper = useCallback(() => {
     let live = true;
     getPaper(id)
-      .then((paper) => live && merge(paper, { content: paper.content, read_receipt: paper.read_receipt }))
+      .then((paper) => live && merge(paper, { content: paper.content, drawing: paper.drawing, read_receipt: paper.read_receipt }))
       .catch((err: Error) => {
         if (!live || endedRef.current) return;
         if (err instanceof ApiError && err.status === 404) setLoad((c) => (c.kind === "ready" ? c : { kind: "missing" }));
@@ -294,7 +294,8 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
               </button>
             </div>
           )}
-          {paper && <p className="read-text">{paper.content}</p>}
+          {paper?.drawing && <img className="read-drawing" src={paper.drawing} alt="A drawing someone left" />}
+          {paper && paper.content.trim() !== "" && <p className="read-text">{paper.content}</p>}
         </div>
         )}
 

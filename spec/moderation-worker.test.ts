@@ -65,6 +65,18 @@ describe("the OpenAI adapter", () => {
     expect(input[0].content).not.toContain("a note");
   });
 
+  it("sends a drawing as an image to both checks, never inside the text", async () => {
+    const api = fakeOpenAi({});
+    const image = "data:image/png;base64,iVBORw0KGgo=";
+    await check(openAiProvider("k", api.impl), { paper_text: "words", paper_image: image, report_reason: null, report_note: null });
+    const [moderation, policy] = api.requests;
+    expect(moderation.body.input).toEqual([{ type: "text", text: "words" }, { type: "image_url", image_url: { url: image } }]);
+    const user = (policy.body.input as { content: unknown }[])[1].content as Record<string, unknown>[];
+    expect(user[1]).toEqual({ type: "input_image", image_url: image, detail: "low" });
+    expect(String(user[0].text)).not.toContain(image);
+    expect(JSON.parse(String(user[0].text))).toMatchObject({ paper_text: "words", paper_drawing: "attached image" });
+  });
+
   it("rejects on a hard-gate category without the paid second call", async () => {
     const api = fakeOpenAi({ moderation: () => json({ results: [{ flagged: true, categories: { ...NO_FLAGS, "sexual/minors": true } }] }) });
     expect(await check(openAiProvider("k", api.impl), payload)).toEqual({ kind: "reject", reason: "sexual_minors", stage: "gate" });
@@ -223,7 +235,7 @@ describe("the review worker", () => {
     const r = reportOn(id);
     const original = db.prepare.bind(db);
     const spy = vi.spyOn(db, "prepare").mockImplementation((sql: string) => {
-      if (sql === "SELECT content FROM papers WHERE id = ?") throw new Error("PRIVATE PAPER TEXT");
+      if (sql === "SELECT content, drawing FROM papers WHERE id = ?") throw new Error("PRIVATE PAPER TEXT");
       return original(sql);
     });
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});

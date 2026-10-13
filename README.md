@@ -53,7 +53,7 @@ numbers alone are not proof. A lost report reply can be retried with its
 original reason and note. Removed text disappears from open readings
 immediately and gets no fire or final reading.
 
-Only paper text, report reasons and relevant notes are sent to OpenAI;
+Only paper text and drawings, report reasons and relevant notes are sent to OpenAI;
 cookies, return keys and visitor identities are not. We request that policy
 responses are not stored, without making a promise about provider retention.
 Our report notes expire after 30 days. Drafts are not sent before submission.

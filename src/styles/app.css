@@ -405,6 +405,88 @@ textarea {
   line-height: 1.2;
 }
 
+/* Type or draw: two quiet toggles over the field; both stay on the paper. */
+.write-input-switch {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.write-input-switch button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font-size: clamp(14px, 1.2vw, 16px);
+  cursor: pointer;
+}
+
+.write-input-switch button[aria-pressed="true"] {
+  border-color: var(--line);
+  background: rgb(250 248 244 / 0.78);
+  color: var(--ink);
+}
+
+.write-field[hidden] {
+  display: none;
+}
+
+/* The canvas keeps the sheet's 12:5 shape across the field, short enough
+   that the rest of the paper still fits. Multiply lets its paper-coloured
+   ground sink into the sheet, so only the ink reads. */
+.drawing-pad {
+  padding: 10px 10px 0;
+}
+
+.drawing-canvas {
+  display: block;
+  width: min(100%, calc(clamp(120px, 30dvh, 300px) * 2.4));
+  aspect-ratio: 12 / 5;
+  mix-blend-mode: multiply;
+  margin: 0 auto;
+  border-radius: 4px;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.drawing-canvas.is-erasing {
+  cursor: cell;
+}
+
+.drawing-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0 8px;
+}
+
+.drawing-tools-gap {
+  flex: 1;
+}
+
+.drawing-tool {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.drawing-tool[aria-pressed="true"] {
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.drawing-tool:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* The frame is on the field, not the textarea, so the count sits on its own
    line under the text instead of over text that has scrolled beneath it. */
 .write-field {
@@ -670,6 +752,14 @@ fieldset:disabled .choice,
 .read-body:focus-visible {
   outline: 1px solid rgb(92 90 85 / 0.25);
   outline-offset: 6px;
+}
+
+.read-drawing {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 0 16px;
+  mix-blend-mode: multiply;
 }
 
 .read-text {

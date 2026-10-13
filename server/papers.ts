@@ -9,6 +9,12 @@ import { checkReceipt, issueReceipt } from "./receipt.ts";
 import { identityFor } from "./session.ts";
 
 export const MAX_CODE_POINTS = 2000;
+// Drawings arrive as a PNG of exactly this size, so every client draws on the
+// same sheet and the server can check what it was sent without decoding it.
+export const DRAWING_WIDTH = 1200;
+export const DRAWING_HEIGHT = 500;
+const MAX_DRAWING_BYTES = 300_000;
+const PNG_PREFIX = "data:image/png;base64,";
 export const WINDOW_SIZE = 12;
 const MAX_SAMPLE = 24;
 const MAX_EXCLUDE = 32;
@@ -31,11 +37,36 @@ const fail = (status: number, code: string, error: string): Failure => ({ ok: fa
 
 export type Created = { id: string; version: number; status: string; revision: number; total: number; fresh: boolean };
 
-type Submission = { content: string; submissionKey: string; mode: Mode; digest: string };
+type Submission = { content: string; drawing: string | null; submissionKey: string; mode: Mode; digest: string };
 
-export function validateSubmission(content: unknown, submissionKey: unknown, modeInput: unknown): Result<Submission> {
-  if (typeof content !== "string" || content.trim() === "") {
-    return fail(400, "invalid_input", "Write something before throwing it.");
+// A PNG of the agreed size and no larger than the cap: the signature and the
+// IHDR header are checked, the pixels are not (the safety check sees them).
+function validDrawing(raw: string): boolean {
+  if (!raw.startsWith(PNG_PREFIX)) return false;
+  const base64 = raw.slice(PNG_PREFIX.length);
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64) || base64.length > Math.ceil(MAX_DRAWING_BYTES / 3) * 4) return false;
+  const bytes = Buffer.from(base64, "base64");
+  return (
+    bytes.length >= 33 &&
+    bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) &&
+    bytes.toString("latin1", 12, 16) === "IHDR" &&
+    bytes.readUInt32BE(16) === DRAWING_WIDTH &&
+    bytes.readUInt32BE(20) === DRAWING_HEIGHT
+  );
+}
+
+export function validateSubmission(
+  content: unknown,
+  submissionKey: unknown,
+  modeInput: unknown,
+  drawingInput: unknown = null,
+): Result<Submission> {
+  if (drawingInput !== null && drawingInput !== undefined && (typeof drawingInput !== "string" || !validDrawing(drawingInput))) {
+    return fail(400, "invalid_input", "That drawing couldn't be read. Try drawing it again.");
+  }
+  const drawing = typeof drawingInput === "string" ? drawingInput : null;
+  if (typeof content !== "string" || (content.trim() === "" && !drawing)) {
+    return fail(400, "invalid_input", "Write or draw something before throwing it.");
   }
   if (Array.from(content).length > MAX_CODE_POINTS) {
     return fail(400, "invalid_input", `Keep it under ${MAX_CODE_POINTS} characters.`);
@@ -46,7 +77,10 @@ export function validateSubmission(content: unknown, submissionKey: unknown, mod
   if (modeInput !== "KEEP" && modeInput !== "RELEASE") {
     return fail(400, "invalid_input", "Choose how to leave it.");
   }
-  return { ok: true, value: { content, submissionKey, mode: modeInput, digest: requestDigest(content, modeInput) } };
+  return {
+    ok: true,
+    value: { content, drawing, submissionKey, mode: modeInput, digest: requestDigest(content, modeInput, drawing) },
+  };
 }
 
 // A submission this identity already made under this key, if any. Compared by
@@ -58,7 +92,7 @@ function priorSubmission(db: DB, ownerId: string, submission: Submission): Resul
     .get(ownerId, submission.submissionKey) as { id: string; version: number; status: string; request_digest: string } | undefined;
   if (!prior) return null;
   if (prior.request_digest !== submission.digest) {
-    return fail(409, "submission_conflict", "This submission was already saved with different words or a different choice.");
+    return fail(409, "submission_conflict", "This submission was already saved with different words, drawing or choice.");
   }
   const { request_digest: _, ...paper } = prior;
   return { ok: true, value: { ...paper, revision: currentRevision(db), total: activeTotal(db), fresh: false } };
@@ -72,8 +106,9 @@ export function createPaper(
   content: unknown,
   submissionKey: unknown,
   modeInput: unknown,
+  drawing: unknown = null,
 ): Result<Created> {
-  const valid = validateSubmission(content, submissionKey, modeInput);
+  const valid = validateSubmission(content, submissionKey, modeInput, drawing);
   if (!valid.ok) return valid;
   const { mode, digest } = valid.value;
 
@@ -82,9 +117,9 @@ export function createPaper(
     if (prior) return prior;
     const id = randomUUID();
     db.prepare(
-      `INSERT INTO papers (id, owner_identity_id, content, created_at, submission_key, mode, request_digest)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run(id, ownerId, valid.value.content, new Date().toISOString(), valid.value.submissionKey, mode, digest);
+      `INSERT INTO papers (id, owner_identity_id, content, drawing, created_at, submission_key, mode, request_digest)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(id, ownerId, valid.value.content, valid.value.drawing, new Date().toISOString(), valid.value.submissionKey, mode, digest);
     const revision = bumpRevision(db);
     return { ok: true, value: { id, version: 1, status: "ACTIVE", revision, total: activeTotal(db), fresh: true } };
   })();
@@ -92,10 +127,18 @@ export function createPaper(
 
 export const countPapers = activeTotal;
 
-type PaperRow = { id: string; owner_identity_id: string; content: string; mode: Mode; status: string; version: number };
+type PaperRow = {
+  id: string;
+  owner_identity_id: string;
+  content: string;
+  drawing: string | null;
+  mode: Mode;
+  status: string;
+  version: number;
+};
 
 const paperRow = (db: DB, id: string): PaperRow | undefined =>
-  db.prepare("SELECT id, owner_identity_id, content, mode, status, version FROM papers WHERE id = ?").get(id) as
+  db.prepare("SELECT id, owner_identity_id, content, drawing, mode, status, version FROM papers WHERE id = ?").get(id) as
     | PaperRow
     | undefined;
 
@@ -193,7 +236,7 @@ export function burnPaper(db: DB, paperId: string, identityId: string, opKey: st
 
     const changed = db
       .prepare(
-        `UPDATE papers SET status = 'DESTROYED', content = '', version = version + 1, ended_at = ?
+        `UPDATE papers SET status = 'DESTROYED', content = '', drawing = NULL, version = version + 1, ended_at = ?
          WHERE id = ? AND status = 'ACTIVE'`,
       )
       .run(new Date().toISOString(), paperId).changes;
@@ -262,6 +305,7 @@ export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise
     res.json({
       ...publicPaper(db, paper, identityId),
       content: paper.content,
+      drawing: paper.drawing,
       read_receipt: identityId ? issueReceipt(serverSecret(db, "read_receipt"), paper.id, identityId) : null,
     });
   });
@@ -351,7 +395,7 @@ export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise
       res.status(400).json({ code: "invalid_input", error: "Confirm that you understand before throwing it." });
       return;
     }
-    const valid = validateSubmission(req.body?.content, key, req.body?.mode);
+    const valid = validateSubmission(req.body?.content, key, req.body?.mode, req.body?.drawing);
     if (!valid.ok) {
       log("create", { identity: ownerId, outcome: valid.code });
       res.status(valid.status).json({ code: valid.code, error: valid.error });
@@ -366,13 +410,13 @@ export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise
       let flight = inFlight.get(flightKey);
       if (flight && flight.digest !== submission.digest) {
         log("create", { identity: ownerId, outcome: "submission_conflict" });
-        res.status(409).json({ code: "submission_conflict", error: "This submission is already being saved with different words or a different choice." });
+        res.status(409).json({ code: "submission_conflict", error: "This submission is already being saved with different words, drawing or choice." });
         return;
       }
       if (!flight) {
         flight = {
           digest: submission.digest,
-          verdict: checkContent({ paper_text: submission.content, report_reason: null, report_note: null }).finally(() =>
+          verdict: checkContent({ paper_text: submission.content, paper_image: submission.drawing, report_reason: null, report_note: null }).finally(() =>
             inFlight.delete(flightKey),
           ),
         };
@@ -392,7 +436,7 @@ export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise
       }
     }
 
-    const result = createPaper(db, ownerId, submission.content, key, submission.mode);
+    const result = createPaper(db, ownerId, submission.content, key, submission.mode, submission.drawing);
     if (!result.ok) {
       log("create", { identity: ownerId, outcome: result.code });
       res.status(result.status).json({ code: result.code, error: result.error });

@@ -11,14 +11,14 @@ function stalledFetch() {
   return send;
 }
 
-it("bounds all publication retries and preserves the same words and key", async () => {
+it("bounds all publication retries and preserves the same words, drawing and key", async () => {
   vi.useFakeTimers();
   const send = stalledFetch();
-  const result = createPaper("my draft", "KEEP", "original-key").catch((e: Error) => e);
+  const result = createPaper("my draft", "data:image/png;base64,AAAA", "KEEP", "original-key").catch((e: Error) => e);
   await vi.advanceTimersByTimeAsync(46800);
   expect(await result).toMatchObject({ name: "AbortError" });
   expect(send).toHaveBeenCalledTimes(3);
-  for (const [, init] of send.mock.calls) expect(JSON.parse(String(init.body))).toMatchObject({ content: "my draft", submission_key: "original-key" });
+  for (const [, init] of send.mock.calls) expect(JSON.parse(String(init.body))).toMatchObject({ content: "my draft", drawing: "data:image/png;base64,AAAA", submission_key: "original-key" });
 });
 
 it("ends a stalled report body without confirming receipt", async () => {

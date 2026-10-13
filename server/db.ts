@@ -5,8 +5,10 @@ import { dirname } from "node:path";
 
 export type DB = Database.Database;
 
-export const requestDigest = (content: string, mode: string): string =>
-  createHash("sha256").update(`${mode}\u0000${content}`).digest("hex");
+// A drawing joins the digest only when there is one, so the digests of papers
+// saved before drawings existed stay valid.
+export const requestDigest = (content: string, mode: string, drawing: string | null = null): string =>
+  createHash("sha256").update(`${mode}\u0000${content}${drawing ? `\u0000${drawing}` : ""}`).digest("hex");
 
 // Each entry runs once, in order, inside a transaction; PRAGMA user_version
 // records how many have run. Append only: never edit one that has shipped.
@@ -173,6 +175,10 @@ const MIGRATIONS: ((db: DB) => void)[] = [
         done_at TEXT
       );
     `),
+
+  // 8: a paper may carry a drawing (a PNG data URL) beside or instead of its
+  // words. Like the words it is immutable, and cleared when the paper ends.
+  (db) => db.exec("ALTER TABLE papers ADD COLUMN drawing TEXT"),
 ];
 
 export const serverSecret = (db: DB, name: string): Buffer =>

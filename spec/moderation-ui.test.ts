@@ -102,7 +102,7 @@ it("keeps a refused publication editable and submits revised words with a new ke
   expect(host.querySelector<HTMLTextAreaElement>("textarea")!.readOnly).toBe(false);
   await input(host.querySelector("textarea")!, "A revised thought."); await click("Crumple & throw");
   expect(control.create.mock.calls[1][0]).toBe("A revised thought.");
-  expect(control.create.mock.calls[1][2]).not.toBe(control.create.mock.calls[0][2]);
+  expect(control.create.mock.calls[1][3]).not.toBe(control.create.mock.calls[0][3]);
   expect(thrown).toHaveBeenCalledTimes(1);
 });
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { DrawingPad, type DrawingPadHandle } from "./DrawingPad.tsx";
 import { ApiError, countCodePoints, createPaper, MAX_CODE_POINTS, type Created, type PaperMode, type SafetyConfig } from "../lib/api.ts";
 
 type Props = {
@@ -22,6 +23,12 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
   const dialogRef = useRef<HTMLDialogElement>(null);
   const confirmationRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
+  // Typing and drawing share one paper: switching only changes which is shown.
+  const [input, setInput] = useState<"type" | "draw">("type");
+  const padRef = useRef<DrawingPadHandle>(null);
+  const [hasDrawing, setHasDrawing] = useState(false);
+  // bumped on every finished stroke, so a changed drawing gets a new key
+  const [drawingEdits, setDrawingEdits] = useState(0);
   const [mode, setMode] = useState<PaperMode | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [confirmationError, setConfirmationError] = useState(false);
@@ -31,7 +38,7 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
   // the choice are then held as sent until a retry with the same key tells us
   // what happened; a new key would only guess, and could save it twice.
   const [unsettled, setUnsettled] = useState(false);
-  const submission = useRef<{ text: string; mode: PaperMode; key: string } | null>(null);
+  const submission = useRef<{ text: string; drawing: string | null; edits: number; mode: PaperMode; key: string } | null>(null);
 
   useEffect(() => {
     const dialog = dialogRef.current!;
@@ -40,7 +47,7 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
   }, []);
 
   const count = countCodePoints(text);
-  const blank = text.trim() === "";
+  const blank = text.trim() === "" && !hasDrawing;
   const tooLong = count > MAX_CODE_POINTS;
   const locked = saving || unsettled;
   const ready = !blank && !tooLong && mode !== null && !offline && !!safety?.provider;
@@ -53,14 +60,19 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
       confirmationRef.current?.focus();
       return;
     }
-    const same = submission.current && submission.current.text === text && submission.current.mode === mode;
-    if (!same) submission.current = { text, mode, key: crypto.randomUUID() };
-    const key = submission.current!.key;
+    // A retry sends exactly what the first try sent, drawing included.
+    const prior = submission.current;
+    const same = prior && prior.text === text && prior.edits === drawingEdits && prior.mode === mode;
+    if (!same) {
+      const drawing = hasDrawing ? (padRef.current?.toDataUrl() ?? null) : null;
+      submission.current = { text, drawing, edits: drawingEdits, mode, key: crypto.randomUUID() };
+    }
+    const { key, drawing } = submission.current!;
     setSaving(true);
     setError(null);
     pendingOps.add(key);
     try {
-      const result = await createPaper(text, mode, key);
+      const result = await createPaper(text, drawing, mode, key);
       onThrown(result);
     } catch (err) {
       setSaving(false);
@@ -99,7 +111,15 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
         <h2 id="write-title" className="write-title">
           What are you ready to put down?
         </h2>
-        <div className="write-field">
+        <div className="write-input-switch" role="group" aria-label="How to put it down">
+          <button type="button" aria-pressed={input === "type"} onClick={() => setInput("type")}>
+            Type
+          </button>
+          <button type="button" aria-pressed={input === "draw"} onClick={() => setInput("draw")}>
+            Draw
+          </button>
+        </div>
+        <div className="write-field" hidden={input !== "type"}>
           <label htmlFor="paper-text" className="visually-hidden">
             Your paper
           </label>
@@ -115,6 +135,16 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
           <span id="write-count" className={`write-count${tooLong ? " is-over" : ""}`}>
             {formatCount(count)} / {formatCount(MAX_CODE_POINTS)}
           </span>
+        </div>
+        <div className="write-field write-draw" hidden={input !== "draw"}>
+          <DrawingPad
+            ref={padRef}
+            disabled={locked}
+            onChange={(marks) => {
+              setHasDrawing(marks);
+              setDrawingEdits((n) => n + 1);
+            }}
+          />
         </div>
 
         <fieldset className="write-modes" disabled={locked}>
@@ -137,7 +167,7 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
 
         <p className="write-disclosure" id="write-disclosure" role={!safety?.provider ? "status" : undefined}>
           {safety?.provider === "openai"
-            ? "Before it enters the space, your text is sent to OpenAI for automated safety checks. Do not include private details. "
+            ? "Before it enters the space, your words and drawing are sent to OpenAI for automated safety checks. Do not include private details. "
             : safety?.provider === "fixture"
               ? "Automated safety checks run before this paper enters the space. "
               : "Safety checks are unavailable. Your words stay here until checks can run. "}
