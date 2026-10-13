@@ -542,12 +542,13 @@ export function createPaperScene(container, buttonLayer, options) {
   }
 
   // Papers arriving from the stream (someone else's throw, the first
-  // snapshot, a refill) drop from inside the upper part of the frame, a
-  // quarter of the way down, so they're seen at once and land within about
-  // half a second. The demo's fixed drop height started them above the top
-  // edge on desktop, where they fell unseen for most of a second.
-  const ARRIVAL_SCREEN_Y = 0.5; // NDC; 1 is the top edge
-  const ARRIVAL_DROP = { min: 0.25, max: 0.9 };
+  // snapshot, a refill) start just past the top edge of the frame, so they
+  // read as thrown in from outside the screen, and enter it on their first
+  // frames of falling. (The demo's fixed drop height started them well
+  // above the edge, where they fell unseen for most of a second; starting
+  // inside the frame made them appear out of the header.)
+  const ARRIVAL_SCREEN_Y = 1.06; // NDC; 1 is the top edge
+  const ARRIVAL_DROP = { min: 0.25, max: 2.2 };
   function arrivalDropHeight(position) {
     const v = new THREE.Vector3();
     const screenY = (lift) => v.set(position.x, position.y + lift, position.z).project(camera).y;
