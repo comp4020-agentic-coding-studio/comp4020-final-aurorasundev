@@ -49,6 +49,7 @@ const BOUNDS_PULL = 3.0;
 // 0.42 suits its wide stage; ours is about a third the size, so a throw met
 // the edge almost at once and died there.
 const WALL_BOUNCE = 0.55;
+const WALL_EXTRA_BOTTOM_PX = 20;
 const ANIM_SPEED = 1.5;
 // Fully flat when open, so the HTML words sit on a flat sheet.
 const OPEN_FRAME = 0;
@@ -186,7 +187,24 @@ export function createPaperScene(container, buttonLayer, options) {
     };
     edgeFar = halfAt(stageBounds.minZ);
     edgeNear = halfAt(stageBounds.maxZ);
+    // the walls papers roll against reach 20px further down the screen
+    const screenY = (z) => (1 - v.set(0, 0, z).project(camera).y) / 2 * size().h;
+    const target = screenY(stageBounds.maxZ) + WALL_EXTRA_BOTTOM_PX;
+    let low = stageBounds.maxZ;
+    let high = stageBounds.maxZ + 1;
+    for (let i = 0; i < 16; i++) {
+      const mid = (low + high) / 2;
+      if (screenY(mid) < target) low = mid;
+      else high = mid;
+    }
+    wallMaxZ = low;
   }
+  // Rolling and dragging use wider walls than spawning: a paper only stops
+  // at the side once a third of it is past the edge of the screen.
+  let wallMaxZ = stageBounds.maxZ;
+  const _wall = new THREE.Vector3();
+  const wallHalfAt = (z) =>
+    1 / Math.abs(_wall.set(1, restCenterY, z).project(camera).x) - collisionRadius / 3;
   const halfWidthAt = (z) =>
     lerp(edgeFar, edgeNear, clamp01((z - stageBounds.minZ) / (stageBounds.maxZ - stageBounds.minZ)));
   applyCamera();
@@ -463,12 +481,12 @@ export function createPaperScene(container, buttonLayer, options) {
 
   function applyPhysicsBounds(dt) {
     const minZ = stageBounds.minZ + collisionRadius;
-    const maxZ = stageBounds.maxZ - collisionRadius;
+    const maxZ = wallMaxZ - collisionRadius;
 
     for (const paper of livePapers()) {
       if (paper.body.type !== CANNON.Body.DYNAMIC) continue;
       const body = paper.body;
-      const maxX = halfWidthAt(body.position.z) - collisionRadius;
+      const maxX = wallHalfAt(body.position.z);
       const minX = -maxX;
       if (body.position.x < minX) {
         if (body.velocity.x < 0) body.velocity.x = Math.abs(body.velocity.x) * WALL_BOUNCE;
@@ -939,9 +957,9 @@ export function createPaperScene(container, buttonLayer, options) {
     grabPlane.constant = -(restCenterY + GRAB_LIFT);
     if (!raycaster.ray.intersectPlane(grabPlane, grabHitPoint)) return;
     paper.grab.target.set(
-      clampAbs(grabHitPoint.x, halfWidthAt(grabHitPoint.z) - collisionRadius),
+      clampAbs(grabHitPoint.x, wallHalfAt(grabHitPoint.z)),
       restCenterY + GRAB_LIFT,
-      Math.min(Math.max(grabHitPoint.z, stageBounds.minZ + collisionRadius), stageBounds.maxZ - collisionRadius),
+      Math.min(Math.max(grabHitPoint.z, stageBounds.minZ + collisionRadius), wallMaxZ - collisionRadius),
     );
   }
 
