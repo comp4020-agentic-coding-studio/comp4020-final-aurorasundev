@@ -45,6 +45,10 @@ const GRAB_MAX_SPEED = 4.5;
 const THROW_MAX_SPEED = 3.2;
 const CLICK_DRAG_THRESHOLD_PX = 6;
 const BOUNDS_PULL = 3.0;
+// Share of its speed a paper keeps off the edge of the stage. The demo's
+// 0.42 suits its wide stage; ours is about a third the size, so a throw met
+// the edge almost at once and died there.
+const WALL_BOUNCE = 0.7;
 const ANIM_SPEED = 1.5;
 // Fully flat when open, so the HTML words sit on a flat sheet.
 const OPEN_FRAME = 0;
@@ -467,17 +471,17 @@ export function createPaperScene(container, buttonLayer, options) {
       const maxX = halfWidthAt(body.position.z) - collisionRadius;
       const minX = -maxX;
       if (body.position.x < minX) {
-        if (body.velocity.x < 0) body.velocity.x = Math.abs(body.velocity.x) * 0.42;
+        if (body.velocity.x < 0) body.velocity.x = Math.abs(body.velocity.x) * WALL_BOUNCE;
         body.velocity.x += BOUNDS_PULL * dt;
       } else if (body.position.x > maxX) {
-        if (body.velocity.x > 0) body.velocity.x = -Math.abs(body.velocity.x) * 0.42;
+        if (body.velocity.x > 0) body.velocity.x = -Math.abs(body.velocity.x) * WALL_BOUNCE;
         body.velocity.x -= BOUNDS_PULL * dt;
       }
       if (body.position.z < minZ) {
-        if (body.velocity.z < 0) body.velocity.z = Math.abs(body.velocity.z) * 0.42;
+        if (body.velocity.z < 0) body.velocity.z = Math.abs(body.velocity.z) * WALL_BOUNCE;
         body.velocity.z += BOUNDS_PULL * dt;
       } else if (body.position.z > maxZ) {
-        if (body.velocity.z > 0) body.velocity.z = -Math.abs(body.velocity.z) * 0.42;
+        if (body.velocity.z > 0) body.velocity.z = -Math.abs(body.velocity.z) * WALL_BOUNCE;
         body.velocity.z -= BOUNDS_PULL * dt;
       }
     }
@@ -584,7 +588,7 @@ export function createPaperScene(container, buttonLayer, options) {
     return q.premultiply(_spin);
   }
 
-  function spawnPaper(id, position, dropIn, dropHeight = randomRange(0.8, 1.2)) {
+  function spawnPaper(id, position, dropIn, dropHeight = randomRange(0.8, 1.2), fallSpeed = 0) {
     const maxFrame = animData.frameCount - 1;
     const base = createPaper(animData, paperMaterial3d);
     base.mesh.castShadow = true;
@@ -623,8 +627,9 @@ export function createPaperScene(container, buttonLayer, options) {
       paper.state = "rolling";
       paper.throw = { settleTimer: 0 };
       body.position.y += dropHeight;
-      // a little tumble, not enough to send it rolling on after it lands
-      body.angularVelocity.set(randomRange(-0.7, 0.7), randomRange(-0.4, 0.4), randomRange(-0.7, 0.7));
+      // the demo's tumble: enough that it rolls on a little after it lands
+      body.angularVelocity.set(randomRange(-1.5, 1.5), randomRange(-0.5, 0.5), randomRange(-1.5, 1.5));
+      if (fallSpeed) body.velocity.y = -fallSpeed;
       syncMeshToBody(paper);
     }
     return paper;
@@ -666,24 +671,53 @@ export function createPaperScene(container, buttonLayer, options) {
       for (const id of wantedIds) if (!papers.has(id)) spawnEntering(id, edge);
       return;
     }
+    // The first fill is the demo's burst: the papers rain in quickly around
+    // one spot, knock into each other and scatter across the stage. Later
+    // arrivals (someone's throw, a refill) still come in one at a time.
+    const burst = firstFill && wantedIds.filter((id) => !papers.has(id)).length >= 3;
+    if (burst) firstFill = false;
+    const cluster = burst
+      ? new THREE.Vector3(0, restMeshY, lerp(stageBounds.minZ, stageBounds.maxZ, 0.4))
+      : null;
     let i = 0;
     for (const id of wantedIds) {
       if (papers.has(id)) continue;
-      const delay = i++ * 70 + randomRange(0, 90);
+      const delay = i++ * (burst ? 45 : 70) + randomRange(0, 90);
       papers.set(id, null);
       later(() => {
         if (papers.get(id) !== null) return;
         papers.delete(id);
         if (!wantedIds.includes(id)) return;
-        const position = randomSpawnPosition();
+        const position = cluster ? burstPosition(cluster) : randomSpawnPosition();
         // with reduced motion it is simply there, without the drop
         if (ritual && !["ending", "restoring"].includes(ritual.phase)) {
           spawnPaper(id, position, false);
           clearRitualColumn(ritual);
         } else if (reduceMotion()) spawnPaper(id, position, false);
-        else spawnPaper(id, position, true, arrivalDropHeight(position));
+        else if (cluster) {
+          const paper = spawnPaper(id, position, true, arrivalDropHeight(position), randomRange(3, 4.5));
+          // drifting outward, so the pile spreads over the stage as it lands
+          const out = _slide.set(position.x - cluster.x, 0, position.z - cluster.z);
+          if (out.lengthSq() < 1e-6) out.set(randomRange(-1, 1), 0, randomRange(-1, 1));
+          out.normalize().multiplyScalar(randomRange(0.8, 1.8));
+          paper.body.velocity.x = out.x;
+          paper.body.velocity.z = out.z;
+        } else spawnPaper(id, position, true, arrivalDropHeight(position));
       }, delay);
     }
+  }
+  let firstFill = true;
+
+  // Near the burst's centre, close enough that neighbours collide on landing,
+  // kept inside the stage.
+  function burstPosition(centre) {
+    const spread = collisionRadius * 1.6;
+    const z = Math.min(
+      Math.max(centre.z + randomRange(-spread, spread), stageBounds.minZ + collisionRadius),
+      stageBounds.maxZ - collisionRadius,
+    );
+    const half = halfWidthAt(z) - collisionRadius;
+    return new THREE.Vector3(clampAbs(centre.x + randomRange(-spread, spread), half), restMeshY, z);
   }
 
   // ==================================================
