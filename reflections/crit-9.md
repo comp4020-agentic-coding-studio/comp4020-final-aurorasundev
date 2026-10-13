@@ -1,0 +1,7 @@
+## What was the breakthrough that moved the work forward?
+
+The biggest breakthrough this week was adding the furnace to Throwaway. I had a clear idea of what “Release it” should feel like: the user places a paper ball into the furnace, watches it burn gradually, and is left with ashes. The first version worked, but the visual effect did not feel convincing. Switching to Codex helped me improve the furnace, the burning sequence, and the movement of the surrounding paper balls. The feature now feels much closer to the experience I had imagined. It reminded me that a feature can be technically complete and still need careful visual work before it communicates the intended feeling.
+
+## What did this work change about who I want to be as a software developer?
+
+This week made me think more about how a software developer chooses and directs tools. Claude helped build the technical foundation, but repeated prompts were not always the best way to solve the visual problems I was seeing. Bringing in Codex gave me another way to approach them. I want to be a developer who can recognise when a tool or approach has reached its limit, explain what is missing, and try a different one. Using several agents well still requires me to make the design decisions and judge the result.
