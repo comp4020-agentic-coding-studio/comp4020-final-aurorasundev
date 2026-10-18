@@ -114,4 +114,22 @@ they go to this feature branch, whose pushes run CI checks but do not deploy
 - `docker build`: **not run locally** (Docker daemon not running; not started
   without the owner). The branch push runs the CI container build.
 
-Next: Task 6 (client Gallery state).
+- CI: draft PR #1 opened so the container checks run on each push without
+  deploying (the workflow deploys only `refs/heads/main`). First run on
+  `ee77820`: **check passed** (container build, `pnpm check` against the
+  container, secret scan); deploy skipped. This also covers the Docker
+  build that could not run locally.
+
+## Task 6: client Gallery state (done, 16:48)
+
+- `src/lib/gallery-api.ts` (types mirrored, no server imports),
+  `src/lib/gallery-state.ts` (pure reducer: snapshot replaces, deltas buffered
+  during loads and replayed past the snapshot revision, version dedupe, hides
+  remembered so a slower page/snapshot cannot restore them, server-cursor
+  paging, 48-tile cap that never evicts the open object, open detail kept
+  across a snapshot until revalidated), `src/lib/useGallery.ts` (one
+  EventSource; fresh snapshot per connection; reconnect revalidates an open
+  id outside the first page; report reason and op key frozen while unsettled).
+- `spec/gallery-state.test.ts`: 10 passed (including 60 objects over 5 pages).
+
+Next: Task 7 (exhibition UI and separate entry).
