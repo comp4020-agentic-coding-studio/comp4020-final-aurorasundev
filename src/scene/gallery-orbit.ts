@@ -347,14 +347,17 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
     } else {
       const discR = Math.min(bandH * 0.38, w * 0.165);
       const size = Math.min(bandH * 0.44, w * 0.18);
+      const orbitRx = Math.min(w * 0.4, w / 2 - size * 0.62);
       L = {
         w,
         h,
         phone,
         cx: -w * 0.015,
         cy,
-        rx: Math.min(w * 0.4, w / 2 - size * 0.62),
-        ry: bandH * 0.24,
+        rx: orbitRx,
+        // the tilted ellipse's highest point plus a far sleeve's half height
+        // stays inside the band, clear of the title
+        ry: Math.min(bandH * 0.24, Math.sqrt(Math.max(0, (bandH / 2 - size * 0.32) ** 2 - (orbitRx * 0.218) ** 2)) / 0.976),
         tilt: -0.22,
         depth: 420,
         size,
