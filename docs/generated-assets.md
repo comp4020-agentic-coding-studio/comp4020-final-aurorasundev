@@ -115,3 +115,34 @@ B01's dark iron), ash1 (fine powder without the flakes B03 shows), flakes1
   the drawn no-WebGL paper. The existing iron texture is retained and given
   rough normal relief on a rebuilt cylinder; no rendered reference mockup
   is pasted into the live furnace. Paper content stays in HTML.
+
+## Gallery fixed material pack — 2026-10-18
+
+The owner selected the mineral-grey record exhibition (G01–G03) and requested
+all fixed visual image materials in `public`. Five generated assets are now
+available in `public/textures/gallery/`; individual content-derived Gallery
+artworks remain runtime output and are not part of this fixed pack.
+
+| File | Dimensions | Role |
+| --- | --- | --- |
+| `vinyl-face.png` | 1024×1024 RGBA PNG | Charcoal record front; transparent exterior and label window |
+| `vinyl-grooves-height.png` | 1024×1024 PNG | Non-colour concentric groove bump data |
+| `paper-stock.jpg` | 1024×1024 JPEG | Shared sleeve/label paper substrate |
+| `sleeve-frame.png` | 1024×1024 RGBA PNG | Blank paper edge overlay with transparent artwork window |
+| `mineral-surface.jpg` | 1536×1024 JPEG | Restrained mineral-grey Gallery background material |
+
+- **Generator:** Codex built-in Image Gen. The exact underlying model ID is
+  not exposed. The record/frame use the selected G02 concept as a style
+  reference; the other three are standalone material generations.
+- **Prompts:** [complete material prompts and selected sources](../design/gallery-records-2026-10-18/asset-prompts.md).
+  One cleanup edit preceded the final sleeve-frame selection.
+- **Packaging:** macOS sips resized square exports to 1024 pixels. PNG
+  preserves alpha for cutouts and lossless encoding for height data; opaque
+  paper/background use JPEG quality 84. Background remains 1536×1024.
+  No new dependency or visual reconstruction script was added.
+- **Verification:** decoded the final images, checked dimensions and centre/
+  corner alpha, and recorded bytes/hashes in the public manifest. The runtime
+  pack totals 4,125,514 bytes. No page-rendering fidelity or provider-backed
+  generation claim follows from these material checks.
+- **Usage:** [state-by-state composition guidance](../design/gallery-records-2026-10-18/design.md#13-fixed-visual-assets-and-where-to-use-them).
+  This pass does not modify the application's current material wiring.

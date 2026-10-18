@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "theme": "A",
+  "generated_on": "2026-10-18",
+  "generator": "Codex built-in Image Gen",
+  "fixed_materials_only": true,
+  "dynamic_artwork_source": "Existing state-gated /api/gallery/:id/image, generated from each burned Release note; never replaced by these assets.",
+  "assets": [
+    {
+      "id": "vinyl-face",
+      "url": "/textures/gallery/vinyl-face.png",
+      "width": 1024,
+      "height": 1024,
+      "bytes": 1120005,
+      "sha256": "f6deabc0852b0939d2a9758563859cb19fc4bd856de9ebb5b36d90f354be9a77",
+      "color_space": "srgb",
+      "alpha": true,
+      "wrap": "clamp-to-edge",
+      "usage": "Layered charcoal vinyl face; centre window accepts dynamic artwork."
+    },
+    {
+      "id": "vinyl-grooves-height",
+      "url": "/textures/gallery/vinyl-grooves-height.png",
+      "width": 1024,
+      "height": 1024,
+      "bytes": 1649949,
+      "sha256": "00b4b76fe14bb63a6907137ad50fac4e1c4213d2ab1ba4c85ecfe74dfdea7d1a",
+      "color_space": "none",
+      "alpha": false,
+      "wrap": "clamp-to-edge",
+      "usage": "Linear/non-colour bump data for physical vinyl grooves; never display as artwork."
+    },
+    {
+      "id": "paper-stock",
+      "url": "/textures/gallery/paper-stock.jpg",
+      "width": 1024,
+      "height": 1024,
+      "bytes": 312833,
+      "sha256": "4b2274b768244788d41fb46b54b1d1eefd2f595f2b248ad9890818241d3c247e",
+      "color_space": "srgb",
+      "alpha": false,
+      "wrap": "clamp-to-edge",
+      "usage": "Shared ivory stock for sleeve backs/edges and circular label substrate."
+    },
+    {
+      "id": "sleeve-frame",
+      "url": "/textures/gallery/sleeve-frame.png",
+      "width": 1024,
+      "height": 1024,
+      "bytes": 415805,
+      "sha256": "406fe199623f86ba9bc3e0d3d2e08779895631b5f5648edfa209a666c103adb3",
+      "color_space": "srgb",
+      "alpha": true,
+      "wrap": "clamp-to-edge",
+      "usage": "Paper frame overlay; place complete generated image within its transparent centre."
+    },
+    {
+      "id": "mineral-surface",
+      "url": "/textures/gallery/mineral-surface.jpg",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 626922,
+      "sha256": "5f9878fc3fd00e592bab96b0662f6dbce162afe582e607b8efa1620f9f82bea1",
+      "color_space": "srgb",
+      "alpha": false,
+      "wrap": "clamp-to-edge",
+      "usage": "Gallery-only mineral background surface; keep separate from artwork and UI."
+    }
+  ]
+}
