@@ -84,4 +84,34 @@ they go to this feature branch, whose pushes run CI checks but do not deploy
   an in-memory DB with seeded records and canaries.
   `spec/gallery.test.ts` + `spec/gallery-realtime.test.ts`: 17 passed.
 
-Next: Task 5 (the worker, wiring and Dockerfile).
+## Task 5: worker, wiring, Dockerfile (done, 16:31)
+
+- `server/artifacts/worker.ts`: one non-overlapping loop (1 s poll; wakes
+  coalesce). Each provider call is preceded by one transaction that leases
+  the job (random token, 180 s) and reserves the UTC-day budget (20 recipes,
+  10 images, 20 inspections). Order per pass: operator actions, discovery
+  (batches of 20), inspection, recipe, image. Results are written only under
+  the same lease; recipes only while the paper is still ACTIVE Release.
+  Recipe: at most 2 attempts, 5 s apart. Image: explicit 429 retried once
+  after max(30 s, Retry-After); timeout/transport/5xx/crash become
+  `GENERATION_UNKNOWN`, never resent automatically. Inspection: at most 3
+  runs (now, +5 s, +30 s); blocked/failed files removed. Startup recovery
+  adopts a finalized file, marks an interrupted dispatch unknown and sweeps
+  staging leftovers. Storage full defers image jobs with `storage_full` and a
+  60 s recheck. Paused (`ARTIFACTS_ENABLED` not 1, or no provider): no
+  provider calls, operator hides still applied.
+- `server/index.ts`: Gallery API mounted before the `/api` 404; `/gallery`
+  and `/gallery/` serve the built page; artifact worker started and stopped
+  with the server; Gallery streams closed on shutdown. Wake on paper changes
+  relies on the 1 s poll (no coupling into the paper module).
+- `Dockerfile`: copies `scripts/artifacts.ts`; no key or flag set.
+- `spec/artifact-worker.test.ts`: 20 passed (deferred provider, fake clock).
+- End to end over real HTTP (fixture provider, local server): burn reply in
+  5 ms; open Gallery stream received `artifact:published` 327 ms after the
+  burn; image served as `image/webp`; no paper id or canary in any reply,
+  event or server log line.
+- Full suite on a fresh DB: **204 passed**.
+- `docker build`: **not run locally** (Docker daemon not running; not started
+  without the owner). The branch push runs the CI container build.
+
+Next: Task 6 (client Gallery state).

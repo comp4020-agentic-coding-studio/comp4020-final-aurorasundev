@@ -378,35 +378,37 @@ export const ARTIFACT_FIXTURE = { recipeFails: "[[artifact:recipe-fails]]" } as 
 export type FixtureControl = {
   calls: { recipe: number; image: number; inspection: number };
   // overrides for the next calls, consumed in order
-  recipe: (() => Promise<Recipe>)[];
-  image: (() => Promise<GeneratedImage>)[];
-  inspection: (() => Promise<"allow" | "blocked">)[];
+  recipe: ((signal: AbortSignal) => Promise<Recipe>)[];
+  image: ((signal: AbortSignal) => Promise<GeneratedImage>)[];
+  inspection: ((signal: AbortSignal) => Promise<"allow" | "blocked">)[];
 };
 
 const FIXTURE_IMAGE = resolve(import.meta.dirname, "../../spec/fixtures/artifacts/keepsake-1024.webp");
 
 export function fixtureArtifactProvider(control: FixtureControl = { calls: { recipe: 0, image: 0, inspection: 0 }, recipe: [], image: [], inspection: [] }) {
-  const bytes = readFileSync(FIXTURE_IMAGE);
+  // read on first use: the image ships with the tests, not the app
+  let bytes: Buffer | null = null;
   const provider: ArtifactProvider & { control: FixtureControl } = {
     name: "fixture",
     control,
-    async prepareRecipe(source) {
+    async prepareRecipe(source, signal) {
       control.calls.recipe++;
       const next = control.recipe.shift();
-      if (next) return next();
+      if (next) return next(signal);
       if (source.text.includes(ARTIFACT_FIXTURE.recipeFails)) throw new ArtifactError("recipe_provider_error", "transient");
       return { motif: source.drawing ? "ribbon" : "vessel", material: "paper", palette: "ivory", gesture: "held" };
     },
-    async generateImage() {
+    async generateImage(_recipe, signal) {
       control.calls.image++;
       const next = control.image.shift();
-      if (next) return next();
+      if (next) return next(signal);
+      bytes ??= readFileSync(FIXTURE_IMAGE);
       return { bytes: Buffer.from(bytes), width: 1024, height: 1024 };
     },
-    async inspectImage() {
+    async inspectImage(_image, signal) {
       control.calls.inspection++;
       const next = control.inspection.shift();
-      if (next) return next();
+      if (next) return next(signal);
       return "allow";
     },
   };
