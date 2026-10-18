@@ -29,11 +29,17 @@ readable centre. Keep phone controls and captions clear of the paper.
 - The Gallery (ADR 005, docs/artifacts-runbook.md) is the one requested
   exception: a burned **Release** paper automatically leaves one inspected,
   independent AI image; Keep never does. Release mode is the only
-  eligibility (no opt-in control). Jobs carry a four-value recipe, never the
-  paper's words or drawing; public objects use an allowlisted shape and an
-  independent id, with no link back. An image request with an unknown
-  outcome is never resent automatically. It is unordered (no feed, ranking,
-  likes or comments) and loads no room code. `ARTIFACTS_ENABLED` stays off
+  eligibility (no opt-in control). The burn transaction reads the note once,
+  in memory, just before clearing it; after the reply one bounded request
+  (15 s) turns it into a strict creative brief, and only the brief is stored.
+  Failure, timeout or restart leaves no record and no fallback. A released
+  paper's fire holds until extraction settles (at most 15 s, never under
+  4.8 s). Public objects use an allowlisted shape and an independent id, with
+  no link back. An image request with an unknown outcome is never resent
+  automatically. It is an unordered record exhibition (design
+  `design/gallery-records-2026-10-18/`, G01–G03; no feed, ranking, likes or
+  comments), loads no room code, and has no sound until a real music
+  service is configured. `ARTIFACTS_ENABLED` stays off
   until the owner decides; the fixture provider is refused on Fly.
 - Real-time is SSE (`GET /api/events`) + HTTP. The database is the source of
   truth; events carry a shared `revision` and are merged by version; every
