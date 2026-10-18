@@ -6,8 +6,10 @@ import { ApiError } from "../src/lib/api.ts";
 import type { GalleryPage, PublicArtifact } from "../src/lib/gallery-api.ts";
 
 // The Gallery page in jsdom, with its HTTP calls and its EventSource faked:
-// loading, honest empty and failure states, the paused note, the detail
-// dialog and its focus, live removal, and a report that holds its key.
+// loading, honest empty and failure states, the paused note, the opened
+// record and its focus, live removal, and a report that holds its key.
+// jsdom has no WebGL, so this is the plain collection the orbit falls back
+// to under reduced motion or without WebGL; both share the same state.
 
 const control = vi.hoisted(() => ({
   page: vi.fn(),
@@ -101,18 +103,18 @@ it("says it is opening, then shows an honest empty state with no fixture art or 
   await mount();
   expect(text()).toContain("Opening the Gallery…");
   await emit("gallery:snapshot", page([]));
-  expect(text()).toContain("No objects have arrived yet.");
-  expect(text()).toContain("Released papers leave abstract keepsakes here after they are burned and their images pass safety checks.");
+  expect(text()).toContain("No records have arrived yet.");
+  expect(text()).toContain("When a released paper is burned, an image shaped by it can arrive here after it passes safety checks.");
   expect(host.querySelectorAll("img")).toHaveLength(0);
-  expect(text()).not.toMatch(/\d+ objects?/);
+  expect(text()).not.toMatch(/\d+ (objects?|records?)/);
 });
 
 it("says when generation is paused, and still shows what is here", async () => {
   control.config.mockResolvedValue({ generation_enabled: false });
   await mount();
   await emit("gallery:snapshot", page([1]));
-  expect(text()).toContain("New objects are not being generated right now.");
-  expect(host.querySelectorAll(".gallery-tile")).toHaveLength(1);
+  expect(text()).toContain("New records are not being made right now.");
+  expect(host.querySelectorAll(".records-tile")).toHaveLength(1);
 });
 
 it("offers a retry when the Gallery can't be opened", async () => {
@@ -125,13 +127,13 @@ it("offers a retry when the Gallery can't be opened", async () => {
   await click("Try again");
   expect(FakeSource.opened).toBe(2);
   await emit("gallery:snapshot", page([1]));
-  expect(host.querySelectorAll(".gallery-tile")).toHaveLength(1);
+  expect(host.querySelectorAll(".records-tile")).toHaveLength(1);
 });
 
-it("renders square, lazy images with alt text and explicit size, and nothing about papers", async () => {
+it("renders square, lazy images with alt text and explicit size, and nothing about papers or sound", async () => {
   await mount();
   await emit("gallery:snapshot", page([1, 2]));
-  const img = host.querySelector<HTMLImageElement>(".gallery-tile img")!;
+  const img = host.querySelector<HTMLImageElement>(".records-tile img")!;
   expect([img.getAttribute("width"), img.getAttribute("height"), img.getAttribute("loading"), img.getAttribute("decoding")]).toEqual([
     "1024",
     "1024",
@@ -142,41 +144,67 @@ it("renders square, lazy images with alt text and explicit size, and nothing abo
   expect(text()).not.toMatch(/paper id|recover|original text|witness/i);
 });
 
+it("an opened record says the note is gone and has no fake player", async () => {
+  await mount();
+  await emit("gallery:snapshot", page([1]));
+  await act(async () => host.querySelector<HTMLButtonElement>(".records-tile")!.click());
+  const dialog = host.querySelector(".record-dialog")!;
+  expect(dialog.textContent).toContain("The original note is gone.");
+  // image-only: the player slot is a disabled control with honest copy, and
+  // nothing shows a waveform, a time or an audio element
+  const play = dialog.querySelector<HTMLButtonElement>(".player-button")!;
+  expect(play.disabled).toBe(true);
+  expect(dialog.textContent).toContain("There is no sound for this record yet.");
+  expect(dialog.querySelector("audio")).toBeNull();
+  expect(dialog.textContent).not.toMatch(/\d\d:\d\d|instrumental/);
+});
+
+it("steps to the next record from an opened one", async () => {
+  await mount();
+  await emit("gallery:snapshot", page([1, 2, 3]));
+  await act(async () => host.querySelector<HTMLButtonElement>(".records-tile")!.click());
+  await click("Next record");
+  expect(host.querySelector(".record-title")!.textContent).toBe("Knot in clay 2");
+  await click("Previous record");
+  await click("Previous record");
+  expect(host.querySelector(".record-title")!.textContent).toBe("Knot in clay 3");
+});
+
 it("opens a detail focused on the dialog, closes on Escape and returns focus to its tile", async () => {
   await mount();
   await emit("gallery:snapshot", page([1, 2]));
-  const tile = host.querySelectorAll<HTMLButtonElement>(".gallery-tile")[1];
+  const tile = host.querySelectorAll<HTMLButtonElement>(".records-tile")[1];
   await act(async () => tile.click());
-  const dialog = host.querySelector<HTMLDialogElement>(".artifact-dialog")!;
+  const dialog = host.querySelector<HTMLDialogElement>(".record-dialog")!;
   expect(dialog.hasAttribute("open")).toBe(true);
   expect(document.activeElement).toBe(dialog);
-  expect(dialog.querySelector(".artifact-title")!.textContent).toBe("Knot in clay 2");
+  expect(dialog.querySelector(".record-title")!.textContent).toBe("Knot in clay 2");
   await act(async () => {
     dialog.dispatchEvent(new Event("cancel", { cancelable: true }));
     await new Promise((r) => setTimeout(r, 5));
   });
-  expect(host.querySelector(".artifact-dialog")).toBeNull();
-  expect(document.activeElement).toBe(host.querySelectorAll(".gallery-tile")[1]);
+  expect(host.querySelector(".record-dialog")).toBeNull();
+  expect(document.activeElement).toBe(host.querySelectorAll(".records-tile")[1]);
 });
 
 it("removes a hidden object from the grid and closes its open detail live", async () => {
   await mount();
   await emit("gallery:snapshot", page([1, 2]));
-  await act(async () => host.querySelectorAll<HTMLButtonElement>(".gallery-tile")[0].click());
-  expect(host.querySelector(".artifact-dialog")).not.toBeNull();
+  await act(async () => host.querySelectorAll<HTMLButtonElement>(".records-tile")[0].click());
+  expect(host.querySelector(".record-dialog")).not.toBeNull();
   await emit("artifact:hidden", { revision: 2, total: 1, id: art(1).id, version: 2 });
-  expect(host.querySelector(".artifact-dialog")).toBeNull();
-  expect(host.querySelectorAll(".gallery-tile")).toHaveLength(1);
+  expect(host.querySelector(".record-dialog")).toBeNull();
+  expect(host.querySelectorAll(".records-tile")).toHaveLength(1);
   // a later publish of an older version can't restore it
   await emit("artifact:published", { revision: 3, total: 2, artifact: art(1, 1) });
-  expect(host.querySelectorAll(".gallery-tile")).toHaveLength(1);
+  expect(host.querySelectorAll(".records-tile")).toHaveLength(1);
 });
 
 it("adds a live arrival without a reload", async () => {
   await mount();
   await emit("gallery:snapshot", page([1]));
   await emit("artifact:published", { revision: 2, total: 2, artifact: art(9) });
-  expect([...host.querySelectorAll(".gallery-caption")].map((c) => c.textContent)).toEqual(["Knot in clay 9", "Knot in clay 1"]);
+  expect([...host.querySelectorAll(".records-caption")].map((c) => c.textContent)).toEqual(["Knot in clay 9", "Knot in clay 1"]);
 });
 
 it("on reconnect, closes an open object outside the first page that is gone", async () => {
@@ -184,9 +212,9 @@ it("on reconnect, closes an open object outside the first page that is gone", as
   control.artifact.mockRejectedValueOnce(new ApiError(404, "artifact_gone", "gone"));
   await mount();
   await emit("gallery:snapshot", page([1], 1, art(1).id));
-  await click("See more objects");
-  await act(async () => host.querySelectorAll<HTMLButtonElement>(".gallery-tile")[1].click());
-  expect(host.querySelector(".artifact-title")!.textContent).toBe("Knot in clay 2");
+  await click("See more records");
+  await act(async () => host.querySelectorAll<HTMLButtonElement>(".records-tile")[1].click());
+  expect(host.querySelector(".record-title")!.textContent).toBe("Knot in clay 2");
   // the stream drops and comes back with a fresh snapshot of the first page
   await act(async () => FakeSource.current!.onerror?.());
   await act(async () => {
@@ -194,25 +222,25 @@ it("on reconnect, closes an open object outside the first page that is gone", as
     await new Promise((r) => setTimeout(r, 0));
   });
   expect(control.artifact).toHaveBeenCalledWith(art(2).id);
-  expect(host.querySelector(".artifact-dialog")).toBeNull();
+  expect(host.querySelector(".record-dialog")).toBeNull();
 });
 
 it("holds a report's reason and key after a lost reply, even through closing and reopening", async () => {
   control.report.mockRejectedValueOnce(new TypeError("reply lost")).mockResolvedValueOnce({ report_id: "r", status: "queued" });
   await mount();
   await emit("gallery:snapshot", page([1]));
-  await act(async () => host.querySelector<HTMLButtonElement>(".gallery-tile")!.click());
-  await click("Report this object");
+  await act(async () => host.querySelector<HTMLButtonElement>(".records-tile")!.click());
+  await click("Report this record");
   await act(async () => host.querySelector<HTMLInputElement>('input[value="spam_scam"]')!.click());
   await click("Send report");
   expect(text()).toContain("We couldn't confirm the report was received.");
   expect(host.querySelector<HTMLFieldSetElement>("fieldset")!.disabled).toBe(true);
   // close and open the same object again
   await act(async () => {
-    host.querySelector(".artifact-dialog")!.dispatchEvent(new Event("cancel", { cancelable: true }));
+    host.querySelector(".record-dialog")!.dispatchEvent(new Event("cancel", { cancelable: true }));
     await new Promise((r) => setTimeout(r, 5));
   });
-  await act(async () => host.querySelector<HTMLButtonElement>(".gallery-tile")!.click());
+  await act(async () => host.querySelector<HTMLButtonElement>(".records-tile")!.click());
   await click("Try again");
   expect(control.report).toHaveBeenCalledTimes(2);
   expect(control.report.mock.calls[1]).toEqual(control.report.mock.calls[0]);
@@ -224,8 +252,8 @@ it("leaves a definitely refused report editable", async () => {
   control.report.mockRejectedValueOnce(new ApiError(429, "rate_limited", "Too many reports for now. Try again later."));
   await mount();
   await emit("gallery:snapshot", page([1]));
-  await act(async () => host.querySelector<HTMLButtonElement>(".gallery-tile")!.click());
-  await click("Report this object");
+  await act(async () => host.querySelector<HTMLButtonElement>(".records-tile")!.click());
+  await click("Report this record");
   await act(async () => host.querySelector<HTMLInputElement>('input[value="something_else"]')!.click());
   await click("Send report");
   expect(text()).toContain("Too many reports for now.");

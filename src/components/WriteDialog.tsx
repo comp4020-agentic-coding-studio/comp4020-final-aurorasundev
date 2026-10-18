@@ -161,8 +161,8 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
             <span>
               <span className="choice-label">Release it</span>
               <span className="choice-hint">
-                Its fate is no longer yours to control. When burned, it will automatically become an anonymous AI keepsake in the public
-                Gallery. Your original words and drawing will be deleted.
+                Its fate is no longer yours to control. When it burns, its words and drawing are sent to OpenAI once to shape an anonymous
+                AI image for the public Gallery. Your original words and drawing are deleted as it burns.
               </span>
             </span>
           </label>

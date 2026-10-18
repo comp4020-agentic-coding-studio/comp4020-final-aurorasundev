@@ -60,13 +60,14 @@ Our report notes expire after 30 days. Drafts are not sent before submission.
 See the [moderation decision](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/004-configured-safety-review.md)
 for the limits and operator workflow.
 
-OpenAI helps turn released papers into abstract images. Only generated
-images that pass safety checks appear in the Gallery. Generation can fail or
-be delayed; the original paper is still gone. When a Release paper is burned,
-its words and drawing are deleted at once; the Gallery keeps a separate
-generated image, not the paper, with no link back to it. Keep papers never
-become keepsakes. Gallery objects can be reported; reports go to an operator
-and do not hide an object by themselves.
+OpenAI helps turn released papers into images for the Gallery, a record
+exhibition. When a Release paper burns, its words and drawing are deleted in
+the same moment and sent to OpenAI once, from memory, to choose a small set
+of image directions; only those directions are kept, never the note. Only
+generated images that pass safety checks appear. Generation can fail; then
+no record appears, and the original paper is still gone. Records have no
+link back to their paper. Keep papers never become records. Records can be
+reported; reports go to an operator and do not hide a record by themselves.
 
 ## References
 
