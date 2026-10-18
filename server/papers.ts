@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Router } from "express";
+import { queueDestroyedRelease, queueReleasePreparation } from "./artifacts/store.ts";
 import { activeTotal, bumpRevision, currentRevision, requestDigest, serverSecret, type DB } from "./db.ts";
 import { broadcast } from "./events.ts";
 import { keyState } from "./identity.ts";
@@ -120,6 +121,8 @@ export function createPaper(
       `INSERT INTO papers (id, owner_identity_id, content, drawing, created_at, submission_key, mode, request_digest)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(id, ownerId, valid.value.content, valid.value.drawing, new Date().toISOString(), valid.value.submissionKey, mode, digest);
+    // a Release paper will leave a keepsake: its recipe is prepared while it is here
+    queueReleasePreparation(db, id, Date.now());
     const revision = bumpRevision(db);
     return { ok: true, value: { id, version: 1, status: "ACTIVE", revision, total: activeTotal(db), fresh: true } };
   })();
@@ -241,6 +244,8 @@ export function burnPaper(db: DB, paperId: string, identityId: string, opKey: st
       )
       .run(new Date().toISOString(), paperId).changes;
     if (changed !== 1) return record("paper_gone");
+    // in the same commit that cleared it: a Release paper's image is queued
+    queueDestroyedRelease(db, paperId, Date.now());
     const revision = bumpRevision(db);
     const result = record("destroyed", revision, activeTotal(db));
     return { ...result, version: paper.version + 1 };

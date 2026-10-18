@@ -93,8 +93,9 @@ describe("which papers can become keepsakes", () => {
     };
     const keep = save("KEEP", "key-keep-1");
     const release = save("RELEASE", "key-release-1");
+    // saving already queued the Release one; asking again changes nothing
     expect(queueReleasePreparation(db, keep, 1)).toBe(false);
-    expect(queueReleasePreparation(db, release, 1)).toBe(true);
+    expect(queueReleasePreparation(db, release, 1)).toBe(false);
     // a Keep paper burned by its author never queues an image
     db.prepare("UPDATE papers SET status = 'DESTROYED', content = '' WHERE id = ?").run(keep);
     expect(queueDestroyedRelease(db, keep, 2)).toBe(false);
@@ -144,7 +145,7 @@ describe("which papers can become keepsakes", () => {
     const r = createPaper(db, "o", "words", "key-one-1", "RELEASE");
     if (!r.ok) throw new Error(r.code);
     const id = r.value.id;
-    expect(queueReleasePreparation(db, id, 1)).toBe(true);
+    // the save queued it; a second request does not add one
     expect(queueReleasePreparation(db, id, 2)).toBe(false);
     // SQLite itself refuses a second row, not only this module
     expect(() =>

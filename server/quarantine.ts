@@ -1,3 +1,4 @@
+import { cancelArtifactPreparation } from "./artifacts/store.ts";
 import { activeTotal, bumpRevision, type DB } from "./db.ts";
 import { broadcast } from "./events.ts";
 import { log } from "./log.ts";
@@ -18,6 +19,8 @@ export function quarantinePaper(db: DB, paperId: string, reason: string, source:
       )
       .get(new Date().toISOString(), reason, paperId) as { version: number } | undefined;
     if (!row) return { changed: false };
+    // removal never leaves a keepsake, and a late recipe can't land
+    cancelArtifactPreparation(db, paperId, Date.now());
     db.prepare(
       `UPDATE report_reviews SET state = 'quarantined', lease_until = NULL, reviewed_at = COALESCE(reviewed_at, ?)
        WHERE paper_id = ? AND state NOT IN ('quarantined', 'dismissed', 'obsolete')`,
