@@ -181,4 +181,59 @@ they go to this feature branch, whose pushes run CI checks but do not deploy
 - Open: header links on phone are 18 px tall, below 44 px; this is the
   existing header's size for About and Return key, left unchanged.
 
-Next: Task 9 (ADR, runbook, docs, final verification).
+## Task 9: documentation and final verification (done, 17:52)
+
+- `docs/adr/005-release-keepsakes.md`, `docs/artifacts-runbook.md` (new).
+- `CLAUDE.md`: `/gallery/` added to routes; the Gallery exclusion replaced by
+  a narrow rule; static-asset image guidance marked as separate from runtime
+  generation. `README.md` as in Task 8.
+- `PROCESS.md` **not changed**: it is written in the owner's voice and has no
+  evidence-list section where a factual link would not read as new
+  narrative. Left for the owner.
+- Final run, fresh build, fresh disposable DB, `ARTIFACTS_ENABLED=1
+  ARTIFACT_PROVIDER=fixture`: `pnpm check` **26 files / 228 tests passed**
+  (baseline 124); `pnpm check:evidence` passed; `git diff --check` clean.
+  CI on the draft PR passed for each pushed task.
+- Diff review against `08a7e9e`: no change under `src/scene`, `PaperField`,
+  `RitualOverlay`, `DrawingPad`, `ReadDialog` or `public/`; `app.css`
+  append-only (0 removed lines); artifact logs carry ids, outcomes and codes
+  only, never `.message`; paper words/drawing read in one place (ACTIVE +
+  RELEASE) and passed in memory to the recipe call; no secrets; the v8
+  fixture holds synthetic text and no sessions or keys.
+
+## Review focus: evidence
+
+1. Keep vs Release. Over real HTTP: a Keep author's burn → 0 jobs; a Release
+   paper → 1 job → 1 published object, words and drawing cleared.
+   Tests: `artifact-lifecycle` (text, drawing-only, combined), `artifact-worker`
+   (Keep never touched), `gallery-consent-ui` (no new control or field).
+2. Two burners / lost reply / restart. Over real HTTP: simultaneous burns
+   answered 200 and 410, a same-key retry 200, one job, one object.
+   Tests: `two_authorized_burners_create_one_job`,
+   `lost_burn_response_reuses_one_job`, `lost_burn_reply_does_not_duplicate_object`,
+   `crash_after_dispatch_does_not_regenerate`.
+3. Late recipe after burn/quarantine: `late_recipe_cannot_overwrite_burn_fallback`,
+   `late_recipe_after_quarantine_is_discarded`, `quarantine_cancels_without_image_job`.
+4. Timeout / crash after dispatch: `marks a timeout or lost connection unknown and
+   never resends it`, `crash_after_dispatch_does_not_regenerate`,
+   `finalized_file_resumes_inspection`, operator retry needs the flag.
+5. Hide while open / paginating / reconnecting:
+   `hide_open_artifact_blocks_future_image_reads` (HTTP),
+   `sends a hide after it commits, once, to every open Gallery` (SSE, two
+   clients), `a hide during a page load removes the object now and the
+   slower page cannot restore it`, `reconnect_revalidates_open_detail_outside_first_page`
+   (state and UI), `removes a hidden object from the grid and closes its open detail live` (UI).
+
+## Status: LOCAL_VERIFIED_PROVIDER_UNVERIFIED
+
+Everything above ran locally with fixture providers. **Not verified:** real
+OpenAI recipe, image and visual-policy calls (no paid call was made); access
+to `gpt-image-2` (the current docs list `gpt-image-2.5-*` instead); real image
+quality; Safari and real phone hardware. Not done by design: no merge to
+`main`, no deployment, no production migration, no secret change.
+
+Release steps when the owner decides: back up the live database (and from
+then on `/data/artifacts`); confirm model access and billing; one approved
+paid smoke test on synthetic content; review its image; decide
+`ARTIFACTS_ENABLED`; mark PR #1 ready and merge (this deploys and runs
+migration 9); read-only checks on the live site.

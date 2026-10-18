@@ -21,12 +21,20 @@ fibre relief. Writing and reading sheets have wrinkled edges and a quiet
 readable centre. Keep phone controls and captions clear of the paper.
 
 - Routes: `/` (space; writing, reading, confirming, reporting and return keys
-  are *states* of it) and `/readme/`. Never add `/write`, `/paper/:id`,
-  profiles or share links.
+  are *states* of it), `/gallery/` and `/readme/`. Never add `/write`,
+  `/paper/:id`, profiles or share links.
 - Never build: a latest feed, search, ranking, profiles, My Papers / personal
   history, comments, likes, follows, editing papers, bulk destruction, points,
   countdowns, online lists, cursors, reader counts or per-frame broadcasts.
-  Gallery / AI artifacts are out unless the user asks.
+- The Gallery (ADR 005, docs/artifacts-runbook.md) is the one requested
+  exception: a burned **Release** paper automatically leaves one inspected,
+  independent AI image; Keep never does. Release mode is the only
+  eligibility (no opt-in control). Jobs carry a four-value recipe, never the
+  paper's words or drawing; public objects use an allowlisted shape and an
+  independent id, with no link back. An image request with an unknown
+  outcome is never resent automatically. It is unordered (no feed, ranking,
+  likes or comments) and loads no room code. `ARTIFACTS_ENABLED` stays off
+  until the owner decides; the fixture provider is refused on Fly.
 - Real-time is SSE (`GET /api/events`) + HTTP. The database is the source of
   truth; events carry a shared `revision` and are merged by version; every
   reconnect reconciles from a snapshot, never by replaying history.
@@ -70,6 +78,10 @@ readable centre. Keep phone controls and captions clear of the paper.
 - SQLite lives at `$DATABASE_PATH` (`/data/throwaway.sqlite` on Fly's volume).
 
 ## Images
+
+These rules are for static assets checked into the repo. The Gallery's
+runtime image generation is separate: it calls the OpenAI Images API from the
+server under docs/artifacts-runbook.md, and its outputs are never committed.
 
 When this project needs an image asset, generate it via the strproxy
 `images/generations` endpoint — see
