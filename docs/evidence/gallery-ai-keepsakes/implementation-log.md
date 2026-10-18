@@ -65,4 +65,23 @@ they go to this feature branch, whose pushes run CI checks but do not deploy
   name `gpt-image-2`. The spec's `gpt-image-2` default is kept unchanged
   (no silent switch); **model access is unverified**.
 
-Next: Task 4 (Gallery HTTP/SSE, reports, private CLI).
+## Task 4: Gallery HTTP/SSE, reports, private CLI (done, 16:02)
+
+- `server/artifacts/router.ts`: config, page (limit 1–24, UUID keyset
+  cursor), one object, image (published check before and after the file read,
+  `image/webp`, `no-store`, `nosniff`), SSE, reports (session, six reasons,
+  op key, no note; 5/identity/hour in SQLite, 20/address/hour through the
+  existing in-memory window counter). Not yet mounted in `server/index.ts`
+  (Task 5).
+- `server/artifacts/events.ts`: separate subscriber set, snapshot of the first
+  12 in the joining tick, 20 s heartbeat, 256 KiB cap, shutdown.
+- `server/artifacts/store.ts`: allowlisted `publicArtifact`, `galleryPage`,
+  lease-guarded `publishArtifact`, `hideArtifact`, `reportArtifact`,
+  `enqueueAdminJob`, `applyArtifactAdminJobs` (hide/dismiss/retry).
+- `scripts/artifacts.ts` + `pnpm artifacts:*`: reports, jobs, hide, dismiss,
+  retry (refused without `--acknowledge-possible-charge`); prints "queued".
+- `spec/gallery-harness.ts` mounts the real router on an ephemeral port over
+  an in-memory DB with seeded records and canaries.
+  `spec/gallery.test.ts` + `spec/gallery-realtime.test.ts`: 17 passed.
+
+Next: Task 5 (the worker, wiring and Dockerfile).

@@ -14,6 +14,11 @@
     "moderation:list": "node scripts/moderation.ts list",
     "moderation:inspect": "node scripts/moderation.ts inspect",
     "moderation:resolve": "node scripts/moderation.ts resolve",
+    "artifacts:reports": "node scripts/artifacts.ts reports",
+    "artifacts:jobs": "node scripts/artifacts.ts jobs",
+    "artifacts:hide": "node scripts/artifacts.ts hide",
+    "artifacts:dismiss": "node scripts/artifacts.ts dismiss",
+    "artifacts:retry": "node scripts/artifacts.ts retry",
     "test": "vitest run"
   },
   "devDependencies": {
