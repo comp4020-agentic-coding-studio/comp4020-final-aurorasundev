@@ -144,7 +144,9 @@ export function useGallery() {
 
   const open = useCallback((id: string | null) => {
     dispatch({ type: "open", id });
-    // a new object starts a new report unless one is still unsettled
+    // Closing changes nothing. Opening starts a fresh report form, except
+    // that an unsettled report stays with its object until a retry settles it.
+    if (id === null) return;
     setReport((r) => (r.kind === "unsettled" && reportSent.current?.id === id ? r : { kind: "idle" }));
   }, []);
 

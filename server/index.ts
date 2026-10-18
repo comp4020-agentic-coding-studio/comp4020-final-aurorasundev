@@ -61,11 +61,14 @@ app.use("/api", (_req, res) => {
   res.status(404).json({ error: "Not found." });
 });
 
-// The Gallery is a page of the same client build, opened without the room.
+// The Gallery is a page of the same client build, opened without the room:
+// the space's preloads of the crumple model are dropped from its HTML.
+const galleryHtml = existsSync(resolve(dist, "index.html"))
+  ? readFileSync(resolve(dist, "index.html"), "utf8").replace(/^\s*<link rel="preload"[^>]*\/vat\/[^>]*>\n/gm, "")
+  : null;
 app.get(/^\/gallery\/?$/, (_req, res, next) => {
-  const page = resolve(dist, "index.html");
-  if (!existsSync(page)) return next();
-  res.set("Cache-Control", "no-cache").sendFile(page);
+  if (!galleryHtml) return next();
+  res.set("Cache-Control", "no-cache").type("html").send(galleryHtml);
 });
 
 app.get("/readme/", (_req, res) => {

@@ -132,4 +132,32 @@ they go to this feature branch, whose pushes run CI checks but do not deploy
   id outside the first page; report reason and op key frozen while unsettled).
 - `spec/gallery-state.test.ts`: 10 passed (including 60 objects over 5 pages).
 
-Next: Task 7 (exhibition UI and separate entry).
+## Task 7: exhibition and separate entry (done, 17:12)
+
+- `src/main.tsx` now lazy-loads one page by pathname (`/gallery`, `/gallery/`
+  → `GalleryApp`; otherwise `App`). Built chunks: `GalleryApp` 11.5 KB,
+  separate from `paper-scene` (733 KB) and `fire` (36 KB).
+- `src/GalleryApp.tsx`, `src/components/ArtifactDialog.tsx`: title, the
+  spec's intro, empty/paused/loading/failure copy, tiles with explicit size,
+  lazy loading and async decoding, native dialog focused on itself (not the
+  cross), Escape and backdrop close, focus returned to the opening tile,
+  report form with the six reasons and no note.
+- `server/index.ts` serves `/gallery` and `/gallery/` from the built
+  `index.html` **with the space's two `/vat/` preloads removed**: without
+  that, the Gallery still downloaded the 1.25 MB model and 1.75 MB texture
+  (found in the browser network log, then fixed).
+- `src/styles/app.css`: rules appended, all scoped to `.gallery-*` /
+  `.artifact-*` (plus one phone rule under `.gallery-header`); no existing
+  rule changed.
+- Browser checks on the built app (fixture objects published through the
+  real save → witness → burn flow): columns 3/3/3/1 at 1920×1080, 1366×768,
+  1280×720, 390×844; no horizontal overflow; **no** model, texture, scene,
+  Three/cannon or fire request on the Gallery; dialog takes focus, Escape
+  returns focus to the tile. The space still loads its scene and model and
+  never the Gallery chunk. Screenshots in [gallery/](gallery/). The tiles look
+  alike because every fixture object uses the one test image.
+- `spec/gallery-ui.test.ts`: 10 passed. Fixed during it: closing a detail
+  reset an unsettled report; now only opening another object does.
+- Full suite on a fresh DB: **224 passed**.
+
+Next: Task 8 (Release copy and Gallery navigation).

@@ -1322,3 +1322,234 @@ fieldset:disabled .choice,
     padding: 0 28px;
   }
 }
+
+/* The Gallery (/gallery/): a quiet exhibition on the same mineral grey, warm
+   paper and charcoal type. Every rule here is scoped to .gallery-* or
+   .artifact-*, so the space is untouched. */
+.gallery-page {
+  min-height: 100dvh;
+  overflow-y: auto;
+}
+
+.gallery-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  max-width: calc(1200px + 2 * var(--gutter));
+  margin: 0 auto;
+  padding: 40px var(--gutter) 0;
+}
+
+.gallery-wordmark {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.gallery-main {
+  max-width: calc(1200px + 2 * var(--gutter));
+  margin: 0 auto;
+  padding: clamp(40px, 7vh, 72px) var(--gutter) 72px;
+}
+
+.gallery-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(32px, 4vw, 48px);
+  line-height: 1.15;
+}
+
+.gallery-intro {
+  max-width: 34em;
+  margin: 14px 0 0;
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.gallery-paused {
+  margin: 10px 0 0;
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.gallery-state {
+  margin: 56px 0 0;
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.gallery-state p {
+  margin: 0 0 16px;
+}
+
+.gallery-empty {
+  font-family: var(--serif);
+  font-size: 22px;
+}
+
+.gallery-empty-note {
+  max-width: 34em;
+  color: var(--muted);
+}
+
+/* three columns from 1,024 px, two from 600 px, one below */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(24px, 3vw, 40px);
+  margin: clamp(32px, 5vh, 56px) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 1023px) {
+  .gallery-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 599px) {
+  .gallery-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gallery-header {
+    padding-top: 44px;
+  }
+
+  .gallery-intro {
+    font-size: 17px;
+  }
+}
+
+.gallery-tile {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gallery-tile img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: rgb(243 240 232 / 0.35);
+}
+
+.gallery-caption {
+  display: block;
+  margin-top: 10px;
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.gallery-tile:hover .gallery-caption {
+  color: var(--ink);
+}
+
+.gallery-more {
+  margin-top: 48px;
+  text-align: center;
+}
+
+/* one object, larger */
+.artifact-dialog {
+  width: min(760px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  margin: auto;
+  overflow-y: auto;
+}
+
+.artifact-dialog::backdrop {
+  background: rgb(198 205 204 / 0.86);
+}
+
+.artifact-dialog:focus {
+  outline: none;
+}
+
+.artifact-sheet {
+  position: relative;
+  padding: 56px clamp(16px, 4vw, 40px) 32px;
+  border-radius: 4px;
+  background: var(--paper);
+  box-shadow: 0 1px 2px rgb(40 36 30 / 0.07), 8px 16px 26px rgb(40 36 30 / 0.12);
+}
+
+.artifact-close {
+  top: 6px;
+  right: 8px;
+}
+
+.artifact-frame {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  max-height: calc(100dvh - 220px);
+  margin: 0 auto;
+}
+
+.artifact-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.artifact-missing {
+  color: var(--muted);
+}
+
+.artifact-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px 24px;
+  margin-top: 20px;
+}
+
+.artifact-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(22px, 2.4vw, 28px);
+}
+
+.artifact-report-link {
+  min-height: 44px;
+}
+
+.artifact-note {
+  margin: 0;
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.artifact-report .report-reasons {
+  margin: 20px 0 0;
+}
+
+.artifact-report .choice {
+  margin-top: 12px;
+}
+
+.artifact-report-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+@media (max-width: 600px) {
+  /* the space lifts its last link first; here Back to the space leads */
+  .gallery-header .header-links .header-link:last-child {
+    order: 0;
+  }
+}
