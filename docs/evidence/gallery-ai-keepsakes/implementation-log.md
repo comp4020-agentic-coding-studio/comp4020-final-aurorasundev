@@ -44,4 +44,25 @@ they go to this feature branch, whose pushes run CI checks but do not deploy
   11 passed. Two Task 1 tests updated because a save now queues on its own.
 - Full suite on a fresh local DB: **144 passed**.
 
-Next: Task 3 (providers and private file storage).
+## Task 3: providers and private storage (done, 15:44)
+
+- `server/artifacts/provider.ts`: real OpenAI adapter (Responses with
+  `store:false` and strict schemas for the recipe and the visual policy;
+  Images API `/v1/images/generations` with n=1, 1024x1024, medium, webp,
+  compression 80, opaque, moderation auto; no `response_format`/`style`),
+  bounded body reads, WebP header validation, safe error codes with five
+  kinds (transient, config, refusal, invalid, ambiguous). Inspection runs the
+  existing moderation `check` unchanged with the image as `paper_image`, then
+  the visual policy. Fixture provider refused on Fly regardless of the flag.
+- `server/artifacts/storage.ts`: server-named UUID files, staging + fsync +
+  rename + directory fsync, recovery, startup sweep, capacity checks.
+- `spec/fixtures/artifacts/keepsake-1024.webp`: a real 1024x1024 WebP (4 KB)
+  drawn locally for tests; never a production seed.
+- `spec/artifact-provider.test.ts` + `spec/artifact-storage.test.ts`: 23 passed.
+- Official docs checked 2026-10-18: the image-generation guide lists
+  `gpt-image-2.5-*` models and confirms size/quality/output_format/
+  output_compression/background/moderation/n and base64 output; it does not
+  name `gpt-image-2`. The spec's `gpt-image-2` default is kept unchanged
+  (no silent switch); **model access is unverified**.
+
+Next: Task 4 (Gallery HTTP/SSE, reports, private CLI).
