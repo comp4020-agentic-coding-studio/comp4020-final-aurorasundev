@@ -160,7 +160,10 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
             <input type="radio" name="mode" value="RELEASE" checked={mode === "RELEASE"} onChange={() => setMode("RELEASE")} />
             <span>
               <span className="choice-label">Release it</span>
-              <span className="choice-hint">Its fate is no longer yours to control.</span>
+              <span className="choice-hint">
+                Its fate is no longer yours to control. When burned, it will automatically become an anonymous AI keepsake in the public
+                Gallery. Your original words and drawing will be deleted.
+              </span>
             </span>
           </label>
         </fieldset>

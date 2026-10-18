@@ -6,9 +6,12 @@ type Props = {
   total: number | null;
   // a paper is being let go: the header stays, its key flow waits
   busy?: boolean;
+  // only from the idle space: leaving mid-draft, mid-reading or mid-ritual
+  // would drop what the visitor is doing
+  canVisitGallery?: boolean;
 };
 
-export function Header({ onReturnKey, total, busy = false }: Props) {
+export function Header({ onReturnKey, total, busy = false, canVisitGallery = false }: Props) {
   return (
     <header className="site-header">
       <div className="header-brand">
@@ -25,6 +28,11 @@ export function Header({ onReturnKey, total, busy = false }: Props) {
         <button type="button" className="header-link" onClick={onReturnKey} disabled={busy}>
           Return key
         </button>
+        {canVisitGallery && (
+          <a className="header-link" href="/gallery/">
+            Gallery
+          </a>
+        )}
         <a className="header-link" href="/readme/">
           About
         </a>

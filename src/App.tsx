@@ -541,7 +541,7 @@ export function App() {
 
   return (
     <div className={`app${mode.kind === "writing" ? " is-writing" : ""}${mode.kind === "ritual" ? " is-ritual" : ""}`}>
-      <Header onReturnKey={openReturnKey} total={ready ? space.total : null} busy={mode.kind === "ritual"} />
+      <Header onReturnKey={openReturnKey} total={ready ? space.total : null} busy={mode.kind === "ritual"} canVisitGallery={mode.kind === "space"} />
       {ready && (
         <PaperField
           ref={field}

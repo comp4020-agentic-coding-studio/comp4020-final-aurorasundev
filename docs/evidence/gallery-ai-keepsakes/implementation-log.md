@@ -160,4 +160,25 @@ they go to this feature branch, whose pushes run CI checks but do not deploy
   reset an unsettled report; now only opening another object does.
 - Full suite on a fresh DB: **224 passed**.
 
-Next: Task 8 (Release copy and Gallery navigation).
+## Task 8: Release copy and Gallery navigation (done, 17:31)
+
+- `WriteDialog.tsx`: only Release's supporting text changed, to the spec's
+  exact copy. Same two radios, same single I understand checkbox, same
+  `createPaper(text, drawing, mode, key)` call and frozen retry.
+- `Header.tsx`: new `canVisitGallery` prop (separate from `busy`), shown as a
+  Gallery link between Return key and About; `App.tsx` passes
+  `mode.kind === "space"`. No ritual or reading shortcut to the Gallery.
+- `README.md`: the spec's qualification sentence plus a short factual note,
+  added to the existing safety section (no new heading).
+- `spec/gallery-consent-ui.test.ts`: 4 passed; with moderation UI, drawing and
+  ritual suites: 26 passed.
+- Browser, built app: Release copy wraps cleanly at 1280×720 (whole form
+  fits), 1366×768 and 390×844 (scrolls inside the dialog as before; submit
+  reachable, 44 px; textarea 16–19 px; hints 14–15 px as before; no
+  overflow). Gallery link present in the idle space and absent while
+  writing. Phone header stacks About / Return key / Gallery under the
+  existing ordering rule. Screenshots in [write/](write/).
+- Open: header links on phone are 18 px tall, below 44 px; this is the
+  existing header's size for About and Return key, left unchanged.
+
+Next: Task 9 (ADR, runbook, docs, final verification).
