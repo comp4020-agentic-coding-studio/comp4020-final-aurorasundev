@@ -180,10 +180,12 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   // words. Like the words it is immutable, and cleared when the paper ends.
   (db) => db.exec("ALTER TABLE papers ADD COLUMN drawing TEXT"),
 
-  // 9: Release keepsakes. A job per Release paper carries only a four-value
-  // recipe, never the paper's words or drawing; `public_id` is an independent
-  // random id, so a published object names no paper. The Gallery has its own
-  // revision, separate from the papers'. Budgets are reserved per UTC day
+  // 9: Release records. A job exists only for a fresh Release burn and
+  // carries a constrained creative brief derived from that note at ignition,
+  // never the note's words or drawing; `public_id` is an independent random
+  // id, so a published object names no paper. `extract_until` is when the
+  // ignition extraction is given up on, which also bounds the burn's fire.
+  // The Gallery has its own revision. Budgets are reserved per UTC day
   // before any provider request. Reports and operator actions are private.
   (db) =>
     db.exec(`
@@ -191,16 +193,16 @@ const MIGRATIONS: ((db: DB) => void)[] = [
         id TEXT PRIMARY KEY,
         paper_id TEXT NOT NULL UNIQUE REFERENCES papers(id),
         public_id TEXT NOT NULL UNIQUE,
-        state TEXT NOT NULL CHECK (state IN ('PREPARE_QUEUED', 'PREPARING', 'PREPARED', 'IMAGE_QUEUED',
-          'GENERATING', 'REVIEW_QUEUED', 'REVIEWING', 'PUBLISHED', 'FAILED', 'BLOCKED', 'CANCELLED',
-          'GENERATION_UNKNOWN')),
-        recipe TEXT,
-        recipe_source TEXT CHECK (recipe_source IN ('prepared', 'neutral')),
-        prepare_attempts INTEGER NOT NULL DEFAULT 0,
+        state TEXT NOT NULL CHECK (state IN ('EXTRACTING', 'IMAGE_QUEUED', 'GENERATING', 'REVIEW_QUEUED',
+          'REVIEWING', 'PUBLISHED', 'SOURCE_UNAVAILABLE', 'FAILED', 'BLOCKED', 'CANCELLED', 'GENERATION_UNKNOWN')),
+        brief TEXT,
+        brief_version INTEGER,
         image_attempts INTEGER NOT NULL DEFAULT 0,
         review_attempts INTEGER NOT NULL DEFAULT 0,
         lease_token TEXT,
         lease_until INTEGER,
+        extract_until INTEGER,
+        not_before INTEGER NOT NULL,
         next_attempt_at INTEGER NOT NULL,
         file_key TEXT,
         error_code TEXT,
@@ -230,7 +232,7 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       INSERT INTO gallery_state (id, revision) VALUES (1, 0);
       CREATE TABLE artifact_budgets (
         day TEXT PRIMARY KEY,
-        recipes INTEGER NOT NULL DEFAULT 0,
+        briefs INTEGER NOT NULL DEFAULT 0,
         images INTEGER NOT NULL DEFAULT 0,
         inspections INTEGER NOT NULL DEFAULT 0
       );

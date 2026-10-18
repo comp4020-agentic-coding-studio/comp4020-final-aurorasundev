@@ -13,7 +13,7 @@
 // applies it (and tells open Gallery pages about a hide) within a second or
 // so; if no server is running, it waits and is applied at the next start.
 // Output is ids, states, reasons and ages: never a paper's words or drawing,
-// a recipe or a provider response.
+// a brief or a provider response.
 import { openDb } from "../server/db.ts";
 import { enqueueAdminJob } from "../server/artifacts/store.ts";
 
@@ -56,12 +56,12 @@ if (command === "reports") {
   }
 } else if (command === "jobs") {
   const rows = db
-    .prepare("SELECT id, state, recipe_source, error_code, image_attempts, review_attempts, updated_at FROM artifact_jobs ORDER BY updated_at DESC LIMIT 50")
-    .all() as { id: string; state: string; recipe_source: string | null; error_code: string | null; image_attempts: number; review_attempts: number; updated_at: number }[];
+    .prepare("SELECT id, state, brief_version, error_code, image_attempts, review_attempts, updated_at FROM artifact_jobs ORDER BY updated_at DESC LIMIT 50")
+    .all() as { id: string; state: string; brief_version: number | null; error_code: string | null; image_attempts: number; review_attempts: number; updated_at: number }[];
   if (rows.length === 0) console.log("no jobs");
   for (const j of rows) {
     console.log(
-      [j.id, j.state.toLowerCase(), j.recipe_source ? `recipe=${j.recipe_source}` : "", `images=${j.image_attempts}`, `reviews=${j.review_attempts}`, j.error_code ? `error=${j.error_code}` : "", `age=${age(j.updated_at)}`]
+      [j.id, j.state.toLowerCase(), j.brief_version ? `brief=v${j.brief_version}` : "", `images=${j.image_attempts}`, `reviews=${j.review_attempts}`, j.error_code ? `error=${j.error_code}` : "", `age=${age(j.updated_at)}`]
         .filter(Boolean)
         .join("  "),
     );

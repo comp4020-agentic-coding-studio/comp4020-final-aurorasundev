@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Router } from "express";
-import { queueDestroyedRelease, queueReleasePreparation } from "./artifacts/store.ts";
+import { beginReleaseExtraction, extractionStatus, type ReleaseSource } from "./artifacts/store.ts";
 import { activeTotal, bumpRevision, currentRevision, requestDigest, serverSecret, type DB } from "./db.ts";
 import { broadcast } from "./events.ts";
 import { keyState } from "./identity.ts";
@@ -121,8 +121,6 @@ export function createPaper(
       `INSERT INTO papers (id, owner_identity_id, content, drawing, created_at, submission_key, mode, request_digest)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(id, ownerId, valid.value.content, valid.value.drawing, new Date().toISOString(), valid.value.submissionKey, mode, digest);
-    // a Release paper will leave a keepsake: its recipe is prepared while it is here
-    queueReleasePreparation(db, id, Date.now());
     const revision = bumpRevision(db);
     return { ok: true, value: { id, version: 1, status: "ACTIVE", revision, total: activeTotal(db), fresh: true } };
   })();
@@ -188,6 +186,8 @@ export function witnessPaper(db: DB, paperId: string, identityId: string) {
 
 type BurnOutcome = "destroyed" | "paper_gone" | "forbidden" | "op_conflict";
 export type Burned = { outcome: BurnOutcome; revision: number | null; total: number | null; fresh: boolean; version?: number };
+// A fresh Release burn hands its note to the record pipeline, in memory only.
+export type Ignition = { paperId: string; jobId: string; lease: string; source: ReleaseSource; extractUntil: number };
 
 // How a confirmed destruction is shown. The duration is a tuning starting
 // point for every page's ending; the seed lets each page vary its flames and
@@ -197,24 +197,37 @@ export const BURN_DURATION_MS = 4800;
 const effectSeed = (paperId: string, endedAt: string): string =>
   createHash("sha256").update(`${paperId}\u0000${endedAt}`).digest("hex").slice(0, 16);
 
+// A Release burn's fire also waits on its record's extraction: while that is
+// open, `extraction_until` says when the fire must end regardless (the
+// extraction has failed by then). Its brief is never part of this.
 export function ending(db: DB, paperId: string) {
   const row = db.prepare("SELECT version, ended_at FROM papers WHERE id = ?").get(paperId) as
     | { version: number; ended_at: string | null }
     | undefined;
   const destroyedAt = row?.ended_at ?? new Date(0).toISOString();
+  const extraction = extractionStatus(db, paperId);
   return {
     version: row?.version ?? 0,
     destroyed_at: destroyedAt,
     burn_duration_ms: BURN_DURATION_MS,
     effect_seed: effectSeed(paperId, destroyedAt),
+    ...(extraction && !extraction.settled ? { extraction_until: new Date(extraction.until).toISOString() } : {}),
   };
 }
 
 // One conditional transition out of ACTIVE, with the text cleared in the same
 // commit. Two people destroying at once get one transition: the second finds
 // it no longer ACTIVE. Rights are checked here, not trusted from the client.
-export function burnPaper(db: DB, paperId: string, identityId: string, opKey: string, confirmed: boolean): Burned {
-  return db.transaction((): Burned => {
+export function burnPaper(
+  db: DB,
+  paperId: string,
+  identityId: string,
+  opKey: string,
+  confirmed: boolean,
+  // whether records are being made at all; when paused, nothing is read
+  extract = true,
+): Burned & { ignition?: Ignition } {
+  return db.transaction((): Burned & { ignition?: Ignition } => {
     const prior = db
       .prepare("SELECT paper_id, outcome, revision, total FROM burn_operations WHERE identity_id = ? AND op_key = ?")
       .get(identityId, opKey) as
@@ -237,18 +250,21 @@ export function burnPaper(db: DB, paperId: string, identityId: string, opKey: st
     if (!paper || paper.status !== "ACTIVE") return record("paper_gone");
     if (!confirmed || !viewerState(db, paper, identityId).can_burn) return { outcome: "forbidden", revision: null, total: null, fresh: false };
 
+    // A Release paper's note is read once, here, just before it is cleared,
+    // and handed back in memory for one extraction; Keep is never read.
+    const now = Date.now();
+    const started = extract ? beginReleaseExtraction(db, paperId, now, BURN_DURATION_MS) : null;
     const changed = db
       .prepare(
         `UPDATE papers SET status = 'DESTROYED', content = '', drawing = NULL, version = version + 1, ended_at = ?
          WHERE id = ? AND status = 'ACTIVE'`,
       )
-      .run(new Date().toISOString(), paperId).changes;
-    if (changed !== 1) return record("paper_gone");
-    // in the same commit that cleared it: a Release paper's image is queued
-    queueDestroyedRelease(db, paperId, Date.now());
+      .run(new Date(now).toISOString(), paperId).changes;
+    // the paper was already ACTIVE above, inside this transaction
+    if (changed !== 1) throw new Error("burn lost its paper inside a transaction");
     const revision = bumpRevision(db);
     const result = record("destroyed", revision, activeTotal(db));
-    return { ...result, version: paper.version + 1 };
+    return { ...result, version: paper.version + 1, ...(started ? { ignition: { paperId, ...started } } : {}) };
   })();
 }
 
@@ -268,7 +284,13 @@ function moderationRefusal(verdict: Exclude<Verdict, { kind: "allow" }>) {
   return { status: 503, logReason: verdict.error.code, body: { code: "moderation_unavailable", error: REFUSALS.unavailable } };
 }
 
-export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise<Verdict>): Router {
+export function papersRouter(
+  db: DB,
+  checkContent: (payload: Payload) => Promise<Verdict>,
+  // after a fresh Release burn has committed and been answered; null when
+  // records are not being made, so the note is never read
+  onIgnite: ((ignition: Ignition) => void) | null = null,
+): Router {
   const router = Router();
 
   // A random handful of what is here, for the first view and for exploring.
@@ -358,7 +380,7 @@ export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise
       res.status(403).json({ code: "forbidden", error: "Open the paper before letting it go." });
       return;
     }
-    const result = burnPaper(db, paperId, identityId, opKey, req.body?.confirmed === true);
+    const { ignition, ...result } = burnPaper(db, paperId, identityId, opKey, req.body?.confirmed === true, onIgnite !== null);
     log("burn", {
       identity: identityId,
       paper: paperId,
@@ -382,6 +404,8 @@ export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise
       broadcast("paper:destroyed", { id: paperId, ...facts, revision: result.revision, active_total: result.total, op: opKey });
     }
     res.json({ id: paperId, status: "destroyed", ...facts, revision: result.revision, total: result.total, op: opKey });
+    // the note goes to its one extraction only now, after the commit and the reply
+    if (ignition) onIgnite?.(ignition);
   });
 
   // Checks still running, by identity and submission key, so a double click

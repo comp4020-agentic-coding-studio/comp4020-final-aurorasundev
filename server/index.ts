@@ -7,7 +7,7 @@ import { artifactProviderFromEnv } from "./artifacts/provider.ts";
 import { galleryRouter } from "./artifacts/router.ts";
 import { createArtifactWorker } from "./artifacts/worker.ts";
 import { openDb } from "./db.ts";
-import { closeAllStreams, eventsRouter } from "./events.ts";
+import { broadcast, closeAllStreams, eventsRouter } from "./events.ts";
 import { identityRouter } from "./identity.ts";
 import { check, providerFromEnv } from "./moderation.ts";
 import { papersRouter } from "./papers.ts";
@@ -26,16 +26,18 @@ const db = openDb(dbPath);
 const provider = providerFromEnv();
 // The test double answers instantly, so its retries needn't wait minutes.
 const worker = createReviewWorker(db, provider, provider?.name === "fixture" ? { retryDelaysMs: [50, 100, 200] } : {});
-// Release keepsakes: paused unless ARTIFACTS_ENABLED=1 and a provider is
-// configured. Paused still queues every Release burn and still applies
-// operator hides; it only sends nothing to the image provider. The fixture
-// provider is refused on Fly, as moderation's is.
+// Release records: paused unless ARTIFACTS_ENABLED=1 and a provider is
+// configured. Paused, a Release burn still burns normally but makes no
+// record (its note is not kept to process later); operator hides still
+// apply. The fixture provider is refused on Fly, as moderation's is.
 const artifactDir = process.env.ARTIFACT_DIR ?? resolve(dirname(dbPath), "artifacts");
 const artifactProvider = artifactProviderFromEnv();
 const artifactWorker = createArtifactWorker(db, artifactProvider, {
   artifactDir,
   enabled: process.env.ARTIFACTS_ENABLED === "1",
   onChange: broadcastGallery,
+  // the burn's fire may end: the paper's id only, never its record
+  onSettled: (paperId) => broadcast("paper:extraction_settled", { id: paperId }),
 });
 const readmeHtml = renderReadmePage(resolve(root, "README.md"));
 const dist = resolve(root, "dist");
@@ -52,7 +54,10 @@ app.post("/api/session", (req, res) => {
 app.get("/api/safety", (_req, res) => {
   res.set("Cache-Control", "no-store").json({ provider: provider?.name ?? null, reports: true });
 });
-app.use("/api", papersRouter(db, (payload) => check(provider, payload)));
+app.use(
+  "/api",
+  papersRouter(db, (payload) => check(provider, payload), artifactWorker.enabled ? (ignition) => void artifactWorker.extract(ignition) : null),
+);
 app.use("/api", galleryRouter(db, artifactDir, () => artifactWorker.enabled, () => void artifactWorker.wake()));
 app.use("/api", reportsRouter(db, () => void worker.wake()));
 app.use("/api", eventsRouter(db));

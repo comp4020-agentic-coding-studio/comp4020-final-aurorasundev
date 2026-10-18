@@ -4,13 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { openDb, requestDigest, type DB } from "../server/db.ts";
-import { createPaper } from "../server/papers.ts";
-import {
-  cancelArtifactPreparation,
-  discoverReleasePreparation,
-  queueDestroyedRelease,
-  queueReleasePreparation,
-} from "../server/artifacts/store.ts";
+import { beginReleaseExtraction, EXTRACT_LIMIT_MS } from "../server/artifacts/store.ts";
 
 // Migration 9 against a real version-8 database captured from the shipped
 // code (spec/fixtures/schema-v8.sqlite): six papers by two identities, one
@@ -82,92 +76,37 @@ describe("migration 9 on a shipped version-8 database", () => {
   });
 });
 
-describe("which papers can become keepsakes", () => {
-  it("release_mode_is_the_only_eligibility", () => {
-    const db = quiet(() => openDb(":memory:"));
-    db.prepare("INSERT INTO identities (id, created_at) VALUES ('o', 'now')").run();
-    const save = (mode: string, key: string) => {
-      const r = createPaper(db, "o", "words", key, mode);
-      if (!r.ok) throw new Error(r.code);
-      return r.value.id;
-    };
-    const keep = save("KEEP", "key-keep-1");
-    const release = save("RELEASE", "key-release-1");
-    // saving already queued the Release one; asking again changes nothing
-    expect(queueReleasePreparation(db, keep, 1)).toBe(false);
-    expect(queueReleasePreparation(db, release, 1)).toBe(false);
-    // a Keep paper burned by its author never queues an image
-    db.prepare("UPDATE papers SET status = 'DESTROYED', content = '' WHERE id = ?").run(keep);
-    expect(queueDestroyedRelease(db, keep, 2)).toBe(false);
-    expect(db.prepare("SELECT paper_id FROM artifact_jobs").all()).toEqual([{ paper_id: release }]);
-    db.close();
-  });
-
-  it("existing_active_release_is_discovered", () => {
+describe("no record is made except at a fresh Release burn", () => {
+  it("leaves every paper that already existed without a job, ended or not", () => {
     const db = quiet(() => openDb(freshCopy()));
-    const activeRelease = papers(db).filter((p) => p.mode === "RELEASE" && p.status === "ACTIVE").map((p) => p.id).sort();
-    expect(activeRelease).toHaveLength(2);
-    expect(discoverReleasePreparation(db, 1)).toBe(2);
-    expect(discoverReleasePreparation(db, 2)).toBe(0);
-    const jobs = db.prepare("SELECT paper_id, state, recipe FROM artifact_jobs ORDER BY paper_id").all();
-    expect(jobs).toEqual(activeRelease.map((paper_id) => ({ paper_id, state: "PREPARE_QUEUED", recipe: null })));
+    // nothing is backfilled: a record needs its note at ignition, and an
+    // ended paper's note is gone
+    expect(db.prepare("SELECT COUNT(*) AS n FROM artifact_jobs").get()).toEqual({ n: 0 });
     db.close();
   });
 
-  it("discovers in bounded batches", () => {
-    const db = quiet(() => openDb(":memory:"));
-    db.prepare("INSERT INTO identities (id, created_at) VALUES ('o', 'now')").run();
-    for (let i = 0; i < 45; i++) {
-      // as if saved before keepsakes existed: no job created at save time
-      db.prepare(
-        "INSERT INTO papers (id, owner_identity_id, content, created_at, submission_key, mode, request_digest) VALUES (?, 'o', 'w', 'now', ?, 'RELEASE', 'd')",
-      ).run(`p-${i}`, `k-${i}`);
-    }
-    expect([discoverReleasePreparation(db, 1), discoverReleasePreparation(db, 1), discoverReleasePreparation(db, 1)]).toEqual([20, 20, 5]);
-    db.close();
-  });
-
-  it("ended_papers_are_not_backfilled", () => {
+  it("starts one extraction only for an ACTIVE Release paper, once", () => {
     const db = quiet(() => openDb(freshCopy()));
-    discoverReleasePreparation(db, 1);
-    const ended = papers(db).filter((p) => p.status !== "ACTIVE").map((p) => p.id);
-    expect(ended).toHaveLength(3);
-    for (const id of ended) {
-      expect(queueReleasePreparation(db, id, 2)).toBe(false);
-      expect(db.prepare("SELECT 1 FROM artifact_jobs WHERE paper_id = ?").get(id)).toBeUndefined();
+    const byStatus = papers(db);
+    const activeRelease = byStatus.find((p) => p.mode === "RELEASE" && p.status === "ACTIVE")!;
+    const activeKeep = byStatus.find((p) => p.mode === "KEEP" && p.status === "ACTIVE")!;
+    for (const ended of byStatus.filter((p) => p.status !== "ACTIVE")) {
+      expect(beginReleaseExtraction(db, ended.id, 1, 4800), ended.id).toBeNull();
     }
-    db.close();
-  });
-
-  it("one_job_per_paper", () => {
-    const db = quiet(() => openDb(":memory:"));
-    db.prepare("INSERT INTO identities (id, created_at) VALUES ('o', 'now')").run();
-    const r = createPaper(db, "o", "words", "key-one-1", "RELEASE");
-    if (!r.ok) throw new Error(r.code);
-    const id = r.value.id;
-    // the save queued it; a second request does not add one
-    expect(queueReleasePreparation(db, id, 2)).toBe(false);
-    // SQLite itself refuses a second row, not only this module
+    expect(beginReleaseExtraction(db, activeKeep.id, 1, 4800)).toBeNull();
+    const first = beginReleaseExtraction(db, activeRelease.id, 1, 4800);
+    expect(first?.source).toEqual({ text: activeRelease.content, drawing: activeRelease.drawing });
+    expect(beginReleaseExtraction(db, activeRelease.id, 2, 4800)).toBeNull();
+    // SQLite itself refuses a second job for one paper, not only this module
     expect(() =>
-      db.prepare("INSERT INTO artifact_jobs (id, paper_id, public_id, state, next_attempt_at, created_at, updated_at) VALUES ('x', ?, 'y', 'PREPARE_QUEUED', 0, 0, 0)").run(id),
+      db
+        .prepare("INSERT INTO artifact_jobs (id, paper_id, public_id, state, not_before, next_attempt_at, created_at, updated_at) VALUES ('x', ?, 'y', 'EXTRACTING', 0, 0, 0, 0)")
+        .run(activeRelease.id),
     ).toThrow(/UNIQUE/);
-    db.prepare("UPDATE papers SET status = 'DESTROYED', content = '' WHERE id = ?").run(id);
-    expect(queueDestroyedRelease(db, id, 3)).toBe(true);
-    expect(queueDestroyedRelease(db, id, 4)).toBe(false);
-    const job = db.prepare("SELECT state, recipe_source FROM artifact_jobs WHERE paper_id = ?").get(id);
-    expect(job).toEqual({ state: "IMAGE_QUEUED", recipe_source: "neutral" });
-    expect((db.prepare("SELECT COUNT(*) AS n FROM artifact_jobs").get() as { n: number }).n).toBe(1);
-    db.close();
-  });
-
-  it("cancels preparation and refuses to queue an image afterwards", () => {
-    const db = quiet(() => openDb(":memory:"));
-    db.prepare("INSERT INTO identities (id, created_at) VALUES ('o', 'now')").run();
-    const r = createPaper(db, "o", "words", "key-cancel-1", "RELEASE");
-    if (!r.ok) throw new Error(r.code);
-    queueReleasePreparation(db, r.value.id, 1);
-    cancelArtifactPreparation(db, r.value.id, 2);
-    expect(db.prepare("SELECT state FROM artifact_jobs").get()).toEqual({ state: "CANCELLED" });
+    // the job itself holds no source
+    const job = db.prepare("SELECT * FROM artifact_jobs").get() as Record<string, unknown>;
+    expect(JSON.stringify(job)).not.toContain("fixture release");
+    expect(job).toMatchObject({ state: "EXTRACTING", brief: null, extract_until: 1 + EXTRACT_LIMIT_MS, not_before: 1 + 4800 });
     db.close();
   });
 });

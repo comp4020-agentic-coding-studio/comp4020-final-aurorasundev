@@ -55,8 +55,8 @@ export async function gallery(options: { enabled?: boolean } = {}): Promise<Harn
        VALUES (?, 'author', '', '2026-01-01T00:00:00.000Z', ?, 'RELEASE', 'DESTROYED', ?)`,
     ).run(paperId, randomUUID(), CANARY.text);
     db.prepare(
-      `INSERT INTO artifact_jobs (id, paper_id, public_id, state, recipe, recipe_source, file_key, next_attempt_at, created_at, updated_at)
-       VALUES (?, ?, ?, 'PUBLISHED', '{"motif":"knot","material":"clay","palette":"sage","gesture":"held"}', 'prepared', ?, 0, 1, 1)`,
+      `INSERT INTO artifact_jobs (id, paper_id, public_id, state, brief, brief_version, file_key, not_before, next_attempt_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'PUBLISHED', '{"schema_version":2,"metaphor":"thread"}', 2, ?, 0, 0, 1, 1)`,
     ).run(jobId, paperId, id, fileKey);
     db.prepare(
       `INSERT INTO artifacts (id, job_id, status, version, file_key, width, height, title, alt, published_at, updated_at)

@@ -1,28 +1,46 @@
-// Shared shapes for Release keepsakes. Nothing here holds a paper's words or
-// drawing: a recipe is four enum values, and the public object is an
-// allowlisted view of a generated image.
+// Shared shapes for Release records. A job holds a constrained creative
+// brief derived from its own burned note, never the note's words or drawing;
+// the public object is an allowlisted view of the generated image.
 
-export const MOTIFS = ["vessel", "knot", "seed", "arch", "ribbon", "stone"] as const;
-export const MATERIALS = ["paper", "clay", "glass", "charcoal"] as const;
-export const PALETTES = ["ivory", "slate", "sage", "ochre"] as const;
-export const GESTURES = ["held", "opening", "balanced", "scattered"] as const;
+export const METAPHORS = ["thread", "vessel", "threshold", "path", "seed", "stone"] as const;
+export const RELATIONS = ["separated", "connected", "under_pressure", "opening", "receding"] as const;
+export const MOTIONS = ["still", "unfolding", "drifting", "settling"] as const;
+export const SPACES = ["enclosed", "open", "distant"] as const;
+export const MATERIALS = ["paper_stone", "frosted_glass", "ink_fibre"] as const;
+export const PALETTES = ["slate_ivory", "sage_charcoal", "cobalt_paper"] as const;
+export const TIMBRES = ["felt_piano", "soft_glass", "warm_pad"] as const;
+export const PULSES = ["none", "slow"] as const;
+export const DENSITIES = ["sparse", "layered"] as const;
+export const ENDINGS = ["open", "settled", "fading"] as const;
 
-export type Recipe = {
-  motif: (typeof MOTIFS)[number];
+// What one note becomes. Every field is an enum chosen by the model after it
+// read that note at ignition; nothing here is free text.
+export type CreativeBriefV2 = {
+  schema_version: 2;
+  metaphor: (typeof METAPHORS)[number];
+  relation: (typeof RELATIONS)[number];
+  motion: (typeof MOTIONS)[number];
+  space: (typeof SPACES)[number];
   material: (typeof MATERIALS)[number];
   palette: (typeof PALETTES)[number];
-  gesture: (typeof GESTURES)[number];
+  music: {
+    timbre: (typeof TIMBRES)[number];
+    pulse: (typeof PULSES)[number];
+    density: (typeof DENSITIES)[number];
+    ending: (typeof ENDINGS)[number];
+  };
 };
 
+// A job exists only for a fresh Release burn. It starts EXTRACTING (the note
+// is held in memory for one request), then carries the brief alone.
 export const JOB_STATES = [
-  "PREPARE_QUEUED",
-  "PREPARING",
-  "PREPARED",
+  "EXTRACTING",
   "IMAGE_QUEUED",
   "GENERATING",
   "REVIEW_QUEUED",
   "REVIEWING",
   "PUBLISHED",
+  "SOURCE_UNAVAILABLE",
   "FAILED",
   "BLOCKED",
   "CANCELLED",
@@ -30,9 +48,7 @@ export const JOB_STATES = [
 ] as const;
 export type JobState = (typeof JOB_STATES)[number];
 
-// States a burn moves straight to IMAGE_QUEUED; later ones are past it.
-export const PREPARATION_STATES: readonly JobState[] = ["PREPARE_QUEUED", "PREPARING", "PREPARED"];
-
+// image only for now; `audio` arrives with the music extension
 export type PublicArtifact = {
   id: string;
   version: number;

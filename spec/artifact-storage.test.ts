@@ -93,7 +93,7 @@ describe("recovery after a crash", () => {
       "INSERT INTO papers (id, owner_identity_id, content, created_at, submission_key, mode, request_digest) VALUES ('p', 'o', '', 'now', 'k', 'RELEASE', 'd')",
     ).run();
     db.prepare(
-      "INSERT INTO artifact_jobs (id, paper_id, public_id, state, file_key, next_attempt_at, created_at, updated_at) VALUES ('j', 'p', ?, 'REVIEW_QUEUED', ?, 0, 0, 0)",
+      "INSERT INTO artifact_jobs (id, paper_id, public_id, state, file_key, not_before, next_attempt_at, created_at, updated_at) VALUES ('j', 'p', ?, 'REVIEW_QUEUED', ?, 0, 0, 0, 0)",
     ).run(kept, `${kept}.webp`);
     writeFileSync(join(d, `${randomUUID()}.webp.0a1b2c3d.partial`), "half");
     writeFileSync(join(d, "notes.txt"), "not ours");

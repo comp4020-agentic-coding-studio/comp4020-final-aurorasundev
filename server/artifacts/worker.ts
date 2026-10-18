@@ -1,43 +1,52 @@
 import { randomUUID } from "node:crypto";
 import type { DB } from "../db.ts";
 import { log } from "../log.ts";
-import { ARTIFACT_TIMEOUTS, ArtifactError, artifactAlt, artifactTitle, parseRecipe, type ArtifactProvider } from "./provider.ts";
+import type { Ignition } from "../papers.ts";
+import { ARTIFACT_TIMEOUTS, ArtifactError, artifactAlt, artifactTitle, parseBrief, type ArtifactProvider } from "./provider.ts";
 import { checkArtifactCapacity, readArtifactFile, recoverArtifactFile, removeArtifactFile, saveArtifactFile, sweepArtifactFiles } from "./storage.ts";
-import { applyArtifactAdminJobs, discoverReleasePreparation, publishArtifact } from "./store.ts";
-import type { GalleryChange, Recipe } from "./types.ts";
+import { acceptBrief, applyArtifactAdminJobs, publishArtifact, sourceUnavailable } from "./store.ts";
+import type { CreativeBriefV2, GalleryChange } from "./types.ts";
 
-// Turns burned Release papers into published keepsakes, one job at a time,
-// inside this server process. Jobs live in SQLite, so a restart resumes them.
+// Turns burned Release papers into published records.
 //
-// Before any provider request the job is leased (a random token) and the
-// day's budget is reserved, in one transaction; every result is written only
-// if that lease still holds and the paper is still in the state it needs.
-// An image request is marked as dispatched before it leaves, so a crash
+// The note is read once, at ignition: the burn hands its source to
+// `extract()` in memory, and one bounded request turns it into a creative
+// brief while the fire burns. Only the brief is ever stored. If that request
+// fails, times out (15 s) or the process restarts mid-request, the record is
+// simply not made: the deleted note is never re-read and nothing unrelated
+// is made in its place.
+//
+// From the brief, one loop inside this process works one job at a time:
+// operator actions, inspection, then images. Before any provider request the
+// job is leased (a random token) and the day's budget is reserved, in one
+// transaction; every result is written only if that lease still holds. An
+// image request is marked as dispatched before it leaves, so a crash
 // mid-generation is found at startup as an unknown outcome and is never
-// silently paid for twice.
+// silently paid for twice. An image is not published before its fire could
+// have ended.
 //
-// Paper words and drawings are read only to prepare a recipe while the paper
-// is ACTIVE, held in memory for that one request, and never written anywhere.
 // Logs carry job ids, states and codes; never an exception's message.
 
 export const LEASE_MS = 180_000;
-export const DAILY_BUDGET = { recipes: 20, images: 10, inspections: 20 };
-const RECIPE_RETRY_MS = 5_000;
-const MAX_RECIPE_ATTEMPTS = 2;
+export const DAILY_BUDGET = { briefs: 20, images: 10, inspections: 20 };
+// extractions in flight at once; more burns than this lose their record
+export const MAX_EXTRACTIONS = 4;
 const RATE_LIMIT_MIN_MS = 30_000;
 const INSPECTION_DELAYS_MS = [5_000, 30_000];
 const MAX_INSPECTIONS = 3;
 const CAPACITY_RECHECK_MS = 60_000;
-const DISCOVERY_BATCH = 20;
+const CLAIM_BATCH = 20;
 
 export type ArtifactWorkerOptions = {
   artifactDir: string;
   enabled: boolean;
   onChange: (change: GalleryChange) => void;
+  // a burn's extraction has settled, so its fire may end (paper id only)
+  onSettled?: (paperId: string) => void;
   now?: () => number;
   pollMs?: number;
   // test-only shortening of the fixed retry waits
-  delays?: { recipeRetryMs?: number; rateLimitMinMs?: number; inspectionMs?: number[]; capacityMs?: number };
+  delays?: { rateLimitMinMs?: number; inspectionMs?: number[]; capacityMs?: number };
 };
 
 type Job = {
@@ -45,8 +54,7 @@ type Job = {
   paper_id: string;
   public_id: string;
   state: string;
-  recipe: string | null;
-  prepare_attempts: number;
+  brief: string | null;
   image_attempts: number;
   review_attempts: number;
   file_key: string | null;
@@ -57,7 +65,6 @@ const utcDay = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 export function createArtifactWorker(db: DB, provider: ArtifactProvider | null, options: ArtifactWorkerOptions) {
   const now = options.now ?? Date.now;
   const poll = options.pollMs ?? 1_000;
-  const recipeRetry = options.delays?.recipeRetryMs ?? RECIPE_RETRY_MS;
   const rateLimitMin = options.delays?.rateLimitMinMs ?? RATE_LIMIT_MIN_MS;
   const inspectionDelays = options.delays?.inspectionMs ?? INSPECTION_DELAYS_MS;
   const capacityWait = options.delays?.capacityMs ?? CAPACITY_RECHECK_MS;
@@ -102,11 +109,12 @@ export function createArtifactWorker(db: DB, provider: ArtifactProvider | null, 
     return db.transaction(() => {
       const rows = db
         .prepare(
-          `SELECT id, paper_id, public_id, state, recipe, prepare_attempts, image_attempts, review_attempts, file_key
+          `SELECT id, paper_id, public_id, state, brief, image_attempts, review_attempts, file_key
            FROM artifact_jobs WHERE state IN (${states.map(() => "?").join(",")}) AND next_attempt_at <= ?
+             AND (state <> 'REVIEW_QUEUED' OR not_before <= ?)
            ORDER BY next_attempt_at, id LIMIT ?`,
         )
-        .all(...states, now(), DISCOVERY_BATCH) as Job[];
+        .all(...states, now(), now(), CLAIM_BATCH) as Job[];
       for (const job of rows) {
         if (!extra(job)) continue;
         if (!reserve(budget)) {
@@ -138,10 +146,15 @@ export function createArtifactWorker(db: DB, provider: ArtifactProvider | null, 
 
   async function recover(): Promise<void> {
     const t = now();
-    // a recipe that was in flight: the paper may still be here, so try again
-    db.prepare(
-      "UPDATE artifact_jobs SET state = 'PREPARE_QUEUED', lease_token = NULL, lease_until = NULL, next_attempt_at = ?, updated_at = ? WHERE state = 'PREPARING' AND (lease_until IS NULL OR lease_until < ?)",
-    ).run(t, t, t);
+    // an extraction that was in flight when the process stopped: its note
+    // existed only in that request, and the paper is gone, so no record
+    const lost = db.prepare("SELECT id, paper_id FROM artifact_jobs WHERE state = 'EXTRACTING'").all() as { id: string; paper_id: string }[];
+    for (const job of lost) {
+      if (sourceUnavailable(db, job.id, null, "source_lost_on_restart", t)) {
+        options.onSettled?.(job.paper_id);
+        log("artifact", { job: job.id, outcome: "source_unavailable", reason: "source_lost_on_restart" });
+      }
+    }
     // an inspection that was in flight: inspect again (counted against its cap)
     db.prepare(
       "UPDATE artifact_jobs SET state = 'REVIEW_QUEUED', lease_token = NULL, lease_until = NULL, next_attempt_at = ?, updated_at = ? WHERE state = 'REVIEWING' AND (lease_until IS NULL OR lease_until < ?)",
@@ -177,6 +190,8 @@ export function createArtifactWorker(db: DB, provider: ArtifactProvider | null, 
   }
 
   async function inspectOne(): Promise<boolean> {
+    // the last step before publishing waits until the fire could have ended,
+    // so a record never appears before its paper has finished burning
     const claimed = claim(["REVIEW_QUEUED"], "REVIEWING", "inspections");
     if (!claimed) return false;
     const { job, lease } = claimed;
@@ -199,8 +214,8 @@ export function createArtifactWorker(db: DB, provider: ArtifactProvider | null, 
         fail("BLOCKED", "inspection_blocked");
         return true;
       }
-      const recipe = parseRecipe(JSON.parse(job.recipe!));
-      const change = publishArtifact(db, job.id, lease, now(), { title: artifactTitle(recipe), alt: artifactAlt(recipe) });
+      const brief = parseBrief(JSON.parse(job.brief!));
+      const change = publishArtifact(db, job.id, lease, now(), { title: artifactTitle(brief), alt: artifactAlt(brief) });
       if (change) {
         options.onChange(change);
         log("artifact", { job: job.id, artifact: change.type === "artifact:published" ? change.artifact.id : undefined, outcome: "published", revision: change.revision });
@@ -217,49 +232,44 @@ export function createArtifactWorker(db: DB, provider: ArtifactProvider | null, 
     return true;
   }
 
-  async function prepareOne(): Promise<boolean> {
-    const claimed = claim(["PREPARE_QUEUED"], "PREPARING", "recipes");
-    if (!claimed) return false;
-    const { job, lease } = claimed;
-    const attempt = job.prepare_attempts + 1;
-    update(job.id, { prepare_attempts: attempt });
-    // read the paper into memory only while it is still ACTIVE and Release
-    const paper = db.prepare("SELECT content, drawing FROM papers WHERE id = ? AND status = 'ACTIVE' AND mode = 'RELEASE'").get(job.paper_id) as
-      | { content: string; drawing: string | null }
-      | undefined;
-    if (!paper) {
-      // burned or removed since the claim: the burn or quarantine moved the
-      // job and dropped this lease, so there is nothing to write
-      return true;
-    }
-    let recipe: Recipe | null = null;
-    let error: ArtifactError | null = null;
+  // --- ignition extraction (driven by the burn, not the loop) -------------------
+
+  let extracting = 0;
+  // One bounded request from a fresh Release burn's note, held only in this
+  // closure. The brief is accepted only under the burn's lease and before its
+  // deadline; anything else leaves the job SOURCE_UNAVAILABLE.
+  async function extract(ignition: Ignition): Promise<void> {
+    const { jobId, lease, paperId, extractUntil } = ignition;
+    let source: Ignition["source"] | null = ignition.source;
+    const settle = (code: string | null, brief?: CreativeBriefV2) => {
+      const accepted = brief ? acceptBrief(db, jobId, lease, brief, now()) : false;
+      if (!accepted) sourceUnavailable(db, jobId, lease, code ?? "brief_too_late", now());
+      log("artifact", { job: jobId, outcome: accepted ? "brief_accepted" : "source_unavailable", reason: accepted ? undefined : (code ?? "brief_too_late") });
+      options.onSettled?.(paperId);
+      if (accepted) void wake();
+    };
+    if (stopped) return settle("shutting_down");
+    if (!dispatching) return settle("generation_paused");
+    if (extracting >= MAX_EXTRACTIONS) return settle("extraction_capacity");
+    if (!reserve("briefs")) return settle("daily_budget");
+    extracting++;
+    const controller = new AbortController();
+    inFlight.add(controller);
+    const timeout = setTimeout(() => controller.abort(), Math.max(0, extractUntil - now()));
     try {
-      recipe = await call(ARTIFACT_TIMEOUTS.recipe, (signal) => provider!.prepareRecipe({ text: paper.content, drawing: paper.drawing }, signal));
+      const brief = await provider!.extractBrief(source, controller.signal);
+      source = null;
+      settle(null, brief);
     } catch (err) {
-      error = err instanceof ArtifactError ? err : new ArtifactError("worker_error", "transient");
+      source = null;
+      const e = err instanceof ArtifactError ? err : new ArtifactError("brief_worker_error", "transient");
+      settle(controller.signal.aborted ? (stopped ? "shutting_down" : "brief_timeout") : e.code);
+      if (e.kind === "config") console.warn(`artifact provider needs an operator: ${e.code}`);
+    } finally {
+      clearTimeout(timeout);
+      inFlight.delete(controller);
+      extracting--;
     }
-    // persist only if still ours and the paper is still here as Release
-    db.transaction(() => {
-      const still = db.prepare("SELECT 1 FROM papers WHERE id = ? AND status = 'ACTIVE' AND mode = 'RELEASE'").get(job.paper_id);
-      if (!still) {
-        log("artifact", { job: job.id, outcome: "recipe_discarded", reason: "paper_not_active" });
-        return;
-      }
-      if (recipe) {
-        if (settle(job, lease, { state: "PREPARED", recipe: JSON.stringify(recipe), recipe_source: "prepared", error_code: null })) {
-          log("artifact", { job: job.id, outcome: "prepared" });
-        } else log("artifact", { job: job.id, outcome: "recipe_discarded", reason: "lease_lost" });
-        return;
-      }
-      const retry = error!.kind === "transient" && attempt < MAX_RECIPE_ATTEMPTS;
-      // no recipe: it waits for a retry, or the burn will use a neutral one
-      settle(job, lease, retry
-        ? { state: "PREPARE_QUEUED", error_code: error!.code, next_attempt_at: now() + recipeRetry }
-        : { state: "PREPARED", error_code: error!.code });
-      log("artifact", { job: job.id, outcome: retry ? "recipe_retry" : "recipe_failed", reason: error!.code });
-    })();
-    return true;
   }
 
   // The image step needs room on disk; without it jobs wait. Room is checked
@@ -284,15 +294,15 @@ export function createArtifactWorker(db: DB, provider: ArtifactProvider | null, 
     // durably dispatched before the request leaves
     const attempt = job.image_attempts + 1;
     update(job.id, { image_attempts: attempt });
-    let recipe: Recipe;
+    let brief: CreativeBriefV2;
     try {
-      recipe = parseRecipe(JSON.parse(job.recipe ?? "null"));
+      brief = parseBrief(JSON.parse(job.brief ?? "null"));
     } catch {
-      settle(job, lease, { state: "FAILED", error_code: "recipe_invalid" });
+      settle(job, lease, { state: "FAILED", error_code: "brief_invalid" });
       return true;
     }
     try {
-      const image = await call(ARTIFACT_TIMEOUTS.image, (signal) => provider!.generateImage(recipe, signal));
+      const image = await call(ARTIFACT_TIMEOUTS.image, (signal) => provider!.generateImage(brief, signal));
       const fileKey = await saveArtifactFile(dir, job.public_id, image.bytes);
       if (!settle(job, lease, { state: "REVIEW_QUEUED", file_key: fileKey, next_attempt_at: now(), error_code: null })) {
         // lost the lease (shut down, or an operator acted): recovery will adopt it
@@ -326,14 +336,12 @@ export function createArtifactWorker(db: DB, provider: ArtifactProvider | null, 
     do {
       again = false;
       applyAdmin();
-      while (!stopped && discoverReleasePreparation(db, now(), DISCOVERY_BATCH) === DISCOVERY_BATCH);
       if (!dispatching) continue;
-      // inspection and operator actions first, then recipes, then images
+      // inspection and operator actions first, then images
       for (;;) {
         if (stopped) break;
         applyAdmin();
         if (await inspectOne()) continue;
-        if (await prepareOne()) continue;
         if (await imageOne()) continue;
         break;
       }
@@ -366,6 +374,7 @@ export function createArtifactWorker(db: DB, provider: ArtifactProvider | null, 
 
   return {
     wake,
+    extract,
     // Stops polling, aborts provider requests and waits for the current step
     // to settle, so nothing writes to the database after this resolves.
     async stop(): Promise<void> {

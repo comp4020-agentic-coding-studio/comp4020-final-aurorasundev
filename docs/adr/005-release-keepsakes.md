@@ -1,7 +1,9 @@
 # 005 — Release papers leave a separate AI keepsake; the original is still deleted
 
 Status: implemented on branch `claude/gallery-ai-keepsakes` and verified
-locally with fixture providers on 2026-10-18. Not deployed. Real OpenAI image
+locally with fixture providers on 2026-10-18; revised the same day to
+extract at ignition and to the record-exhibition design (G01–G03). Not
+deployed. Real OpenAI image
 generation and the visual-policy check have **not** been exercised; see the
 release boundary below.
 
@@ -18,17 +20,17 @@ a way back to a paper.
 | Question | Options considered | Decision | Cost accepted |
 | --- | --- | --- | --- |
 | Who becomes a keepsake? | an extra opt-in checkbox at writing; Release mode | **Release mode is the only eligibility.** The Release description says so before saving; no new control, field or confirmation | a Release author cannot have a Release paper without a keepsake; Keep never produces one, including when its author burns it |
-| What does generation see? | keep the raw words/drawing in the job after the burn; generate the full image before confirming the burn; prepare a small recipe while the paper is still here | **A four-enum recipe (motif, material, palette, gesture) prepared while the paper is ACTIVE.** The image job sees only the recipe | extra states; an imperfect abstraction; the words and drawing are sent once to OpenAI for the recipe |
-| What if the paper is burned before a recipe exists? | wait for the recipe; read the paper anyway | **A neutral recipe chosen from the job's own random public id**, never from the paper. A late recipe is discarded | some keepsakes say nothing about their paper |
-| Does the burn wait for AI? | synchronous generation; asynchronous | **Asynchronous.** The burn transaction clears the paper and queues the job in the same commit; the existing eight-second burn path is unchanged | completion is not guaranteed in any time, and a stopped Fly machine does no work until it next starts |
-| Can the public object be traced to its paper? | reuse the paper id; a separate id | **An independent random UUID**, and an allowlisted public shape with no paper, job, recipe, owner or timestamps | an observer may still infer a link from timing; absolute unlinkability is not claimed |
+| What does generation see? | keep the raw words/drawing in the job after the burn; prepare a recipe at save time; read the note at ignition | **Revised 2026-10-18 (design A): the burn transaction reads the note once, in memory, just before clearing it.** After the commit and the burn reply, one bounded Responses request turns it into a strict `CreativeBriefV2` (metaphor, relation, motion, space, material, palette and a small musical vocabulary). Only the brief is stored; the image job sees only phrases built from it | the note exists briefly in application memory and one in-flight request after its row is cleared; a restart during that request loses it |
+| What if no brief is produced? | a neutral fallback from the job's public id; retry from a stored copy | **No record.** Timeout (15 s from the burn), refusal, a malformed answer, capacity (4 in flight), the daily budget or a restart marks the job `SOURCE_UNAVAILABLE`. The earlier neutral fallback is removed: an image that says nothing about its note is not made | some released papers leave no record |
+| Does the burn wait for AI? | synchronous generation; asynchronous; let the fire follow extraction | **The reply never waits.** The fire on screen holds while extraction runs and ends when the server says it settled (`paper:extraction_settled`), at the latest 15 s after the burn; never before its normal 4.8 s. Image generation and inspection stay asynchronous, and nothing is published before the burn's normal ending | spectators see a longer fire for released papers; a stopped Fly machine does no work until it next starts |
+| Can the public object be traced to its paper? | reuse the paper id; a separate id | **An independent random UUID**, and an allowlisted public shape with no paper, job, brief, owner or timestamps | an observer may still infer a link from timing; absolute unlinkability is not claimed |
 | What if an image request's outcome is unknown? | retry automatically; mark it unknown | **`GENERATION_UNKNOWN`, never resent automatically.** An operator retry requires acknowledging a possible extra charge | a timed-out image may need a person |
 | Who removes an object? | report count thresholds; automated review of reports; operator | **An operator**, through a private CLI. Reports only queue for review | removal depends on someone reading the queue; no response time is promised |
 
 ## What is stored
 
 New tables (migration 9): `artifact_jobs` (a private job per Release paper:
-state, the four-value recipe, attempt counts, lease, a server-made file name,
+state, the validated creative brief, attempt counts, lease, a server-made file name,
 a safe error code), `artifacts` (the public objects), `gallery_state` (the
 Gallery's own revision), `artifact_budgets` (per-UTC-day counters),
 `artifact_reports` and `artifact_admin_jobs`. None has a column for words or
@@ -40,10 +42,12 @@ after a published-state check.
 ## Costs and limits
 
 - **External processing.** OpenAI receives each Release paper's words and
-  drawing once, for the recipe (Responses with `store: false`, which is a
-  request, not a guarantee about provider retention), then only fixed
-  phrases built from the recipe, then the generated image for inspection.
-- **Money and quotas.** Per UTC day at most 20 recipe requests, 10 image
+  drawing once, at ignition, for the brief (Responses with `store: false`,
+  which is a request, not a guarantee about provider retention), then only
+  fixed phrases built from the brief, then the generated image for
+  inspection. The note is never written to a job, file, log or retry queue;
+  JavaScript memory and the provider give no instant-erasure guarantee.
+- **Money and quotas.** Per UTC day at most 20 brief requests, 10 image
   requests (1024×1024, medium quality, WebP) and 20 inspection runs; every
   dispatched request counts, including failures. Over budget, jobs wait for
   the next UTC day.
@@ -56,7 +60,9 @@ after a published-state check.
   and their files are removed. Reports need an operator.
 - **Failure is visible, not hidden.** Generation can fail or be delayed; the
   original paper is still gone. With processing paused the Gallery says new
-  objects are not being generated; Release still works and its jobs queue.
+  records are not being made, and a burn reads nothing and queues nothing.
+- **Sound is not built.** The record view keeps a disabled player slot with
+  honest copy; no music provider is configured or called.
 
 ## Release boundary
 

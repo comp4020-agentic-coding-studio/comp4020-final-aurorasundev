@@ -4,11 +4,14 @@ import { describe, expect, it } from "vitest";
 import { openDb, type DB } from "../server/db.ts";
 import { burnPaper, createPaper } from "../server/papers.ts";
 import { quarantinePaper } from "../server/quarantine.ts";
+import { acceptBrief, sourceUnavailable } from "../server/artifacts/store.ts";
+import { fixtureBrief } from "../server/artifacts/provider.ts";
 import { open, post, visitor, witness, url } from "./client.ts";
 
-// Keepsake jobs follow the real paper lifecycle: a Release save prepares one,
-// a successful burn queues its image in the same commit that clears the
-// words and drawing, quarantine cancels it. Keep papers never get one.
+// A record starts at ignition: the burn transaction reads a Release paper's
+// note once, just before clearing it, and hands it back in memory for one
+// extraction. Nothing is prepared at save time; Keep is never read; a repeat,
+// a loser of a race or a forbidden burn never gets a source.
 
 const quiet = <T>(run: () => T): T => {
   const log = console.log;
@@ -54,10 +57,11 @@ function drawing(): string {
   ]).toString("base64")}`;
 }
 
-type Job = { state: string; recipe: string | null; recipe_source: string | null; lease_token: string | null };
-const jobFor = (db: DB, paperId: string): Job | undefined =>
-  db.prepare("SELECT state, recipe, recipe_source, lease_token FROM artifact_jobs WHERE paper_id = ?").get(paperId) as Job | undefined;
-const jobCount = (db: DB): number => (db.prepare("SELECT COUNT(*) AS n FROM artifact_jobs").get() as { n: number }).n;
+const jobs = (db: DB): number => (db.prepare("SELECT COUNT(*) AS n FROM artifact_jobs").get() as { n: number }).n;
+const job = (db: DB, paperId: string) =>
+  db.prepare("SELECT state, brief, lease_token FROM artifact_jobs WHERE paper_id = ?").get(paperId) as
+    | { state: string; brief: string | null; lease_token: string | null }
+    | undefined;
 
 function setup() {
   const db = quiet(() => openDb(":memory:"));
@@ -72,24 +76,12 @@ function setup() {
   return { db, save, acknowledge };
 }
 
-describe("a save prepares a keepsake only for Release", () => {
-  it("queues preparation for text, drawing-only and combined Release papers", () => {
+describe("nothing happens before ignition", () => {
+  it("a save, Keep or Release, makes no job and reads nothing", () => {
     const { db, save } = setup();
-    for (const id of [save("RELEASE", "words"), save("RELEASE", "", drawing()), save("RELEASE", "both", drawing())]) {
-      expect(jobFor(db, id)).toMatchObject({ state: "PREPARE_QUEUED", recipe: null });
-    }
-    db.close();
-  });
-
-  it("queues nothing for a Keep paper, nor for a repeat of a saved submission", () => {
-    const { db, save } = setup();
-    const keep = save("KEEP");
-    expect(jobFor(db, keep)).toBeUndefined();
-    const key = randomUUID();
-    const first = createPaper(db, "author", "once", key, "RELEASE");
-    const again = createPaper(db, "author", "once", key, "RELEASE");
-    expect(first.ok && again.ok && first.value.id === again.value.id).toBe(true);
-    expect(jobCount(db)).toBe(1);
+    save("KEEP");
+    save("RELEASE", "words", drawing());
+    expect(jobs(db)).toBe(0);
     db.close();
   });
 
@@ -99,109 +91,113 @@ describe("a save prepares a keepsake only for Release", () => {
     expect(createPaper(db, "author", "same words", key, "KEEP").ok).toBe(true);
     const changed = createPaper(db, "author", "same words", key, "RELEASE");
     expect(changed.ok === false && changed.status).toBe(409);
-    expect(jobCount(db)).toBe(0);
     db.close();
   });
 });
 
-describe("a burn queues the image in the same commit that clears the paper", () => {
-  it("a Keep author's burn never queues an image", () => {
-    const { db, save } = setup();
-    const keep = save("KEEP", "both", drawing());
-    expect(burnPaper(db, keep, "author", "burn-keep-1", true).outcome).toBe("destroyed");
-    expect(jobFor(db, keep)).toBeUndefined();
-    expect(jobCount(db)).toBe(0);
-    db.close();
-  });
-
-  it("a Release burn moves the prepared job to the image queue and clears words and drawing", () => {
+describe("the burn reads its note once, then clears it in the same commit", () => {
+  it("hands back text, drawing-only and combined notes exactly, and clears them", () => {
     const { db, save, acknowledge } = setup();
-    for (const [content, art] of [["words", null], ["", drawing()], ["both", drawing()]] as const) {
-      const id = save("RELEASE", content, art);
+    const art = drawing();
+    for (const [content, d] of [["words", null], ["", art], ["both", art]] as const) {
+      const id = save("RELEASE", content, d);
       acknowledge(id, "reader");
-      expect(burnPaper(db, id, "reader", `burn-${randomUUID()}`, true).outcome).toBe("destroyed");
+      const burned = burnPaper(db, id, "reader", randomUUID(), true);
+      expect(burned.outcome).toBe("destroyed");
+      expect(burned.ignition?.source).toEqual({ text: content, drawing: d });
       expect(db.prepare("SELECT content, drawing, status FROM papers WHERE id = ?").get(id)).toEqual({ content: "", drawing: null, status: "DESTROYED" });
-      const job = jobFor(db, id)!;
-      expect(job.state).toBe("IMAGE_QUEUED");
-      // nothing was prepared yet, so the recipe is the neutral enum one
-      expect(job.recipe_source).toBe("neutral");
-      expect(Object.keys(JSON.parse(job.recipe!)).sort()).toEqual(["gesture", "material", "motif", "palette"]);
+      expect(job(db, id)).toMatchObject({ state: "EXTRACTING", brief: null });
     }
     db.close();
   });
 
-  it("creates the job at burn time for a Release paper discovery never reached", () => {
-    const { db, acknowledge } = setup();
-    // as if saved before keepsakes existed: no job yet
-    db.prepare(
-      "INSERT INTO papers (id, owner_identity_id, content, created_at, submission_key, mode, request_digest) VALUES ('old', 'author', 'w', 'now', 'k-old', 'RELEASE', 'd')",
-    ).run();
-    acknowledge("old", "reader");
-    expect(burnPaper(db, "old", "reader", "burn-old-1", true).outcome).toBe("destroyed");
-    expect(jobFor(db, "old")).toMatchObject({ state: "IMAGE_QUEUED", recipe_source: "neutral" });
+  it("a Keep author's burn reads nothing and makes no job", () => {
+    const { db, save } = setup();
+    const keep = save("KEEP", "both", drawing());
+    const burned = burnPaper(db, keep, "author", randomUUID(), true);
+    expect(burned.outcome).toBe("destroyed");
+    expect(burned.ignition).toBeUndefined();
+    expect(jobs(db)).toBe(0);
     db.close();
   });
 
-  it("keeps a prepared recipe and drops any preparation lease", () => {
-    const { db, save, acknowledge } = setup();
+  it("a forbidden burn reads nothing", () => {
+    const { db, save } = setup();
     const id = save("RELEASE");
-    const recipe = JSON.stringify({ motif: "knot", material: "clay", palette: "sage", gesture: "held" });
-    db.prepare("UPDATE artifact_jobs SET state = 'PREPARED', recipe = ?, recipe_source = 'prepared' WHERE paper_id = ?").run(recipe, id);
-    acknowledge(id, "reader");
-    burnPaper(db, id, "reader", "burn-prepared-1", true);
-    expect(jobFor(db, id)).toEqual({ state: "IMAGE_QUEUED", recipe, recipe_source: "prepared", lease_token: null });
-
-    const racing = save("RELEASE");
-    db.prepare("UPDATE artifact_jobs SET state = 'PREPARING', lease_token = 'late', lease_until = 999999999999 WHERE paper_id = ?").run(racing);
-    acknowledge(racing, "reader");
-    burnPaper(db, racing, "reader", "burn-racing-1", true);
-    expect(jobFor(db, racing)).toMatchObject({ state: "IMAGE_QUEUED", recipe_source: "neutral", lease_token: null });
+    // not witnessed: a Release paper can't be burned yet
+    const burned = burnPaper(db, id, "reader", randomUUID(), true);
+    expect([burned.outcome, burned.ignition]).toEqual(["forbidden", undefined]);
+    expect(jobs(db)).toBe(0);
     db.close();
   });
 
-  it("lost_burn_response_reuses_one_job", () => {
+  it("lost_burn_response_reuses_one_job: a retry gets the receipt but never the note", () => {
     const { db, save, acknowledge } = setup();
     const id = save("RELEASE");
     acknowledge(id, "reader");
     const first = burnPaper(db, id, "reader", "burn-lost-1", true);
     const retry = burnPaper(db, id, "reader", "burn-lost-1", true);
     expect([first.outcome, first.fresh, retry.outcome, retry.fresh]).toEqual(["destroyed", true, "destroyed", false]);
-    expect(jobCount(db)).toBe(1);
+    expect(first.ignition).toBeDefined();
+    expect(retry.ignition).toBeUndefined();
+    expect(jobs(db)).toBe(1);
     db.close();
   });
 
-  it("two_authorized_burners_create_one_job", () => {
+  it("two_authorized_burners_create_one_job and one source", () => {
     const { db, save, acknowledge } = setup();
     const id = save("RELEASE");
     acknowledge(id, "reader");
     acknowledge(id, "other");
-    const totalBefore = (db.prepare("SELECT COUNT(*) AS n FROM papers WHERE status = 'ACTIVE'").get() as { n: number }).n;
     const a = burnPaper(db, id, "reader", "burn-a-1", true);
     const b = burnPaper(db, id, "other", "burn-b-1", true);
     expect([a.outcome, b.outcome]).toEqual(["destroyed", "paper_gone"]);
-    expect(a.total).toBe(totalBefore - 1);
-    expect(jobCount(db)).toBe(1);
+    expect([!!a.ignition, !!b.ignition]).toEqual([true, false]);
+    expect(jobs(db)).toBe(1);
+    db.close();
+  });
+
+  it("accepts a brief only under the burn's own lease, before its deadline", () => {
+    const { db, save, acknowledge } = setup();
+    const id = save("RELEASE", "an unfinished conversation");
+    acknowledge(id, "reader");
+    const { ignition } = burnPaper(db, id, "reader", randomUUID(), true);
+    const brief = fixtureBrief("an unfinished conversation", null);
+    expect(acceptBrief(db, ignition!.jobId, "not-the-lease", brief, Date.now())).toBe(false);
+    expect(acceptBrief(db, ignition!.jobId, ignition!.lease, brief, ignition!.extractUntil + 1)).toBe(false);
+    expect(acceptBrief(db, ignition!.jobId, ignition!.lease, brief, Date.now())).toBe(true);
+    expect(job(db, id)).toMatchObject({ state: "IMAGE_QUEUED", lease_token: null });
+    expect(JSON.parse(job(db, id)!.brief!)).toEqual(brief);
+    // a second answer can't replace it
+    expect(acceptBrief(db, ignition!.jobId, ignition!.lease, { ...brief, metaphor: "stone" }, Date.now())).toBe(false);
+    db.close();
+  });
+
+  it("a failed extraction leaves no record and no brief", () => {
+    const { db, save, acknowledge } = setup();
+    const id = save("RELEASE");
+    acknowledge(id, "reader");
+    const { ignition } = burnPaper(db, id, "reader", randomUUID(), true);
+    expect(sourceUnavailable(db, ignition!.jobId, ignition!.lease, "brief_timeout", Date.now())).toBe(true);
+    expect(job(db, id)).toMatchObject({ state: "SOURCE_UNAVAILABLE", brief: null });
     db.close();
   });
 });
 
-describe("quarantine cancels", () => {
-  it("quarantine_cancels_without_image_job", () => {
-    const { db, save } = setup();
+describe("quarantine", () => {
+  it("quarantine_cancels_without_image_job: a quarantined paper is never burned, so never read", () => {
+    const { db, save, acknowledge } = setup();
     const id = save("RELEASE", "both", drawing());
-    db.prepare("UPDATE artifact_jobs SET state = 'PREPARING', lease_token = 'late', lease_until = 999999999999 WHERE paper_id = ?").run(id);
-    expect(quiet(() => quarantinePaper(db, id, "spam", "operator")).changed).toBe(true);
-    expect(db.prepare("SELECT content, drawing FROM papers WHERE id = ?").get(id)).toEqual({ content: "", drawing: null });
-    expect(jobFor(db, id)).toEqual({ state: "CANCELLED", recipe: null, recipe_source: null, lease_token: null });
-    // a later burn attempt finds nothing to burn and queues nothing
-    expect(burnPaper(db, id, "author", "burn-after-q-1", true).outcome).toBe("paper_gone");
-    expect(jobFor(db, id)!.state).toBe("CANCELLED");
+    quiet(() => quarantinePaper(db, id, "spam", "operator"));
+    acknowledge(id, "reader");
+    expect(burnPaper(db, id, "reader", randomUUID(), true).outcome).toBe("paper_gone");
+    expect(jobs(db)).toBe(0);
     db.close();
   });
 });
 
-describe("over HTTP, nothing about keepsakes leaks", () => {
-  it("leaves the paper, list, create and burn replies exactly as they were", async () => {
+describe("over HTTP", () => {
+  it("leaves the paper, list and create replies unchanged; a Release burn says when its fire must end", async () => {
     const author = await visitor();
     const created = await post(author, "/api/papers", { content: "release words", mode: "RELEASE", confirmed: true, submission_key: randomUUID(), keepsake: false });
     expect(created.status).toBe(201);
@@ -214,9 +210,27 @@ describe("over HTTP, nothing about keepsakes leaks", () => {
     await witness(reader, id, opened.read_receipt);
     const burned = await post(reader, `/api/papers/${id}/burn`, { read_receipt: opened.read_receipt, op_key: randomUUID(), confirmed: true });
     const receipt = (await burned.json()) as Record<string, unknown>;
-    expect(Object.keys(receipt).sort()).toEqual(["burn_duration_ms", "destroyed_at", "effect_seed", "id", "op", "revision", "status", "total", "version"]);
+    const base = ["burn_duration_ms", "destroyed_at", "effect_seed", "id", "op", "revision", "status", "total", "version"];
+    // with generation running, a Release burn's fire waits at most 15 s;
+    // paused, there is no extraction and the reply is exactly as before
+    expect(Object.keys(receipt).filter((k) => k !== "extraction_until").sort()).toEqual(base);
+    if (receipt.extraction_until !== undefined) {
+      const until = Date.parse(String(receipt.extraction_until)) - Date.parse(String(receipt.destroyed_at));
+      expect(until).toBe(15_000);
+    }
+    expect(JSON.stringify(receipt)).not.toMatch(/brief|metaphor|release words/);
     const list = (await (await fetch(url("/api/papers"))).json()) as Record<string, unknown>;
     expect(Object.keys(list).sort()).toEqual(["papers", "revision", "total"]);
-    expect(JSON.stringify(list)).not.toMatch(/artifact|keepsake|recipe/);
+
+    // Keep never has an extraction to wait for
+    const k = (await (await post(author, "/api/papers", { content: "keep words", mode: "KEEP", confirmed: true, submission_key: randomUUID() })).json()) as {
+      paper: { id: string };
+    };
+    const ko = await open(author, k.paper.id);
+    const kb = (await (await post(author, `/api/papers/${k.paper.id}/burn`, { read_receipt: ko.read_receipt, op_key: randomUUID(), confirmed: true })).json()) as Record<
+      string,
+      unknown
+    >;
+    expect(Object.keys(kb).sort()).toEqual(base);
   });
 });
