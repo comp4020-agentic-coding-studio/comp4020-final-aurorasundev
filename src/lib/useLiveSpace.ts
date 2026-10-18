@@ -15,18 +15,22 @@ type Options = {
   onOwnDestroyed: (ending: Ending) => void;
   // a paper's version moved (someone witnessed it); only its readers care
   onChanged: (id: string, version: number) => void;
+  // a Release paper's record has been read (or given up on): its held fire may end
+  onExtractionSettled?: (id: string) => void;
 };
 
 const RETRY_MS = [500, 1000, 2000, 4000, 8000];
 
 type Ended = { id: string; version: number; revision: number; active_total: number; op?: string };
-export type Ending = Ended & { burn_duration_ms?: number; effect_seed?: string };
+// `extraction_until`: a Release burn's fire is held, still burning, until its
+// record has been read from the note or this time passes (at most 15 s).
+export type Ending = Ended & { burn_duration_ms?: number; effect_seed?: string; extraction_until?: string };
 
 // One EventSource per page instance. Every (re)connect sends the ids on
 // screen, and the snapshot that opens the stream says which still exist and
 // refills the rest of the window: missed events are recovered as current
 // facts, never replayed.
-export function useLiveSpace({ limit, reading, pendingOps, onGone, onOwnDestroyed, onChanged }: Options) {
+export function useLiveSpace({ limit, reading, pendingOps, onGone, onOwnDestroyed, onChanged, onExtractionSettled }: Options) {
   // The state is applied here first and rendered after, so a reply that
   // lands between an event and the next render (a late creation answer)
   // is checked against what this page has already learned.
@@ -37,8 +41,8 @@ export function useLiveSpace({ limit, reading, pendingOps, onGone, onOwnDestroye
     setSpace(state.current);
   }, []);
   const [attempt, setAttempt] = useState(0);
-  const latest = useRef({ limit, reading, onGone, onOwnDestroyed, onChanged });
-  latest.current = { limit, reading, onGone, onOwnDestroyed, onChanged };
+  const latest = useRef({ limit, reading, onGone, onOwnDestroyed, onChanged, onExtractionSettled });
+  latest.current = { limit, reading, onGone, onOwnDestroyed, onChanged, onExtractionSettled };
 
   useEffect(() => {
     let source: EventSource | null = null;
@@ -101,6 +105,10 @@ export function useLiveSpace({ limit, reading, pendingOps, onGone, onOwnDestroye
         const d = parse<Ended>(e);
         act({ type: "removed", id: d.id, revision: d.revision, total: d.active_total, reading: latest.current.reading() });
         latest.current.onGone(d.id, "quarantined");
+      });
+
+      source.addEventListener("paper:extraction_settled", (e) => {
+        latest.current.onExtractionSettled?.(parse<{ id: string }>(e).id);
       });
 
       source.addEventListener("paper:witnessed", (e) => {

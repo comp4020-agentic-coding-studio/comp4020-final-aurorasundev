@@ -22,9 +22,11 @@ export type PaperFieldHandle = {
   cancelRitual: () => void;
   endRitual: () => void;
   burnRemote: (id: string, burn: Burn) => boolean;
+  releaseBurn: (id: string) => void;
 };
 
-export type Burn = { seed: number; durationMs: number };
+// `hold`: a Release paper's fire waits (still burning) for releaseBurn().
+export type Burn = { seed: number; durationMs: number; hold?: boolean };
 export type RitualEvent = { type: "ready" | "dropped" | "burning" | "ashes" | "fallback" };
 export type RitualLayout = { paperBottom: number; furnaceTop: number; furnaceBottom: number };
 
@@ -136,6 +138,7 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
       cancelRitual: () => scene.current?.cancelRitual(),
       endRitual: () => scene.current?.endRitual(),
       burnRemote: (id, burn) => (!failed && scene.current ? scene.current.burnRemote(id, burn) : false),
+      releaseBurn: (id) => scene.current?.releaseBurn(id),
     }),
     [failed],
   );

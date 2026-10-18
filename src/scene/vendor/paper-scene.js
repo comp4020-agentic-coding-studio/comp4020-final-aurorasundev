@@ -1493,7 +1493,7 @@ export function createPaperScene(container, buttonLayer, options) {
   // Confirmed by the server: it settles into the hearth and burns from the
   // bottom up (B02), then leaves its ash (B03). `remote` is the ending when
   // someone else let it go first: it burns where it hangs, over the furnace.
-  function ignite({ seed, durationMs, remote }) {
+  function ignite({ seed, durationMs, remote, hold = false }) {
     const r = ritual;
     if (!r || !r.paper) return;
     releaseRitualPointer();
@@ -1501,7 +1501,7 @@ export function createPaperScene(container, buttonLayer, options) {
     r.time = 0;
     if (!fire || !r.furnace) {
       if (fireLoad || !r.fireFailed) {
-        r.pendingIgnite = { seed, durationMs, remote };
+        r.pendingIgnite = { seed, durationMs, remote, hold: hold && !releasedEarly.has(ritualHoldKey) };
         return;
       }
       r.paper.mesh.visible = false;
@@ -1518,6 +1518,7 @@ export function createPaperScene(container, buttonLayer, options) {
       mode: remote ? "remote" : "furnace",
       seed,
       durationMs,
+      hold: hold && !releasedEarly.delete(ritualHoldKey),
       reducedMotion: r.reduced,
       surfaceY: f.hearthPoint.y,
       settleTo: remote ? undefined : f.hearthPoint,
@@ -1651,6 +1652,9 @@ export function createPaperScene(container, buttonLayer, options) {
   // it lies (B04) and its ash stays a few seconds, then fades. A ghost: no
   // button, no body, not part of the window any more.
   const ghosts = new Set();
+  // releases that arrived before their fire had started
+  const releasedEarly = new Set();
+  const ritualHoldKey = "\u0000ritual";
   const MAX_GHOST_BURNS = compact ? 2 : 3;
 
   function updateGhosts(dt) {
@@ -1661,7 +1665,7 @@ export function createPaperScene(container, buttonLayer, options) {
     }
   }
 
-  function igniteGhost(paper, seed, durationMs) {
+  function igniteGhost(paper, seed, durationMs, hold = false) {
     if (pointerState && pointerState.paper === paper) {
       pointerState.paper = null;
       pointerState.grabbing = false;
@@ -1690,6 +1694,8 @@ export function createPaperScene(container, buttonLayer, options) {
           mode: "remote",
           seed,
           durationMs,
+          // released before the fire module loaded: it doesn't wait at all
+          hold: hold && !releasedEarly.delete(paper.id),
           reducedMotion: reduceMotion(),
           surfaceY: FLOOR_VISUAL_Y,
           viewportHeight: size().h,
@@ -1882,6 +1888,8 @@ export function createPaperScene(container, buttonLayer, options) {
       const place = ritualPlacement();
       const r = {
         paper,
+        // kept after the paper itself is handed over to the fire
+        paperId: paper.id,
         phase: "crumpling",
         time: 0,
         reduced: reduceMotion(),
@@ -1941,17 +1949,37 @@ export function createPaperScene(container, buttonLayer, options) {
       r.phase = "returning";
     },
 
-    /** Confirmed gone: it settles into the hearth and burns. */
-    igniteRitual({ seed, durationMs }) {
+    /** Confirmed gone: it settles into the hearth and burns. @param {{ seed: number, durationMs: number, hold?: boolean }} burn */
+    igniteRitual({ seed, durationMs, hold = false }) {
       if (!ritual || !ritual.paper || !PRECOMMIT.includes(ritual.phase)) return;
       if (ritual.phase === "crumpling") this.placeRitual();
-      ignite({ seed, durationMs, remote: false });
+      ignite({ seed, durationMs, remote: false, hold });
     },
 
-    /** Someone else let it go before it was placed: it burns where it hangs. */
-    burnRitualRemotely({ seed, durationMs }) {
+    /** Someone else let it go before it was placed: it burns where it hangs. @param {{ seed: number, durationMs: number, hold?: boolean }} burn */
+    burnRitualRemotely({ seed, durationMs, hold = false }) {
       if (!ritual || !ritual.paper || !PRECOMMIT.includes(ritual.phase)) return;
-      ignite({ seed, durationMs, remote: true });
+      ignite({ seed, durationMs, remote: true, hold });
+    },
+
+    /**
+     * A held fire may die down: the record it waited on has been read (or
+     * its deadline passed). `id` is the paper's; the ritual's own fire is
+     * found the same way. Remembered if the fire hasn't started yet.
+     */
+    releaseBurn(id) {
+      const r = ritual;
+      if (r && r.paperId === id) {
+        if (r.effect) r.effect.release();
+        else releasedEarly.add(ritualHoldKey);
+        return;
+      }
+      for (const ghost of ghosts) {
+        if (ghost.paper.id !== id) continue;
+        if (ghost.effect) ghost.effect.release();
+        else releasedEarly.add(id);
+        return;
+      }
     },
 
     /** Taken out for safety (or found gone on reconnect): it simply goes. */
@@ -1999,11 +2027,12 @@ export function createPaperScene(container, buttonLayer, options) {
      * where it lies; false if there is nothing here to burn (it then just
      * leaves with the window, or the reader keeps it).
      */
-    burnRemote(id, { seed, durationMs }) {
+    /** @param {string} id @param {{ seed: number, durationMs: number, hold?: boolean }} burn */
+    burnRemote(id, { seed, durationMs, hold = false }) {
       const paper = papers.get(id);
       if (!paper || paper === activePaper || paper.ghost) return false;
       if (!["closed", "rolling", "grabbed"].includes(paper.state)) return false;
-      igniteGhost(paper, seed, durationMs);
+      igniteGhost(paper, seed, durationMs, hold);
       return true;
     },
 

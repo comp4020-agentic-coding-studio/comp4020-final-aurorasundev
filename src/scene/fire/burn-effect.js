@@ -17,6 +17,12 @@
 // about five seconds more and fades over one, then `finished` is true.
 // Reduced motion: no flames, flicker, smoke or falling; the paper chars and
 // turns to ash in place over about 1.4 s.
+//
+// A fire can be held (`hold: true`): it plays normally until the front is
+// nearly at the top, then keeps burning there, flames and smoke alive, until
+// `release()`, and only then dies down. A Release paper's fire holds while
+// its record is being read from the note, so the fire lasts as long as that
+// does (the caller releases it by its own deadline).
 import * as THREE from "three";
 import { createAsh } from "./ash.js";
 import { createBurnMaterial, fixBurnFrame } from "./burn-material.js";
@@ -45,6 +51,7 @@ const TOP = 1.08;
  *   mode: "furnace" | "remote",
  *   seed?: number,                    any number; the same seed gives the same burn pattern
  *   durationMs?: number,              flames to last ember, default 5400
+ *   hold?: boolean,                   wait before the embers until release()
  *   reducedMotion?: boolean,
  *   surfaceY: number,                 world y of the hearth (furnace) or floor (remote) under the paper
  *   settleTo?: THREE.Vector3,         furnace: world point on the hearth the paper comes to rest on (its lowest point lands there, centred above it)
@@ -60,6 +67,13 @@ export function createBurnEffect(options) {
   const IGNITE = 0.4;
   const EMBER = 1.0;
   const FRONT = total - IGNITE - EMBER;
+
+  // Where a held fire waits: late in the climb, before the embers. `time`
+  // drives the burn's progress and stops there; `clock` keeps the flames,
+  // smoke and embers moving the whole time.
+  let held = !!options.hold;
+  const HOLD_AT = IGNITE + FRONT * 0.92;
+  let clock = 0;
 
   const original = { material: mesh.material, depth: mesh.customDepthMaterial, position: mesh.position.clone() };
   const burn = createBurnMaterial(/** @type {THREE.MeshStandardMaterial} */ (mesh.material), {
@@ -236,7 +250,7 @@ export function createBurnEffect(options) {
     u.uProgress.value = progress;
     u.uCollapse.value = collapse;
     u.uGlow.value = glow;
-    u.uTime.value = time;
+    u.uTime.value = clock;
     // what is left rests on the surface as its underside burns away, then
     // slumps into the ash
     const consumed = progress - consume;
@@ -269,7 +283,7 @@ export function createBurnEffect(options) {
     // the front's slant: 0.45 of the paper's height per span along the side,
     // so about ±0.45·radius/span at the paper's edge, in box heights
     slant.copy(slantDir).multiplyScalar(((0.45 * diameter) / 2 / Math.max(height, 1e-4)) * (height / flameBox) * (1 - collapse));
-    flames.update(base, diameter * 1.5, flameBox, strength * (0.4 + 0.6 * (1 - Math.min(Math.max(consumed, 0), 1))), time, front, ring, slant);
+    flames.update(base, diameter * 1.5, flameBox, strength * (0.4 + 0.6 * (1 - Math.min(Math.max(consumed, 0), 1))), clock, front, ring, slant);
     const reach = flameBox;
     source.set(c.x, frontY, c.z);
     particles.update(dt, {
@@ -307,6 +321,13 @@ export function createBurnEffect(options) {
   const doneAt = reduced ? reducedTotal : total;
 
   return {
+    /** A held fire may now die down. Harmless if not held. */
+    release() {
+      held = false;
+    },
+    get held() {
+      return held;
+    },
     /** "igniting" | "burning" | "embers" | "ashes" | "fading" | "gone" */
     get phase() {
       return phase;
@@ -325,11 +346,13 @@ export function createBurnEffect(options) {
     /** Wall-clock duration; particle motion is capped separately from the burn front. */
     update(dt) {
       if (disposed) return;
-      time += dt;
+      clock += dt;
+      // a held fire's progress waits at HOLD_AT; reduced motion never holds
+      time = held && !reduced ? Math.min(time + dt, Math.max(time, HOLD_AT)) : time + dt;
       const motionDt = Math.min(dt, 0.05);
       if (reduced) stepReduced(motionDt);
       else stepNormal(motionDt);
-      ash.update(reduced ? 0 : motionDt, time);
+      ash.update(reduced ? 0 : motionDt, clock);
       if (mode === "remote" && time > doneAt) {
         const after = time - doneAt;
         if (after > REMOTE_HOLD) {
