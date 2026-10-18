@@ -17,4 +17,19 @@ they go to this feature branch, whose pushes run CI checks but do not deploy
 - Screenshots of the current space, text write, drawing write and read at
   1366×768 and 390×844 in [baseline/](baseline/).
 
-Next: Task 1 (migration 9 and the store).
+## Task 1: job and public-object model (done, 15:25)
+
+- Migration 9 appends six tables (`artifact_jobs`, `artifacts`,
+  `gallery_state`, `artifact_budgets`, `artifact_reports`,
+  `artifact_admin_jobs`); migrations 1–8 and `requestDigest` are unchanged.
+  No table has a column for words or a drawing. Per-address report limits
+  reuse the existing in-memory window counter, so no address is stored.
+- `server/artifacts/types.ts`, `server/artifacts/store.ts` (four guarded,
+  synchronous store functions; neutral recipe from the job's random public id).
+- `spec/fixtures/schema-v8.sqlite` captured with the shipped code at version 8
+  (six papers, two identities, one burned Release, one quarantined Release,
+  one author-burned Keep).
+- `spec/artifact-migration.test.ts`: 9 passed, `tsc --noEmit` clean. Note: the
+  tests were written alongside the implementation, not run red first.
+
+Next: Task 2 (bind jobs to save, burn and quarantine).
