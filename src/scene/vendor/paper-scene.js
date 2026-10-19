@@ -20,6 +20,7 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { createPaper, updatePaperFrame } from "./paper.js";
 import { loadVATData } from "./paper-vat.js";
+import { createRoomPlate } from "../room-plate.js";
 
 const BACKGROUND = "#c6cdcc";
 // Cool mineral plaster and a lighter stone floor frame the warm ivory paper.
@@ -101,27 +102,38 @@ export function createPaperScene(container, buttonLayer, options) {
   const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 100);
   let ritualView = false;
   let stageBounds = { minX: -2.4, maxX: 2.4, minZ: WALL_Z, maxZ: 1.7 };
+  // The window-lit wall/floor photograph, projected from the home pose.
+  const roomPlate = createRoomPlate();
+  const fitRoomPlate = (aspect) => roomPlate.fit(poseHomeCamera, aspect, FLOOR_VISUAL_Y, WALL_Z);
 
   // The demo framed a wide, distant 16:9 stage; the references are a much
   // closer "hero shot" where each paper fills a good fraction of the frame.
   // A portrait phone looks down more steeply and gets a narrower, deeper
   // stage so papers stay clear of the controls.
+  function poseHomeCamera(cam, aspect) {
+    cam.aspect = aspect;
+    if (aspect < 0.8) {
+      cam.fov = 46;
+      cam.position.set(0, 2.55, 1.85);
+      cam.lookAt(0, 0.15, 0.1);
+    } else {
+      cam.fov = 38;
+      cam.position.set(0, 1.6, 2.5);
+      cam.lookAt(0, 0.2, -0.15);
+    }
+  }
   function applyCamera() {
     const { w, h } = size();
-    camera.aspect = w / h;
+    poseHomeCamera(camera, w / h);
     if (camera.aspect < 0.8) {
-      camera.fov = 46;
-      camera.position.set(0, 2.55, 1.85);
-      camera.lookAt(0, 0.15, 0.1);
       const halfW = Math.min(0.92, 1.45 * camera.aspect);
       stageBounds = { minX: -halfW, maxX: halfW, minZ: -0.95, maxZ: 0.95 };
     } else {
-      camera.fov = 38;
-      camera.position.set(0, 1.6, 2.5);
-      camera.lookAt(0, 0.2, -0.15);
       const halfW = Math.min(1.5, 0.76 * camera.aspect);
       stageBounds = { minX: -halfW, maxX: halfW, minZ: -0.95, maxZ: 0.7 };
     }
+    // The room plate is fixed to this home pose, never the ritual lens.
+    fitRoomPlate(camera.aspect);
     // B01/B05 show the side of an iron cylinder, with a shallow elliptical
     // opening. Lower the lens for the ritual rather than distorting the iron.
     if (ritualView) {
@@ -245,11 +257,14 @@ export function createPaperScene(container, buttonLayer, options) {
   });
   // Deepen only the cast shadow on the ground, preserving the paper lighting.
   floorMat.onBeforeCompile = (shader) => {
+    // The room plate sets the lit colour first; the deepening below then
+    // runs on it unchanged, so the ground shadow keeps its former extra depth.
+    roomPlate.patchFloor(shader);
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <shadowmap_pars_fragment>", "#include <shadowmap_pars_fragment>\n#include <shadowmask_pars_fragment>")
       .replace("#include <opaque_fragment>", "outgoingLight *= mix(0.78, 1.0, getShadowMask());\n#include <opaque_fragment>");
   };
-  floorMat.customProgramCacheKey = () => "throwaway-ground-shadow-v1";
+  floorMat.customProgramCacheKey = () => "throwaway-ground-shadow-v1+room-plate-v1";
   const floor = new THREE.Mesh(floorGeometry, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, FLOOR_VISUAL_Y, 1);
@@ -269,10 +284,16 @@ export function createPaperScene(container, buttonLayer, options) {
     metalness: 0,
     envMapIntensity: 0.2,
   });
+  wallMat.onBeforeCompile = (shader) => roomPlate.patchWall(shader);
+  wallMat.customProgramCacheKey = () => "throwaway-wall-room-plate-v1";
   const wall = new THREE.Mesh(wallGeometry, wallMat);
   wall.position.set(0, FLOOR_VISUAL_Y + wallHeight / 2, WALL_Z);
   wall.receiveShadow = true;
   scene.add(wall);
+
+  // The room plate loads after first render; until then, or if it fails,
+  // the plain wall and floor above stay.
+  roomPlate.load(`${options.textureBase ?? "/textures/"}room/home-window-light-v1.jpg`, renderer);
 
   // Lights
   // plan.md's D01 target is soft broad light and restrained contact shadows
@@ -2059,6 +2080,7 @@ export function createPaperScene(container, buttonLayer, options) {
       floorMat.dispose();
       wallGeometry.dispose();
       wallMat.dispose();
+      roomPlate.dispose();
       paperMaterial3d.dispose();
       paperBump.dispose();
       paperFolds.dispose();
