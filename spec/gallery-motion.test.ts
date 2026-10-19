@@ -49,6 +49,20 @@ describe("wheel", () => {
     expect(wheelSnap(4, 6.4)).toBe(6);
     expect(wheelSnap(4, 6.6)).toBe(7);
   });
+
+  it("a fast trackpad flick, inertia tail included, crosses several records with no cap", () => {
+    // a flick: a few strong frames, then the OS inertia tail decaying at 60 Hz
+    let target = 4;
+    let d = 90;
+    while (d > 0.5) {
+      target += wheelItems({ deltaX: 0, deltaY: d, deltaMode: 0 });
+      d *= 0.95;
+    }
+    const landed = wheelSnap(4, target);
+    expect(landed - 4).toBeGreaterThanOrEqual(4);
+    // the same flick backwards lands as far the other way
+    expect(wheelSnap(4, 4 - (target - 4))).toBe(4 - (landed - 4));
+  });
 });
 
 describe("spin clock", () => {
