@@ -98,12 +98,22 @@ export function GalleryApp() {
     return () => window.removeEventListener("keydown", onKey);
   }, [orbit, isOpen]);
 
-  // a bounded collection: near its end, ask for the next page
-  const { hasMore, loadMore, loadingMore } = g;
+  // the window never retires the record in front
+  const { hasMore, loadMore, loadingMore, focus: setWindowFocus } = g;
+  useEffect(() => setWindowFocus(focused?.id ?? null), [focused, setWindowFocus]);
+
+  // A sliding window: near its end, ask for the next page. The window retires
+  // records from its start, so the end keeps moving forward and turning on
+  // reaches every record; after the last one it wraps to the first page.
+  // One request per focused record, so an empty page cannot chain requests.
+  const askedAt = useRef<string | null>(null);
   useEffect(() => {
-    if (!orbit || !hasMore || loadingMore || !focused) return;
+    if (!orbit || !hasMore || loadingMore || !focused || askedAt.current === focused.id) return;
     const at = g.items.findIndex((a) => a.id === focused.id);
-    if (at >= g.items.length - 4) loadMore();
+    if (at >= g.items.length - 4) {
+      askedAt.current = focused.id;
+      loadMore();
+    }
   }, [orbit, hasMore, loadingMore, loadMore, focused, g.items]);
 
   const frames = useCallback(
@@ -210,9 +220,11 @@ export function GalleryApp() {
         ) : (
           <GalleryGridFallback
             items={g.items}
-            hasMore={g.hasMore}
+            hasMore={g.moreAhead}
+            retired={g.retired}
             loadingMore={g.loadingMore}
             onLoadMore={g.loadMore}
+            onRestart={g.restart}
             onOpen={(id, el) => {
               opener.current = el;
               openRecord(id);
@@ -224,7 +236,7 @@ export function GalleryApp() {
       {g.selected && (
         <RecordView
           artifact={g.selected}
-          report={g.report}
+          report={g.reportFor(g.selected.id)}
           frozenReason={g.frozenReason(g.selected.id)}
           arriving={arriving}
           canStep={many}

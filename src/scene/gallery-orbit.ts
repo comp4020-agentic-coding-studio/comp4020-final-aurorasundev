@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { gsap } from "gsap";
 import { Observer } from "gsap/Observer";
+import { mergeOrbitItems, nextFocusIndex, type OrbitItem } from "./orbit-items.ts";
 
 // The Gallery's record exhibition (G01–G03): one charcoal record in the
 // middle and the collection's square sleeves on a tilted orbit around it.
@@ -14,7 +15,7 @@ import { Observer } from "gsap/Observer";
 
 gsap.registerPlugin(Observer);
 
-export type OrbitItem = { id: string; image_url: string };
+export type { OrbitItem };
 export type OrbitCallbacks = {
   onFocus: (id: string) => void;
   onOpen: (id: string) => void;
@@ -39,6 +40,8 @@ const FACE_WINDOW = 0.383;
 const FRAME_PLATE = 1.076;
 const ART_INSET = 0.87;
 const MAX_TEXTURES = 14;
+// wider than a phone but this short: gallery.css's compact landscape layout
+const COMPACT_H = 540;
 
 const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -345,9 +348,14 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
         shadowDrop: 0.04,
       };
     } else {
-      const discR = Math.min(bandH * 0.38, w * 0.165);
-      const size = Math.min(bandH * 0.44, w * 0.18);
-      const orbitRx = Math.min(w * 0.4, w / 2 - size * 0.62);
+      // a short landscape stage (gallery.css's matching media query) keeps
+      // the same orbit with a flatter tilt and objects sized to its height,
+      // so it still reads as an exhibition rather than a row of thumbnails
+      const compact = h <= COMPACT_H;
+      const tilt = compact ? -0.12 : -0.22;
+      const discR = compact ? Math.min(bandH * 0.42, w * 0.13) : Math.min(bandH * 0.38, w * 0.165);
+      const size = compact ? Math.min(bandH * 0.54, w * 0.15) : Math.min(bandH * 0.44, w * 0.18);
+      const orbitRx = compact ? Math.min(w * 0.36, w / 2 - size * 0.7) : Math.min(w * 0.4, w / 2 - size * 0.62);
       L = {
         w,
         h,
@@ -357,12 +365,13 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
         rx: orbitRx,
         // the tilted ellipse's highest point plus a far sleeve's half height
         // stays inside the band, clear of the title
-        ry: Math.min(bandH * 0.24, Math.sqrt(Math.max(0, (bandH / 2 - size * 0.32) ** 2 - (orbitRx * 0.218) ** 2)) / 0.976),
-        tilt: -0.22,
+        ry: Math.min(bandH * 0.24, Math.sqrt(Math.max(0, (bandH / 2 - size * 0.32) ** 2 - (orbitRx * Math.sin(-tilt)) ** 2)) / Math.cos(tilt)),
+        tilt,
         depth: 420,
         size,
-        disc: { x: -w * 0.015, y: cy, z: 0, size: discR, rx: 0.5, ry: -0.42, rz: 0, vis: 1, fade: 1 },
-        discDetail: rec ? still(rec, 2, rec.size / 2) : { x: -w * 0.28, y: cy, z: 2, size: h * 0.29, rx: 0, ry: 0, rz: 0, vis: 1, fade: 1 },
+        disc: { x: -w * 0.015, y: cy, z: 0, size: discR, rx: compact ? 0.38 : 0.5, ry: -0.42, rz: 0, vis: 1, fade: 1 },
+        // compact: the record tucks behind the sleeve, as the HTML one does
+        discDetail: rec ? still(rec, compact ? -2 : 2, rec.size / 2) : { x: -w * 0.28, y: cy, z: 2, size: h * 0.29, rx: 0, ry: 0, rz: 0, vis: 1, fade: 1 },
         hero: art ? still(art, 0) : { x: 0, y: cy, z: 0, size: h * 0.6, rx: 0, ry: 0, rz: 0, vis: 1, fade: 1 },
         shadowDrop: 0.66,
       };
@@ -440,10 +449,14 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
   const count = () => items.length;
   const focusIndex = () => (count() ? mod(Math.round(target), count()) : -1);
 
+  // Applies a list now. A surviving focus keeps its id, and a removed one
+  // hands over to the nearest survivor. Mid-drag (removals only) the record
+  // under the pointer stays under it and the gesture carries on from there.
   function applyItems(next: OrbitItem[]) {
-    const prevFocus = count() ? items[focusIndex()]?.id : null;
+    const prev = items;
     const prevIndex = focusIndex();
     const offset = phase - Math.round(target);
+    const fraction = target - Math.round(target);
     items = next;
     const keep = new Set(next.map((i) => i.id));
     for (const [id, s] of sleeves) {
@@ -452,18 +465,32 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
         sleeves.delete(id);
       }
     }
+    // a removed record's image leaves the GPU too, and the label lets it go
+    for (const [id, t] of textures) {
+      if (keep.has(id)) continue;
+      if (labelMat.map === t.tex) {
+        labelMat.map = stockTex;
+        labelMat.needsUpdate = true;
+      }
+      t.tex.dispose();
+      textures.delete(id);
+    }
     for (const item of next) if (!sleeves.has(item.id)) sleeves.set(item.id, makeSleeve(item));
     if (!next.length) {
       phase = target = 0;
     } else {
-      let idx = prevFocus ? next.findIndex((i) => i.id === prevFocus) : -1;
-      // a removed focus hands over to the nearest remaining item
-      if (idx < 0) idx = clamp(prevIndex < 0 ? 0 : prevIndex, 0, next.length - 1);
-      target = idx;
+      const idx = nextFocusIndex(prev, prevIndex, next);
+      if (dragging) {
+        // the same whole-step shift for the gesture's start, so a phone
+        // swipe still counts its steps from where it began
+        dragStart += idx - Math.round(target);
+        target = idx + fraction;
+      } else target = idx;
       phase = idx + clamp(offset, -0.5, 0.5);
     }
     dirty = 4;
-    settle(true);
+    // mid-drag only a removed focus is reported now; the rest when it settles
+    settle(!dragging || !next.some((i) => i.id === reported));
   }
 
   // one focus report per settled position, never one per frame
@@ -724,9 +751,11 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
 
   return {
     setItems(next) {
-      // never reorder the ring under a pointer: wait for the gesture to end
-      if (dragging) pending = next;
-      else applyItems(next);
+      // a removal applies now, even under a pointer; arrivals and reordering
+      // wait for the gesture to end, and only the latest list is queued
+      const m = mergeOrbitItems(items, next, dragging);
+      pending = m.queued;
+      if (m.now !== items) applyItems(m.now);
     },
     setOpen(value) {
       if (open === value) return;

@@ -31,8 +31,8 @@ export function useGallery() {
   const [attempt, setAttempt] = useState(0);
   const openIdRef = useRef<string | null>(null);
   openIdRef.current = state.openId;
-  const cursorRef = useRef<string | null>(null);
-  cursorRef.current = state.cursor;
+  const cursorRef = useRef<{ cursor: string | null; hasMore: boolean }>({ cursor: null, hasMore: false });
+  cursorRef.current = { cursor: state.cursor, hasMore: state.hasMore };
   const loadingRef = useRef(false);
   loadingRef.current = state.loading !== null;
   const pageAbort = useRef<AbortController | null>(null);
@@ -96,15 +96,33 @@ export function useGallery() {
     return () => clearTimeout(timer);
   }, [state.revision, error]);
 
+  // The next page of the sliding window, from the server's cursor; a null
+  // cursor with more to show is the wrap back to the first page. The page
+  // carries the cursor it was asked for, so a stale one changes nothing.
   const loadMore = useCallback(() => {
-    const after = cursorRef.current;
-    if (!after || loadingRef.current) return;
+    const { cursor: after, hasMore } = cursorRef.current;
+    if (!hasMore || loadingRef.current) return;
     pageAbort.current?.abort();
     const controller = new AbortController();
     pageAbort.current = controller;
     dispatch({ type: "load", kind: "page" });
-    getGalleryPage(after, controller.signal)
-      .then((page) => !controller.signal.aborted && dispatch({ type: "page", page }))
+    getGalleryPage(after ?? undefined, controller.signal)
+      .then((page) => !controller.signal.aborted && dispatch({ type: "page", page, after }))
+      .catch(() => !controller.signal.aborted && dispatch({ type: "failed" }));
+  }, []);
+
+  // the record in front, which the window never retires
+  const focus = useCallback((id: string | null) => dispatch({ type: "focus", id }), []);
+
+  // The way back: the first page replaces the window (an in-flight page for
+  // the old cursor is aborted, and would be stale anyway).
+  const restart = useCallback(() => {
+    pageAbort.current?.abort();
+    const controller = new AbortController();
+    pageAbort.current = controller;
+    dispatch({ type: "load", kind: "page" });
+    getGalleryPage(undefined, controller.signal)
+      .then((page) => !controller.signal.aborted && dispatch({ type: "restart", page }))
       .catch(() => !controller.signal.aborted && dispatch({ type: "failed" }));
   }, []);
 
@@ -114,41 +132,37 @@ export function useGallery() {
   }, []);
 
   // --- reporting -------------------------------------------------------------
-  // An unsettled report keeps its reason and key until a retry settles it,
-  // even if the form is closed and opened again: a lost reply is not proof
-  // that nothing was saved.
-  const [report, setReport] = useState<ReportState>({ kind: "idle" });
-  const reportSent = useRef<{ id: string; reason: ArtifactReportReason; key: string } | null>(null);
+  // Each record has its own report: its state, and while the operation is
+  // open (sending, or unsettled after a lost reply) its frozen reason and key.
+  // A reply only ever settles the record it was sent for, so a late answer
+  // for one record never changes another's form. An unsettled report keeps
+  // its reason and key until a retry settles it, through closing, reopening
+  // and reporting other records: a lost reply is not proof nothing was saved.
+  const [reports, setReports] = useState<Record<string, ReportState>>({});
+  const reportOps = useRef(new Map<string, { reason: ArtifactReportReason; key: string }>());
+  const settleReport = (id: string, next: ReportState) => setReports((r) => ({ ...r, [id]: next }));
   const sendReport = useCallback(async (id: string, reason: ArtifactReportReason) => {
-    const prior = reportSent.current;
-    const frozen = prior && prior.id === id ? prior : { id, reason, key: crypto.randomUUID() };
-    reportSent.current = frozen;
-    setReport({ kind: "sending" });
+    const prior = reportOps.current.get(id);
+    const frozen = prior ?? { reason, key: crypto.randomUUID() };
+    reportOps.current.set(id, frozen);
+    settleReport(id, { kind: "sending" });
     try {
-      await reportArtifact(frozen.id, frozen.reason, frozen.key);
-      reportSent.current = null;
-      setReport({ kind: "received" });
+      await reportArtifact(id, frozen.reason, frozen.key);
+      reportOps.current.delete(id);
+      settleReport(id, { kind: "received" });
     } catch (err) {
       if (err instanceof ApiError && err.status < 500) {
-        reportSent.current = null;
-        setReport({ kind: "refused", message: err.status === 404 ? "This object is no longer here." : err.message });
+        reportOps.current.delete(id);
+        settleReport(id, { kind: "refused", message: err.status === 404 ? "This object is no longer here." : err.message });
       } else {
-        setReport({ kind: "unsettled", message: "We couldn't confirm the report was received. Try again: it won't be sent twice." });
+        settleReport(id, { kind: "unsettled", message: "We couldn't confirm the report was received. Try again: it won't be sent twice." });
       }
     }
   }, []);
-  const frozenReason = useCallback((id: string): ArtifactReportReason | null => {
-    const f = reportSent.current;
-    return f && f.id === id ? f.reason : null;
-  }, []);
+  const reportFor = useCallback((id: string): ReportState => reports[id] ?? { kind: "idle" }, [reports]);
+  const frozenReason = useCallback((id: string): ArtifactReportReason | null => reportOps.current.get(id)?.reason ?? null, []);
 
-  const open = useCallback((id: string | null) => {
-    dispatch({ type: "open", id });
-    // Closing changes nothing. Opening starts a fresh report form, except
-    // that an unsettled report stays with its object until a retry settles it.
-    if (id === null) return;
-    setReport((r) => (r.kind === "unsettled" && reportSent.current?.id === id ? r : { kind: "idle" }));
-  }, []);
+  const open = useCallback((id: string | null) => dispatch({ type: "open", id }), []);
 
   return {
     items: state.items,
@@ -158,13 +172,20 @@ export function useGallery() {
     error,
     reconnecting,
     generationEnabled,
+    // more pages, including the orbit's wrap back to the first one
     hasMore: state.hasMore,
+    // more pages after the ones shown, for the grid's "See more"
+    moreAhead: state.hasMore && state.cursor !== null,
+    // earlier records left the window: the grid offers the way back
+    retired: state.retired,
     loadMore,
+    restart,
+    focus,
     retry,
     selected: openArtifact(state),
     openId: state.openId,
     open,
-    report,
+    reportFor,
     sendReport,
     frozenReason,
   };

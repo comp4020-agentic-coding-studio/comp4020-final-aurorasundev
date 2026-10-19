@@ -259,3 +259,171 @@ it("leaves a definitely refused report editable", async () => {
   expect(text()).toContain("Too many reports for now.");
   expect(host.querySelector<HTMLFieldSetElement>("fieldset")!.disabled).toBe(false);
 });
+
+it("the plain collection reaches the last of 60 records within the window, then offers a way back", async () => {
+  const all = Array.from({ length: 60 }, (_, i) => i + 1);
+  const serve = (after?: string): GalleryPage => {
+    const rest = all.filter((n) => !after || art(n).id > after);
+    const items = rest.slice(0, 12);
+    return { ...page(items, 1, rest.length > 12 ? art(items[11]).id : null), total: 60 };
+  };
+  control.page.mockImplementation(async (after?: string) => serve(after));
+  await mount();
+  await emit("gallery:snapshot", serve());
+  for (let i = 0; i < 4; i++) await click("See more records");
+  const captions = () => [...host.querySelectorAll(".records-caption")].map((c) => c.textContent);
+  expect(captions()).toContain("Knot in clay 60");
+  expect(captions()).toContain("Knot in clay 49");
+  expect(host.querySelectorAll(".records-tile").length).toBeLessThanOrEqual(48);
+  expect(text()).not.toContain("See more records");
+  await click("Back to the first records");
+  expect(control.page).toHaveBeenLastCalledWith(undefined, expect.anything());
+  expect(captions()[0]).toBe("Knot in clay 1");
+  expect(captions()).toHaveLength(12);
+  expect(text()).toContain("See more records");
+});
+
+// --- reports are bound to their own record and operation ---------------------
+
+function deferred<T>() {
+  let resolve!: (v: T) => void;
+  let reject!: (e: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+async function openTile(i: number) {
+  await act(async () => host.querySelectorAll<HTMLButtonElement>(".records-tile")[i].click());
+}
+async function closeDialog() {
+  await act(async () => {
+    host.querySelector(".record-dialog")!.dispatchEvent(new Event("cancel", { cancelable: true }));
+    await new Promise((r) => setTimeout(r, 5));
+  });
+}
+async function reportAs(reason: string) {
+  await click("Report this record");
+  await act(async () => host.querySelector<HTMLInputElement>(`input[value="${reason}"]`)!.click());
+  await click("Send report");
+}
+const title = () => host.querySelector(".record-title")!.textContent;
+const settle = () => act(async () => new Promise((r) => setTimeout(r, 0)));
+
+it("a late success for record A never marks record B as reported", async () => {
+  const a = deferred<{ report_id: string; status: "queued" }>();
+  control.report.mockReturnValueOnce(a.promise);
+  await mount();
+  await emit("gallery:snapshot", page([1, 2]));
+  await openTile(0);
+  await reportAs("spam_scam");
+  expect(text()).toContain("Sending…");
+  // switch to B while A's reply is still on its way
+  await click("Next record");
+  expect(title()).toBe("Knot in clay 2");
+  await act(async () => a.resolve({ report_id: "r", status: "queued" }));
+  await settle();
+  expect(text()).not.toContain("Report received.");
+  expect(text()).toContain("Report this record");
+  // B can still be reported, with its own key
+  control.report.mockResolvedValueOnce({ report_id: "r2", status: "queued" });
+  await reportAs("something_else");
+  expect(control.report.mock.calls[1].slice(0, 2)).toEqual([art(2).id, "something_else"]);
+  expect(control.report.mock.calls[1][2]).not.toBe(control.report.mock.calls[0][2]);
+  expect(text()).toContain("Report received.");
+  // and A shows its own receipt when it is opened again
+  await click("Previous record");
+  expect(title()).toBe("Knot in clay 1");
+  expect(text()).toContain("Report received.");
+});
+
+it("a late refusal or lost reply for A leaves B's form alone", async () => {
+  const a = deferred<never>();
+  control.report.mockReturnValueOnce(a.promise);
+  await mount();
+  await emit("gallery:snapshot", page([1, 2]));
+  await openTile(0);
+  await reportAs("spam_scam");
+  await click("Next record");
+  await click("Report this record");
+  await act(async () => host.querySelector<HTMLInputElement>('input[value="threats_abuse"]')!.click());
+  await act(async () => a.reject(new ApiError(429, "rate_limited", "Too many reports for now. Try again later.")));
+  await settle();
+  expect(text()).not.toContain("Too many reports for now.");
+  expect(host.querySelector<HTMLFieldSetElement>("fieldset")!.disabled).toBe(false);
+  expect(host.querySelector<HTMLInputElement>('input[value="threats_abuse"]')!.checked).toBe(true);
+  expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')!.textContent).toBe("Send report");
+  // A, opened again, shows its refusal and is editable
+  await click("Previous record");
+  await click("Report this record");
+  expect(text()).toContain("Too many reports for now.");
+});
+
+it("A's lost reply keeps its reason and key while B is reported, and A's retry reuses them", async () => {
+  const a = deferred<never>();
+  control.report
+    .mockReturnValueOnce(a.promise)
+    .mockResolvedValueOnce({ report_id: "rb", status: "queued" })
+    .mockResolvedValueOnce({ report_id: "ra", status: "queued" });
+  await mount();
+  await emit("gallery:snapshot", page([1, 2]));
+  await openTile(0);
+  await reportAs("private_information");
+  await closeDialog();
+  await act(async () => a.reject(new TypeError("reply lost")));
+  await settle();
+  // B is reported in between
+  await openTile(1);
+  expect(text()).not.toContain("We couldn't confirm");
+  await reportAs("spam_scam");
+  expect(text()).toContain("Report received.");
+  await closeDialog();
+  // A reopens on its unsettled form, its reason frozen
+  await openTile(0);
+  expect(text()).toContain("We couldn't confirm the report was received.");
+  expect(host.querySelector<HTMLInputElement>('input[value="private_information"]')!.checked).toBe(true);
+  await click("Try again");
+  expect(control.report).toHaveBeenCalledTimes(3);
+  expect(control.report.mock.calls[2]).toEqual(control.report.mock.calls[0]);
+  expect(text()).toContain("Report received.");
+});
+
+it("hiding a record while its report is sending closes it and leaves the next record's form fresh", async () => {
+  const a = deferred<{ report_id: string; status: "queued" }>();
+  control.report.mockReturnValueOnce(a.promise);
+  await mount();
+  await emit("gallery:snapshot", page([1, 2]));
+  await openTile(0);
+  await reportAs("spam_scam");
+  await emit("artifact:hidden", { revision: 2, total: 1, id: art(1).id, version: 2 });
+  expect(host.querySelector(".record-dialog")).toBeNull();
+  await openTile(0);
+  expect(title()).toBe("Knot in clay 2");
+  // the hidden record's reply lands while the next one is open
+  await act(async () => a.resolve({ report_id: "r", status: "queued" }));
+  await settle();
+  expect(text()).not.toContain("Report received.");
+  expect(text()).toContain("Report this record");
+});
+
+it("a report still sending survives closing and reopening its record", async () => {
+  const a = deferred<{ report_id: string; status: "queued" }>();
+  control.report.mockReturnValueOnce(a.promise);
+  await mount();
+  await emit("gallery:snapshot", page([1, 2]));
+  await openTile(0);
+  await reportAs("sexual_graphic");
+  await closeDialog();
+  await openTile(1);
+  expect(text()).not.toContain("Sending…");
+  await closeDialog();
+  await openTile(0);
+  await click("Report this record");
+  expect(text()).toContain("Sending…");
+  expect(host.querySelector<HTMLFieldSetElement>("fieldset")!.disabled).toBe(true);
+  await act(async () => a.resolve({ report_id: "r", status: "queued" }));
+  await settle();
+  expect(text()).toContain("Report received.");
+  expect(control.report).toHaveBeenCalledTimes(1);
+});

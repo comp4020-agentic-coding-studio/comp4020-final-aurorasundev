@@ -2,16 +2,20 @@ import type { PublicArtifact } from "../lib/gallery-api.ts";
 
 // The plain collection, for reduced motion, no WebGL or a lost context: the
 // same live records as the orbit, each a sleeve that opens the same view.
+// It shows a bounded window: "See more" pages forward (retiring the earliest
+// records), and once any were retired, a way back starts from the first.
 
 type Props = {
   items: PublicArtifact[];
   hasMore: boolean;
+  retired: boolean;
   loadingMore: boolean;
   onLoadMore: () => void;
+  onRestart: () => void;
   onOpen: (id: string, opener: HTMLButtonElement) => void;
 };
 
-export function GalleryGridFallback({ items, hasMore, loadingMore, onLoadMore, onOpen }: Props) {
+export function GalleryGridFallback({ items, hasMore, retired, loadingMore, onLoadMore, onRestart, onOpen }: Props) {
   return (
     <div className="records-grid-wrap">
       <ul className="records-grid" aria-label="Records">
@@ -26,11 +30,18 @@ export function GalleryGridFallback({ items, hasMore, loadingMore, onLoadMore, o
           </li>
         ))}
       </ul>
-      {hasMore && (
+      {(hasMore || retired) && (
         <div className="records-more">
-          <button type="button" className="button button-secondary" onClick={onLoadMore} disabled={loadingMore}>
-            {loadingMore ? "Opening more…" : "See more records"}
-          </button>
+          {retired && (
+            <button type="button" className="button button-secondary" onClick={onRestart} disabled={loadingMore}>
+              Back to the first records
+            </button>
+          )}
+          {hasMore && (
+            <button type="button" className="button button-secondary" onClick={onLoadMore} disabled={loadingMore}>
+              {loadingMore ? "Opening more…" : "See more records"}
+            </button>
+          )}
         </div>
       )}
     </div>
