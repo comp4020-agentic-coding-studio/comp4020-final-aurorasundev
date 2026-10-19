@@ -7,7 +7,7 @@ import { createGate, takesInput } from "./lib/gallery-progress.ts";
 import { recordReveal } from "./lib/record-reveal.ts";
 import { useEntryProgress, type EntryRefs } from "./lib/useEntryProgress.ts";
 import { useGallery } from "./lib/useGallery.ts";
-import { canDrawOrbit } from "./scene/gallery-orbit.ts";
+import { canDrawOrbit } from "./scene/gallery-belt.ts";
 import type { Mist } from "./scene/mist.ts";
 import "./styles/gallery.css";
 

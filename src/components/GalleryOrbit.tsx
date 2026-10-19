@@ -1,7 +1,7 @@
 import type { gsap } from "gsap";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { PublicArtifact } from "../lib/gallery-api.ts";
-import { createGalleryOrbit, type GalleryOrbit as Scene, type OrbitFrame } from "../scene/gallery-orbit.ts";
+import { createGalleryBelt, type GalleryOrbit as Scene, type OrbitFrame } from "../scene/gallery-belt.ts";
 
 // The HTML host for the record exhibition: mounts the isolated scene, feeds
 // it the live collection by id and passes its settled focus back up. The
@@ -45,7 +45,7 @@ export const GalleryOrbit = forwardRef<OrbitHandle, Props>(function GalleryOrbit
     if (!host.current || !f) return;
     let made: Scene | null = null;
     try {
-      made = createGalleryOrbit(
+      made = createGalleryBelt(
         host.current,
         f,
         {

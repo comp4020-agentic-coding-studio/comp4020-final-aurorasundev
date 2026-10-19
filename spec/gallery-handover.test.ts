@@ -3,7 +3,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { GalleryPage, PublicArtifact } from "../src/lib/gallery-api.ts";
-import type { OrbitCallbacks } from "../src/scene/gallery-orbit.ts";
+import type { OrbitCallbacks } from "../src/scene/gallery-belt.ts";
 
 // The hand-over between the record exhibition's WebGL scene and the HTML
 // record, with the scene replaced by a recorder: the HTML takes over only when
@@ -30,9 +30,9 @@ vi.mock("../src/lib/gallery-api.ts", async (original) => ({
   getGalleryConfig: control.config,
   reportArtifact: control.report,
 }));
-vi.mock("../src/scene/gallery-orbit.ts", () => ({
+vi.mock("../src/scene/gallery-belt.ts", () => ({
   canDrawOrbit: () => true,
-  createGalleryOrbit: (_host: HTMLElement, _frames: unknown, cb: OrbitCallbacks) => {
+  createGalleryBelt: (_host: HTMLElement, _frames: unknown, cb: OrbitCallbacks) => {
     control.scene.cb = cb;
     return {
       setItems: () => {},

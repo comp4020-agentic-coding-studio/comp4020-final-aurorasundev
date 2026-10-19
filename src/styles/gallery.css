@@ -857,7 +857,7 @@
 
 /* --- short landscape (phones turned sideways, small laptop windows) --------
    Wider than a phone but too short for the desktop stack. Matches
-   COMPACT_H in gallery-orbit.ts. The header, title and caption tighten so
+   COMPACT_H in belt-layout.ts. The header, title and caption tighten so
    the orbit keeps a real stage; the opened record becomes three reserved
    columns (record tucked behind the sleeve, the full art, a scrolling text
    column) under one row for the header and one for back/close. */

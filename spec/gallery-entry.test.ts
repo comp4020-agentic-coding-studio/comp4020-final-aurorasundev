@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GalleryPage, PublicArtifact } from "../src/lib/gallery-api.ts";
 import { createGate, GATE_CAP_MS, isAdvanceKey, progress, returnGesture, swipeDirection, takesInput, wheelDirection, type Stage } from "../src/lib/gallery-progress.ts";
-import type { OrbitCallbacks, OrbitOptions } from "../src/scene/gallery-orbit.ts";
+import type { OrbitCallbacks, OrbitOptions } from "../src/scene/gallery-belt.ts";
 
 // The Gallery's entry (design 2026-10-19 §1–§3) without WebGL: the virtual
 // progress p and its rules (advance, return, skip, never replaying on close,
@@ -141,9 +141,9 @@ vi.mock("../src/lib/gallery-api.ts", async (original) => ({
   getGalleryConfig: control.config,
   reportArtifact: control.report,
 }));
-vi.mock("../src/scene/gallery-orbit.ts", () => ({
+vi.mock("../src/scene/gallery-belt.ts", () => ({
   canDrawOrbit: () => true,
-  createGalleryOrbit: (_host: HTMLElement, _frames: unknown, cb: OrbitCallbacks, opts: OrbitOptions = {}) => {
+  createGalleryBelt: (_host: HTMLElement, _frames: unknown, cb: OrbitCallbacks, opts: OrbitOptions = {}) => {
     control.scene.cb = cb;
     control.scene.held = opts.held;
     return {
