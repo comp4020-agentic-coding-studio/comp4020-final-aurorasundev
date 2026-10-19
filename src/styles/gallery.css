@@ -235,6 +235,15 @@
     visibility 0s linear 300ms;
 }
 
+/* a closing record: the header is back at once (the dialog's copy of it has
+   gone), the caption and title wait until the sleeve has left the art frame */
+.is-returning .records-intro,
+.is-returning .orbit-foot {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+}
+
 /* --- states and the plain collection -------------------------------------- */
 .records-state {
   max-width: 560px;
@@ -626,11 +635,22 @@
   animation: record-in 420ms ease both;
 }
 
-.record-dialog.is-arriving .record-text,
-.record-dialog.is-arriving .record-back,
-.record-dialog.is-arriving .record-close,
-.record-dialog.is-arriving .record-steps {
-  animation-delay: 380ms;
+/* over the orbit, the scene's open timeline brings the text in itself
+   (src/lib/record-reveal.ts), nested in the same timeline as the sleeve and
+   record, so a CSS clock never races it */
+.has-orbit .record-dialog .record-text,
+.has-orbit .record-dialog .record-back,
+.has-orbit .record-dialog .record-close,
+.has-orbit .record-dialog .record-steps {
+  animation: none;
+}
+
+/* held back until the open's reveal has begun (it marks the dialog) */
+.has-orbit .record-dialog.is-arriving:not([data-revealed]) .record-text > *,
+.has-orbit .record-dialog.is-arriving:not([data-revealed]) .record-back,
+.has-orbit .record-dialog.is-arriving:not([data-revealed]) .record-close,
+.has-orbit .record-dialog.is-arriving:not([data-revealed]) .record-steps {
+  visibility: hidden;
 }
 
 @keyframes record-in {

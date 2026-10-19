@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GalleryGridFallback } from "./components/GalleryGridFallback.tsx";
 import { GalleryOrbit, type OrbitHandle } from "./components/GalleryOrbit.tsx";
 import { RecordView } from "./components/RecordView.tsx";
+import { recordReveal } from "./lib/record-reveal.ts";
 import { useGallery } from "./lib/useGallery.ts";
 import { canDrawOrbit } from "./scene/gallery-orbit.ts";
 import "./styles/gallery.css";
@@ -11,8 +12,6 @@ import "./styles/gallery.css";
 // shows whichever is in front. No feed, counts, dates or way back to a paper.
 // It never loads the room's scene.
 
-const ARRIVE_MS = 620;
-
 function prefersStill(): boolean {
   return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
@@ -21,7 +20,13 @@ export function GalleryApp() {
   const g = useGallery();
   const [orbit, setOrbit] = useState(() => !prefersStill() && canDrawOrbit());
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  // The scene's timelines own the hand-over: `arriving` holds the HTML
+  // record back until the open (or a step) has finished in WebGL, and
+  // `returning` keeps the browsing page stepped back until the close has
+  // carried the sleeve away. Both end from the scene's callbacks, not timers.
   const [arriving, setArriving] = useState(false);
+  const [returning, setReturning] = useState(false);
+  const page = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<OrbitHandle>(null);
   const band = useRef<HTMLDivElement>(null);
   const ghostArt = useRef<HTMLDivElement>(null);
@@ -32,27 +37,40 @@ export function GalleryApp() {
   const focused = useMemo(() => g.items.find((a) => a.id === focusedId) ?? g.items[0] ?? null, [g.items, focusedId]);
   const isOpen = g.selected !== null;
 
+  const showOrbit = orbit && g.items.length > 0;
+
   const openRecord = useCallback(
     (id: string) => {
-      setArriving(orbit);
+      setArriving(showOrbit);
+      setReturning(false);
       g.open(id);
     },
-    [g, orbit],
+    [g, showOrbit],
   );
-
-  useEffect(() => {
-    if (!arriving) return;
-    const t = setTimeout(() => setArriving(false), ARRIVE_MS);
-    return () => clearTimeout(t);
-  }, [arriving]);
 
   const close = useCallback(() => {
     g.open(null);
     setArriving(false);
+    setReturning(showOrbit);
     const back = opener.current;
     opener.current = null;
     requestAnimationFrame(() => back?.focus({ preventScroll: true }));
-  }, [g]);
+  }, [g, showOrbit]);
+
+  // a record closed from outside (hidden live) hands back the same way
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (wasOpen.current && !isOpen && showOrbit) setReturning(true);
+    if (!isOpen) setArriving(false);
+    wasOpen.current = isOpen;
+  }, [isOpen, showOrbit]);
+
+  const onArrive = useCallback(() => setArriving(false), []);
+  const onHandBack = useCallback(() => setReturning(false), []);
+  const reveal = useCallback(() => {
+    const dialog = page.current?.querySelector<HTMLElement>(".record-dialog");
+    return dialog ? recordReveal(dialog) : null;
+  }, []);
 
   // a settled turn moves the focus; inside an open record the arrows turn
   // the orbit and the open record follows it
@@ -66,7 +84,7 @@ export function GalleryApp() {
 
   const step = useCallback(
     (dir: 1 | -1) => {
-      if (orbit) {
+      if (showOrbit) {
         // the orbit carries the next sleeve in; the HTML record follows it
         setArriving(true);
         orbitRef.current?.step(dir);
@@ -79,7 +97,7 @@ export function GalleryApp() {
       setFocusedId(next.id);
       g.open(next.id);
     },
-    [g, orbit],
+    [g, showOrbit],
   );
 
   // Left/Right turn the collection while browsing
@@ -121,14 +139,24 @@ export function GalleryApp() {
     [],
   );
 
-  const showOrbit = orbit && g.items.length > 0;
   const many = g.items.length > 1;
 
   return (
-    <div className={`records-page${showOrbit ? " has-orbit" : ""}${isOpen ? " is-open" : ""}`}>
+    <div ref={page} className={`records-page${showOrbit ? " has-orbit" : ""}${isOpen ? " is-open" : ""}${returning && showOrbit && !isOpen ? " is-returning" : ""}`}>
       <div className="records-surface" aria-hidden="true" />
       {showOrbit && (
-        <GalleryOrbit ref={orbitRef} items={g.items} open={isOpen} frames={frames} onFocus={onFocus} onOpen={openRecord} onLost={() => setOrbit(false)} />
+        <GalleryOrbit
+          ref={orbitRef}
+          items={g.items}
+          open={isOpen}
+          frames={frames}
+          onFocus={onFocus}
+          onOpen={openRecord}
+          onLost={() => setOrbit(false)}
+          onArrive={onArrive}
+          onHandBack={onHandBack}
+          reveal={reveal}
+        />
       )}
       {/* where an opened record's art and disc sit, measured by the scene */}
       <div className="record-frame record-ghost" aria-hidden="true">
@@ -238,7 +266,7 @@ export function GalleryApp() {
           artifact={g.selected}
           report={g.reportFor(g.selected.id)}
           frozenReason={g.frozenReason(g.selected.id)}
-          arriving={arriving}
+          arriving={arriving && showOrbit}
           canStep={many}
           onStep={step}
           onReport={(reason) => void g.sendReport(g.selected!.id, reason)}

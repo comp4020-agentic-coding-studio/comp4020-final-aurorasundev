@@ -3,13 +3,19 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { gsap } from "gsap";
 import { Observer } from "gsap/Observer";
 import { mergeOrbitItems, nextFocusIndex, type OrbitItem } from "./orbit-items.ts";
+import { advanceSpin, dampPhase, spinning, wheelItems, wheelSnap, SPIN_GAIN, SPIN_IDLE, SPIN_RESPONSE, WHEEL_QUIET_MS } from "./gallery-motion.ts";
+import { closeTimeline, local, newChoreo, openTimeline, slideStages, stepTimeline, type SpinClock } from "./record-timeline.ts";
+import { createSleeveKit, type SleeveMesh } from "./sleeve-kit.ts";
+import { applyVinylSheen } from "./vinyl-sheen.ts";
 
 // The Gallery's record exhibition (G01–G03): one charcoal record in the
 // middle and the collection's square sleeves on a tilted orbit around it.
 // Everything moves from one shared phase: input changes a target, one ticker
-// damps toward it, and a settled gesture reports a focused id once. Per-frame
-// state stays here, never in React. Text is HTML; only the generated images
-// and the fixed materials in /textures/gallery/ are drawn.
+// damps toward it (the only damping), and a settled gesture reports a focused
+// id once. Opening and closing a record are GSAP timelines over a few shared
+// values (record-timeline.ts); every pose is a pure function of the phase and
+// those values. Per-frame state stays here, never in React. Text is HTML; only
+// the generated images and the fixed materials in /textures/gallery/ are drawn.
 //
 // It imports nothing from the room: no paper scene, furnace, fire or physics.
 
@@ -20,6 +26,13 @@ export type OrbitCallbacks = {
   onFocus: (id: string) => void;
   onOpen: (id: string) => void;
   onLost: () => void;
+  // an open (or a step inside one) has finished: the sleeve and record rest
+  // exactly on the HTML frames, which can take over now
+  onArrive: () => void;
+  // a close has gone far enough for the browsing page to come back
+  onHandBack: () => void;
+  // the HTML half of an open, nested into the scene's timeline (optional)
+  reveal?: () => gsap.core.Timeline | null;
 };
 export type GalleryOrbit = {
   setItems: (items: OrbitItem[]) => void;
@@ -36,9 +49,6 @@ const FRONT = -Math.PI / 2;
 // plate's half-width (measured from the file's alpha)
 const FACE_EDGE = 0.945;
 const FACE_WINDOW = 0.383;
-// sleeve-frame.png: opaque border from 3.5% to 9.8% of the plate
-const FRAME_PLATE = 1.076;
-const ART_INSET = 0.87;
 const MAX_TEXTURES = 14;
 // wider than a phone but this short: gallery.css's compact landscape layout
 const COMPACT_H = 540;
@@ -89,15 +99,12 @@ type Layout = {
 type Sleeve = {
   id: string;
   url: string;
-  group: THREE.Group;
-  stock: THREE.Mesh;
-  art: THREE.Mesh;
-  frame: THREE.Mesh;
+  mesh: SleeveMesh;
   shadow: THREE.Mesh;
-  mats: THREE.Material[];
-  artMat: THREE.MeshBasicMaterial;
+  shadowMat: THREE.MeshBasicMaterial;
   pose: Pose;
-  placed: boolean;
+  // the pointer's hover lift, 0..1, eased by its own small tween
+  lift: { v: number };
 };
 
 const hiddenPose = (): Pose => ({ x: 0, y: 0, z: -80, size: 1, rx: 0, ry: 0, rz: 0, vis: 0, fade: 1 });
@@ -170,7 +177,6 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
   const dropShadow = shadowTexture(true);
 
   const unitPlane = new THREE.PlaneGeometry(1, 1);
-  const unitBox = new THREE.BoxGeometry(1, 1, 0.012);
   const unitCircle = new THREE.CircleGeometry(1, 96);
 
   // --- the record ----------------------------------------------------------
@@ -201,6 +207,7 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
     transparent: true,
     alphaTest: 0.01,
   });
+  const sheen = applyVinylSheen(faceMat, { inner: FACE_WINDOW, outer: FACE_EDGE });
   const face = new THREE.Mesh(unitPlane, faceMat);
   face.scale.setScalar(2 / FACE_EDGE);
   face.position.z = 0.003;
@@ -212,7 +219,7 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
   scene.add(disc, discShadow);
   const discMats: THREE.Material[] = [rimMat, labelMat, holeMat, faceMat];
   const discPose: Pose = hiddenPose();
-  let discPlaced = false;
+  const sunDir = sun.position.clone().normalize();
 
   // --- sleeves and their images --------------------------------------------
   const textures = new Map<string, { tex: THREE.Texture; used: number; ready: boolean }>();
@@ -250,54 +257,25 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
     return null;
   }
 
+  const kit = createSleeveKit(stockTex, frameTex);
   const sleeves = new Map<string, Sleeve>();
   function makeSleeve(item: OrbitItem): Sleeve {
-    const group = new THREE.Group();
-    const stockMat = new THREE.MeshStandardMaterial({ map: stockTex, roughness: 0.95, envMapIntensity: 0.25, transparent: true });
-    const artMat = new THREE.MeshBasicMaterial({ map: stockTex, transparent: true });
-    const frameMat = new THREE.MeshStandardMaterial({
-      map: frameTex,
-      roughness: 0.95,
-      envMapIntensity: 0.25,
-      transparent: true,
-      alphaTest: 0.01,
-      depthWrite: false,
-    });
+    const mesh = kit.make();
+    mesh.body.userData.id = item.id;
     const shadowMat = new THREE.MeshBasicMaterial({ map: floorShadow, transparent: true, depthWrite: false, opacity: 0 });
-    const stock = new THREE.Mesh(unitBox, stockMat);
-    stock.renderOrder = 0;
-    stock.userData.id = item.id;
-    const art = new THREE.Mesh(unitPlane, artMat);
-    art.scale.setScalar(ART_INSET);
-    art.position.z = 0.0075;
-    art.renderOrder = 1;
-    const frame = new THREE.Mesh(unitPlane, frameMat);
-    frame.scale.setScalar(FRAME_PLATE);
-    frame.position.z = 0.008;
-    frame.renderOrder = 2;
-    group.add(stock, art, frame);
     const shadow = new THREE.Mesh(unitPlane, shadowMat);
     shadow.renderOrder = -1;
-    scene.add(group, shadow);
-    group.visible = false;
+    scene.add(mesh.group, shadow);
+    mesh.group.visible = false;
     shadow.visible = false;
-    return {
-      id: item.id,
-      url: item.image_url,
-      group,
-      stock,
-      art,
-      frame,
-      shadow,
-      mats: [stockMat, artMat, frameMat, shadowMat],
-      artMat,
-      pose: hiddenPose(),
-      placed: false,
-    };
+    return { id: item.id, url: item.image_url, mesh, shadow, shadowMat, pose: hiddenPose(), lift: { v: 0 } };
   }
   function dropSleeve(s: Sleeve) {
-    scene.remove(s.group, s.shadow);
-    for (const m of s.mats) m.dispose();
+    gsap.killTweensOf(s.lift);
+    if (hovered === s) hovered = null;
+    scene.remove(s.mesh.group, s.shadow);
+    s.mesh.dispose();
+    s.shadowMat.dispose();
   }
 
   // --- layout from the viewport and the HTML stage band ---------------------
@@ -434,7 +412,7 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
     };
   }
 
-  // --- the shared phase ----------------------------------------------------
+  // --- the shared phase and the choreography -------------------------------
   let items: OrbitItem[] = [];
   let pending: OrbitItem[] | null = null;
   let phase = 0;
@@ -442,9 +420,29 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
   let reported: string | null = null;
   let dragging = false;
   let dragStart = 0;
+  // the whole item a wheel gesture began on, while it is under way
+  let wheelStart: number | null = null;
   let dirty = 4;
-  const fx = { detail: 0, entry: 0 };
   let open = false;
+  // the page's own entrance, separate from opening a record
+  const intro = { entry: 0 };
+  // the values the open/close timelines drive; poses are pure functions of them
+  const c = newChoreo();
+  const spinClock: SpinClock = { angle: 0, boost: 0 };
+  let tl: gsap.core.Timeline | null = null;
+  // a finished open or step waits for the orbit to settle on its record
+  // before the HTML takes over, so the hand-over is never early
+  let arriveDue = false;
+  // the HTML half of an open (text, then the title letter by letter), nested
+  // in the scene's timeline so the two can never drift apart
+  let revealTl: gsap.core.Timeline | null = null;
+  const still = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+  let idleRate = still?.matches ? 0 : SPIN_IDLE;
+  const onStill = () => {
+    idleRate = still?.matches ? 0 : SPIN_IDLE;
+    dirty = 4;
+  };
+  still?.addEventListener?.("change", onStill);
 
   const count = () => items.length;
   const focusIndex = () => (count() ? mod(Math.round(target), count()) : -1);
@@ -476,6 +474,15 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
       textures.delete(id);
     }
     for (const item of next) if (!sleeves.has(item.id)) sleeves.set(item.id, makeSleeve(item));
+    // the record in front was removed while it stood forward: its successor
+    // does not leap into its place; the close that follows starts from here
+    const lost = prevIndex >= 0 && !keep.has(prev[prevIndex].id);
+    if (lost && c.hero > 0) {
+      stopTimeline(false);
+      c.hero = 0;
+    }
+    // a wheel gesture in progress restarts from wherever the list lands
+    wheelStart = null;
     if (!next.length) {
       phase = target = 0;
     } else {
@@ -499,7 +506,7 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
       reported = null;
       return;
     }
-    if (!force && (dragging || Math.abs(target - phase) > 0.02)) return;
+    if (!force && (dragging || wheelStart !== null || Math.abs(target - phase) > 0.02)) return;
     const id = items[focusIndex()].id;
     if (id !== reported) {
       reported = id;
@@ -510,6 +517,32 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
   function snap(to?: number) {
     target = to ?? Math.round(target);
     dirty = 4;
+  }
+
+  // --- timelines: one at a time, each taking over from where the last left off
+  function stopTimeline(keepText: boolean) {
+    // a record that stays open keeps its text: an interrupted reveal finishes;
+    // one that closes gives any split title back as it was
+    if (revealTl) {
+      if (keepText) revealTl.progress(1);
+      (revealTl.data as { revert?: () => void } | undefined)?.revert?.();
+    }
+    revealTl = null;
+    arriveDue = false;
+    tl?.kill();
+    tl = null;
+  }
+  function arriveWhenSettled() {
+    arriveDue = true;
+    dirty = Math.max(dirty, 1);
+  }
+  function play(next: gsap.core.Timeline) {
+    tl = next;
+    next.eventCallback("onUpdate", () => (dirty = Math.max(dirty, 1)));
+    next.eventCallback("onComplete", () => {
+      if (tl === next) tl = null;
+      dirty = 4;
+    });
   }
 
   // --- input: wheel, drag and swipe on the stage only ------------------------
@@ -526,12 +559,16 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
       // pinch-zoom and modified wheels belong to the browser
       if (open || !count() || e.ctrlKey || e.metaKey) return;
       e.preventDefault();
-      const unit = e.deltaMode === 1 ? 32 : e.deltaMode === 2 ? 400 : 1;
-      const d = clamp((Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX) * unit, -120, 120);
-      target += d / 320;
+      if (wheelStart === null) wheelStart = Math.round(target);
+      target += wheelItems(e);
       dirty = 4;
+      // snap once the wheel goes quiet, so a trackpad's glide is never cut off
       clearTimeout(wheelTimer);
-      wheelTimer = window.setTimeout(() => snap(), 140);
+      wheelTimer = window.setTimeout(() => {
+        const start = wheelStart;
+        wheelStart = null;
+        snap(start === null ? undefined : wheelSnap(start, target));
+      }, WHEEL_QUIET_MS);
     },
     onPress: () => {
       if (open || !count()) return;
@@ -540,6 +577,7 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
     onDragStart: () => {
       if (open || !count()) return;
       dragging = true;
+      setHover(null);
     },
     onDrag: (self) => {
       if (!dragging) return;
@@ -569,6 +607,13 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
   // a click (not a drag) opens the record, or turns a sleeve to the front
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
+  function pick(x: number, y: number): THREE.Intersection | undefined {
+    ndc.set((x / L.w) * 2 - 1, -(y / L.h) * 2 + 1);
+    raycaster.setFromCamera(ndc, camera);
+    const targets: THREE.Object3D[] = [face, label];
+    for (const s of sleeves.values()) if (s.mesh.group.visible && s.pose.vis > 0.3) targets.push(s.mesh.body);
+    return raycaster.intersectObjects(targets, false)[0];
+  }
   let down: { x: number; y: number; t: number } | null = null;
   const onDown = (e: PointerEvent) => {
     down = { x: e.clientX, y: e.clientY, t: performance.now() };
@@ -578,11 +623,7 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
     down = null;
     if (!d || open || !count()) return;
     if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || performance.now() - d.t > 500) return;
-    ndc.set((e.clientX / L.w) * 2 - 1, -(e.clientY / L.h) * 2 + 1);
-    raycaster.setFromCamera(ndc, camera);
-    const targets: THREE.Object3D[] = [face, label];
-    for (const s of sleeves.values()) if (s.group.visible && s.pose.vis > 0.3) targets.push(s.stock);
-    const hit = raycaster.intersectObjects(targets, false)[0];
+    const hit = pick(e.clientX, e.clientY);
     if (!hit) return;
     const id = hit.object.userData.id as string | undefined;
     const fi = focusIndex();
@@ -597,6 +638,29 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
   host.addEventListener("pointerdown", onDown);
   host.addEventListener("pointerup", onUp);
 
+  // hover: on a desktop pointer the sleeve under it lifts a little
+  let hovered: Sleeve | null = null;
+  function setHover(next: Sleeve | null) {
+    if (next === hovered) return;
+    for (const [s, v] of [
+      [hovered, 0],
+      [next, 1],
+    ] as const) {
+      if (!s) continue;
+      gsap.to(s.lift, { v, duration: v ? 0.32 : 0.45, ease: v ? "power2.out" : "power2.inOut", overwrite: true, onUpdate: () => (dirty = Math.max(dirty, 1)) });
+    }
+    hovered = next;
+    host.style.cursor = next ? "pointer" : "";
+  }
+  const onMove = (e: PointerEvent) => {
+    if (e.pointerType !== "mouse" || L.phone || open || dragging || !count()) return setHover(null);
+    const id = pick(e.clientX, e.clientY)?.object.userData.id as string | undefined;
+    setHover(id ? (sleeves.get(id) ?? null) : null);
+  };
+  const onLeave = () => setHover(null);
+  host.addEventListener("pointermove", onMove);
+  host.addEventListener("pointerleave", onLeave);
+
   // --- per frame -----------------------------------------------------------
   const clock = new THREE.Clock();
   const place = (obj: THREE.Object3D, p: Pose) => {
@@ -604,98 +668,103 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
     obj.rotation.set(p.rx, p.ry, p.rz);
   };
 
+  // where an item at ring offset s sits, given the choreography: the others
+  // step aside one after another, the chosen one comes forward to the HTML
+  // art frame, and a hovered one lifts
+  function sleevePose(s: number, lift: number): Pose {
+    const n = count();
+    let p = n > 1 ? orbitPose(s) : hiddenPose();
+    const focusWeight = clamp(1 - Math.abs(s), 0, 1);
+    const aside = local(c.exit, Math.abs(s), c.order) * (1 - focusWeight);
+    if (aside > 0 || c.hero > 0) {
+      const out: Pose = {
+        ...p,
+        x: L.cx + (p.x - L.cx) * (1 + 0.85 * aside),
+        y: L.cy + (p.y - L.cy) * (1 + 0.25 * aside),
+        z: p.z - 90 * aside,
+        size: p.size * (1 - 0.25 * aside),
+        fade: 1 - 0.6 * aside,
+      };
+      p = blend(out, L.hero, c.hero * focusWeight);
+    }
+    if (lift > 0) {
+      p.z += 36 * lift;
+      p.y += 5 * lift;
+      p.size *= 1 + 0.045 * lift;
+    }
+    const entry = intro.entry;
+    p.size *= 0.6 + 0.4 * entry;
+    p.y -= (1 - entry) * 30 * (1 + Math.abs(s));
+    p.fade *= entry;
+    return p;
+  }
+
+  // the record: in the middle, tucked into the chosen sleeve, then slid out
+  // of it onto the HTML disc frame
+  function discPoseFor(hp: Pose | null): Pose {
+    let dp: Pose = { ...L.disc };
+    if (hp && c.tuck > 0) {
+      const tucked: Pose = { x: hp.x, y: hp.y, z: hp.z - 4, size: hp.size * 0.46, rx: hp.rx, ry: hp.ry, rz: hp.rz, vis: 1, fade: 1 };
+      dp = blend(dp, tucked, c.tuck);
+      if (c.slide > 0) {
+        const { out, settle: rest } = slideStages(c.slide);
+        const D = L.discDetail;
+        // a record that rests in front of the sleeve first clears its edge,
+        // so it never passes through the paper
+        const front = D.z >= L.hero.z;
+        const clearX = front ? Math.max(Math.min(D.x, L.hero.x - L.hero.size / 2 - D.size * 0.98), -L.w / 2 + D.size * 0.8) : D.x;
+        const mid: Pose = { x: clearX, y: lerp(hp.y, D.y, 0.5), z: tucked.z, size: D.size, rx: 0, ry: 0, rz: 0, vis: 1, fade: 1 };
+        dp = blend(blend(dp, mid, out), D, rest);
+        dp.z = lerp(tucked.z, D.z, smooth(0, 0.15, rest));
+      }
+    }
+    const entry = intro.entry;
+    dp.y -= (1 - entry) * 40;
+    return dp;
+  }
+
   function frame() {
     if (document.hidden) return;
     const dt = Math.min(clock.getDelta(), 0.05);
     const prev = phase;
-    phase += (target - phase) * (1 - Math.exp(-dt * 9));
-    if (Math.abs(target - phase) < 1e-4) phase = target;
-    let moving = Math.abs(phase - prev) > 1e-5;
+    phase = dampPhase(phase, target, dt);
+    let moving = phase !== prev;
     settle();
+    if (arriveDue && open && phase === target) {
+      arriveDue = false;
+      cb.onArrive();
+    }
 
     const n = count();
-    const detail = fx.detail;
-    const entry = fx.entry;
-    const k = 1 - Math.exp(-dt * 14);
-
-    // the record
-    const dp = blend(L.disc, L.discDetail, detail);
-    dp.y -= (1 - entry) * 40;
-    for (const key of Object.keys(dp) as (keyof Pose)[]) {
-      const before = discPose[key];
-      discPose[key] = discPlaced ? lerp(before, dp[key], k) : dp[key];
-      if (Math.abs(discPose[key] - before) > 0.01) moving = true;
-    }
-    discPlaced = true;
-    place(disc, discPose);
-    disc.scale.setScalar(discPose.size * (0.92 + 0.08 * entry));
-    spin.rotation.z = -phase * (TAU / 10) + (1 - entry) * 0.8;
-    // the phone's opened record is the art alone; the disc steps aside
-    const discFade = entry * (L.phone ? 1 - smooth(0.1, 0.6, detail) : 1);
-    for (const m of discMats) m.opacity = discFade;
-    disc.visible = discFade > 0.01;
-    discShadow.visible = !L.phone;
-    discShadow.position.set(discPose.x + discPose.size * 0.1, discPose.y - discPose.size * 1.45, discPose.z - 200);
-    discShadow.scale.set(discPose.size * 2.4, discPose.size * 0.42, 1);
-    discShadowMat.opacity = 0.2 * entry * (1 - detail);
+    const entry = intro.entry;
     const fi = n ? mod(Math.round(phase), n) : -1;
-    const labelItem = fi >= 0 ? items[fi] : null;
-    const labelTex = labelItem ? artFor({ id: labelItem.id, url: labelItem.image_url }) : null;
-    if (labelMat.map !== (labelTex ?? stockTex)) {
-      labelMat.map = labelTex ?? stockTex;
-      labelMat.needsUpdate = true;
-    }
 
     // the sleeves; ranks give a back-to-front draw order
     const order: Sleeve[] = [];
+    let heroPose = null as Pose | null;
     items.forEach((item, i) => {
       const sl = sleeves.get(item.id);
       if (!sl) return;
       const s = n > 1 ? ringDelta(i - phase, n) : 0;
-      let p = n > 1 ? orbitPose(s) : hiddenPose();
-      if (detail > 0) {
-        // the orbit gives way to the margins; the focused sleeve comes forward
-        const out: Pose = {
-          ...p,
-          x: L.cx + (p.x - L.cx) * (1 + 0.85 * detail),
-          y: L.cy + (p.y - L.cy) * (1 + 0.25 * detail),
-          size: p.size * (1 - 0.25 * detail),
-          fade: 1 - 0.6 * detail,
-        };
-        // the focused sleeve comes forward to exactly where the HTML record
-        // takes over, so the hand-over shows no seam
-        const focusWeight = clamp(1 - Math.abs(s), 0, 1);
-        p = blend(out, L.hero, detail * focusWeight);
-      }
-      p.size *= 0.6 + 0.4 * entry;
-      p.y -= (1 - entry) * 30 * (1 + Math.abs(s));
-      p.fade *= entry;
-      const cur = sl.pose;
-      if (!sl.placed) {
-        Object.assign(cur, p);
-        sl.placed = true;
-      } else {
-        for (const key of Object.keys(p) as (keyof Pose)[]) {
-          const before = cur[key];
-          cur[key] = lerp(before, p[key], k);
-          if (Math.abs(cur[key] - before) > 0.01) moving = true;
-        }
-      }
+      const cur = sleevePose(s, sl.lift.v);
+      sl.pose = cur;
+      if (i === fi) heroPose = cur;
+      const g = sl.mesh.group;
       const shown = cur.vis > 0.015 && cur.fade > 0.01;
-      sl.group.visible = shown;
+      g.visible = shown;
       sl.shadow.visible = shown;
       if (!shown) return;
-      place(sl.group, cur);
-      sl.group.scale.setScalar(cur.size);
+      place(g, cur);
+      g.scale.setScalar(cur.size);
       // only nearby sleeves fetch their image
-      const tex = Math.abs(s) < 4.5 || detail > 0 ? artFor(sl) : null;
+      const tex = Math.abs(s) < 4.5 || c.hero > 0 ? artFor(sl) : null;
       const want = tex ?? stockTex;
-      if (sl.artMat.map !== want) {
-        sl.artMat.map = want;
-        sl.artMat.needsUpdate = true;
+      if (sl.mesh.artMat.map !== want) {
+        sl.mesh.artMat.map = want;
+        sl.mesh.artMat.needsUpdate = true;
       }
-      for (const m of sl.mats) m.opacity = cur.fade;
-      const sm = sl.shadow.material as THREE.MeshBasicMaterial;
+      sl.mesh.setOpacity(cur.fade);
+      const sm = sl.shadowMat;
       if (L.phone) {
         sm.map = dropShadow;
         sl.shadow.position.set(cur.x + cur.size * 0.03, cur.y - cur.size * L.shadowDrop, cur.z - 4);
@@ -707,10 +776,40 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
         sl.shadow.position.set(cur.x + cur.size * 0.06, cur.y - cur.size * L.shadowDrop, cur.z - 180);
         sl.shadow.rotation.set(0, 0, 0);
         sl.shadow.scale.set(cur.size * 1.25, cur.size * 0.22, 1);
-        sm.opacity = 0.2 * cur.fade * cur.vis * (1 - detail * 0.8);
+        sm.opacity = 0.2 * cur.fade * cur.vis * (1 - c.hero * 0.8);
       }
       order.push(sl);
     });
+
+    // the record
+    const dp = discPoseFor(heroPose);
+    Object.assign(discPose, dp);
+    place(disc, discPose);
+    disc.scale.setScalar(discPose.size * (0.92 + 0.08 * entry));
+    // its spin: a slow idle turn plus a boost from the orbit's motion, both
+    // time-based; a timeline that lands it upright owns it while it runs
+    const idle = idleRate * c.idle;
+    if (!gsap.isTweening(spinClock)) {
+      const phaseVelocity = dt > 0 ? (phase - prev) / dt : 0;
+      Object.assign(spinClock, advanceSpin(spinClock, dt, { idle, phaseVelocity, gain: idleRate ? SPIN_GAIN : 0, response: SPIN_RESPONSE }));
+    }
+    spin.rotation.z = spinClock.angle + (1 - entry) * 0.8;
+    // the phone's opened record is the art alone; the record goes into it
+    const discFade = entry * (L.phone ? 1 - smooth(0.35, 0.95, c.tuck) : 1);
+    for (const m of discMats) m.opacity = discFade;
+    disc.visible = discFade > 0.01;
+    if (disc.visible) sheen.update(spin, camera, sunDir, idle + spinClock.boost);
+    discShadow.visible = !L.phone;
+    discShadow.position.set(discPose.x + discPose.size * 0.1, discPose.y - discPose.size * 1.45, discPose.z - 200);
+    discShadow.scale.set(discPose.size * 2.4, discPose.size * 0.42, 1);
+    discShadowMat.opacity = 0.2 * entry * (1 - c.hero);
+    const labelItem = fi >= 0 ? items[fi] : null;
+    const labelTex = labelItem ? artFor({ id: labelItem.id, url: labelItem.image_url }) : null;
+    if (labelMat.map !== (labelTex ?? stockTex)) {
+      labelMat.map = labelTex ?? stockTex;
+      labelMat.needsUpdate = true;
+    }
+
     order.sort((a, b) => a.pose.z - b.pose.z);
     let rank = 1;
     let discRanked = false;
@@ -719,11 +818,13 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
         disc.renderOrder = rank++;
         discRanked = true;
       }
-      sl.group.renderOrder = rank++;
+      sl.mesh.group.renderOrder = rank++;
     }
     if (!discRanked) disc.renderOrder = rank;
 
-    if (moving || dirty > 0 || gsap.isTweening(fx)) {
+    // render on demand: only while something moves, or the record turns
+    const turning = disc.visible && spinning(spinClock, idle);
+    if (moving || turning || dirty > 0 || tl !== null || gsap.isTweening(intro)) {
       renderer.render(scene, camera);
       if (dirty > 0) dirty--;
     }
@@ -747,7 +848,7 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
 
   measure();
   renderer.setAnimationLoop(frame);
-  gsap.to(fx, { entry: 1, duration: 0.65, ease: "power2.out", delay: 0.05 });
+  const introTween = gsap.to(intro, { entry: 1, duration: 0.65, ease: "power2.out", delay: 0.05 });
 
   return {
     setItems(next) {
@@ -760,11 +861,30 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
     setOpen(value) {
       if (open === value) return;
       open = value;
+      stopTimeline(false);
       if (value) {
         observer.disable();
+        clearTimeout(wheelTimer);
+        wheelStart = null;
+        setHover(null);
         snap();
-      } else observer.enable();
-      gsap.to(fx, { detail: value ? 1 : 0, duration: 0.72, ease: "power3.inOut", overwrite: true });
+        const next = openTimeline(c, spinClock, { phone: L.phone });
+        const reveal = cb.reveal?.() ?? null;
+        if (reveal) {
+          // the text comes in as the record lands, the title last
+          next.add(reveal, "land");
+          revealTl = reveal;
+        }
+        // at the timeline's end the WebGL sleeve and record rest exactly on
+        // the HTML frames, and the title has finished: hand over
+        next.call(arriveWhenSettled, undefined, ">");
+        play(next);
+      } else {
+        observer.enable();
+        const next = closeTimeline(c);
+        next.call(() => cb.onHandBack(), undefined, 0.35);
+        play(next);
+      }
       dirty = 4;
     },
     focus(id) {
@@ -775,24 +895,37 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
     step(dir) {
       if (!count()) return;
       snap(Math.round(target) + dir);
+      if (!open) return;
+      // inside an open record: the orbit carries the next sleeve forward and
+      // the record turns once to rest upright, then the HTML takes over again
+      stopTimeline(true);
+      const next = stepTimeline(c, spinClock, { phone: L.phone });
+      next.call(arriveWhenSettled, undefined, ">");
+      play(next);
     },
     dispose() {
       renderer.setAnimationLoop(null);
-      gsap.killTweensOf(fx);
+      stopTimeline(false);
+      introTween.kill();
+      gsap.killTweensOf(spinClock);
       clearTimeout(wheelTimer);
       observer.kill();
       resize.disconnect();
+      still?.removeEventListener?.("change", onStill);
       host.removeEventListener("pointerdown", onDown);
       host.removeEventListener("pointerup", onUp);
+      host.removeEventListener("pointermove", onMove);
+      host.removeEventListener("pointerleave", onLeave);
       document.removeEventListener("visibilitychange", onVisible);
       renderer.domElement.removeEventListener("webglcontextlost", onLost);
       for (const s of sleeves.values()) dropSleeve(s);
       sleeves.clear();
+      kit.dispose();
       for (const t of textures.values()) t.tex.dispose();
       textures.clear();
       for (const m of [...discMats, discShadowMat]) m.dispose();
       for (const t of [faceTex, grooveTex, stockTex, frameTex, floorShadow, dropShadow]) t.dispose();
-      for (const g of [unitPlane, unitBox, unitCircle, rim.geometry]) g.dispose();
+      for (const g of [unitPlane, unitCircle, rim.geometry]) g.dispose();
       envTarget.dispose();
       renderer.dispose();
       renderer.domElement.remove();

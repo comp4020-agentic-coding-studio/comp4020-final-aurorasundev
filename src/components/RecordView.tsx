@@ -121,7 +121,10 @@ export function RecordView({ artifact, report, frozenReason, arriving, canStep, 
         <div className="record-text">
           {view === "look" ? (
             <>
-              <h2 id="record-title" className="record-title">
+              {/* keyed: the reveal splits and restores this heading's text,
+                  so a new record gets a new element rather than an update to
+                  a text node React no longer holds */}
+              <h2 key={artifact.id} id="record-title" className="record-title">
                 {artifact.title}
               </h2>
               <p className="record-lede">An image shaped by a released note.</p>

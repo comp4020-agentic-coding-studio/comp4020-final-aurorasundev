@@ -1,3 +1,4 @@
+import type { gsap } from "gsap";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { PublicArtifact } from "../lib/gallery-api.ts";
 import { createGalleryOrbit, type GalleryOrbit as Scene, type OrbitFrame } from "../scene/gallery-orbit.ts";
@@ -14,13 +15,19 @@ type Props = {
   onFocus: (id: string) => void;
   onOpen: (id: string) => void;
   onLost: () => void;
+  // the scene's open/close timelines report their ends; the HTML takes over
+  // (or hands back) from these, never from a timer
+  onArrive: () => void;
+  onHandBack: () => void;
+  // the opened record's HTML reveal, nested into the scene's open timeline
+  reveal: () => gsap.core.Timeline | null;
 };
 
-export const GalleryOrbit = forwardRef<OrbitHandle, Props>(function GalleryOrbit({ items, open, frames, onFocus, onOpen, onLost }, ref) {
+export const GalleryOrbit = forwardRef<OrbitHandle, Props>(function GalleryOrbit({ items, open, frames, onFocus, onOpen, onLost, onArrive, onHandBack, reveal }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<Scene | null>(null);
-  const handlers = useRef({ onFocus, onOpen, onLost });
-  handlers.current = { onFocus, onOpen, onLost };
+  const handlers = useRef({ onFocus, onOpen, onLost, onArrive, onHandBack, reveal });
+  handlers.current = { onFocus, onOpen, onLost, onArrive, onHandBack, reveal };
 
   useEffect(() => {
     const f = frames();
@@ -31,6 +38,9 @@ export const GalleryOrbit = forwardRef<OrbitHandle, Props>(function GalleryOrbit
         onFocus: (id) => handlers.current.onFocus(id),
         onOpen: (id) => handlers.current.onOpen(id),
         onLost: () => handlers.current.onLost(),
+        onArrive: () => handlers.current.onArrive(),
+        onHandBack: () => handlers.current.onHandBack(),
+        reveal: () => handlers.current.reveal(),
       });
     } catch {
       handlers.current.onLost();
