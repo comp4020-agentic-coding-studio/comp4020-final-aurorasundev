@@ -33,12 +33,25 @@ export type OrbitCallbacks = {
   onHandBack: () => void;
   // the HTML half of an open, nested into the scene's timeline (optional)
   reveal?: () => gsap.core.Timeline | null;
+  // the scene has decoded its textures, compiled and drawn its warm-up frames
+  onReady?: () => void;
+};
+export type OrbitOptions = {
+  // the page's entry is showing: the scene starts unseen and without input,
+  // and the page's transition drives its entrance (setEntry()) instead
+  held?: boolean;
 };
 export type GalleryOrbit = {
   setItems: (items: OrbitItem[]) => void;
   setOpen: (open: boolean) => void;
   focus: (id: string) => void;
   step: (dir: 1 | -1) => void;
+  // whether wheel, drag and clicks reach the scene (off while p < 1)
+  setInput: (enabled: boolean) => void;
+  // the scene's entrance, 0..1, set by the page's transition while held
+  setEntry: (value: number) => void;
+  // nothing turning: no drag, no wheel gesture, the phase on its target
+  atRest: () => boolean;
   dispose: () => void;
 };
 
@@ -135,7 +148,7 @@ function shadowTexture(square: boolean): THREE.CanvasTexture {
 // objects arrive exactly where the HTML record takes over.
 export type OrbitFrame = { band: HTMLElement; art: HTMLElement; disc: HTMLElement };
 
-export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: OrbitCallbacks): GalleryOrbit {
+export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: OrbitCallbacks, opts: OrbitOptions = {}): GalleryOrbit {
   const band = frames.band;
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -163,8 +176,20 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
 
   // --- fixed materials, decoded once ---------------------------------------
   const loader = new THREE.TextureLoader();
+  // load gating: every fixed material and the front images, then compile
+  const loads: Promise<void>[] = [];
   const fixed = (name: string, color = true) => {
-    const t = loader.load(TEX + name, () => (dirty = 4));
+    let done = () => {};
+    loads.push(new Promise<void>((r) => (done = r)));
+    const t = loader.load(
+      TEX + name,
+      () => {
+        dirty = 4;
+        done();
+      },
+      undefined,
+      () => done(),
+    );
     t.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
     t.anisotropy = maxAniso;
     return t;
@@ -222,7 +247,7 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
   const sunDir = sun.position.clone().normalize();
 
   // --- sleeves and their images --------------------------------------------
-  const textures = new Map<string, { tex: THREE.Texture; used: number; ready: boolean }>();
+  const textures = new Map<string, { tex: THREE.Texture; used: number; ready: boolean; settled: Promise<void> }>();
   let useClock = 0;
   function artFor(item: { id: string; url: string }): THREE.Texture | null {
     const known = textures.get(item.id);
@@ -230,16 +255,19 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
       known.used = ++useClock;
       return known.ready ? known.tex : null;
     }
-    const entry = { tex: null as unknown as THREE.Texture, used: ++useClock, ready: false };
+    let settle = () => {};
+    const entry = { tex: null as unknown as THREE.Texture, used: ++useClock, ready: false, settled: new Promise<void>((r) => (settle = r)) };
     entry.tex = loader.load(
       item.url,
       () => {
         entry.ready = true;
         dirty = 4;
+        settle();
       },
       undefined,
       () => {
         // a hidden or missing image keeps the blank stock
+        settle();
       },
     );
     entry.tex.colorSpace = THREE.SRGBColorSpace;
@@ -426,6 +454,8 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
   let open = false;
   // the page's own entrance, separate from opening a record
   const intro = { entry: 0 };
+  // off while the page's entry shows (p < 1)
+  let inputOn = !opts.held;
   // the values the open/close timelines drive; poses are pure functions of them
   const c = newChoreo();
   const spinClock: SpinClock = { angle: 0, boost: 0 };
@@ -557,7 +587,7 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
     onWheel: (self) => {
       const e = self.event as WheelEvent;
       // pinch-zoom and modified wheels belong to the browser
-      if (open || !count() || e.ctrlKey || e.metaKey) return;
+      if (open || !inputOn || !count() || e.ctrlKey || e.metaKey) return;
       e.preventDefault();
       if (wheelStart === null) wheelStart = Math.round(target);
       target += wheelItems(e);
@@ -571,11 +601,11 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
       }, WHEEL_QUIET_MS);
     },
     onPress: () => {
-      if (open || !count()) return;
+      if (open || !inputOn || !count()) return;
       dragStart = Math.round(target);
     },
     onDragStart: () => {
-      if (open || !count()) return;
+      if (open || !inputOn || !count()) return;
       dragging = true;
       setHover(null);
     },
@@ -621,7 +651,7 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
   const onUp = (e: PointerEvent) => {
     const d = down;
     down = null;
-    if (!d || open || !count()) return;
+    if (!d || open || !inputOn || !count()) return;
     if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || performance.now() - d.t > 500) return;
     const hit = pick(e.clientX, e.clientY);
     if (!hit) return;
@@ -653,7 +683,7 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
     host.style.cursor = next ? "pointer" : "";
   }
   const onMove = (e: PointerEvent) => {
-    if (e.pointerType !== "mouse" || L.phone || open || dragging || !count()) return setHover(null);
+    if (e.pointerType !== "mouse" || L.phone || open || !inputOn || dragging || !count()) return setHover(null);
     const id = pick(e.clientX, e.clientY)?.object.userData.id as string | undefined;
     setHover(id ? (sleeves.get(id) ?? null) : null);
   };
@@ -725,6 +755,7 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
 
   function frame() {
     if (document.hidden) return;
+    if (warmFrames > 0) dirty = Math.max(dirty, 1);
     const dt = Math.min(clock.getDelta(), 0.05);
     const prev = phase;
     phase = dampPhase(phase, target, dt);
@@ -827,6 +858,7 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
     if (moving || turning || dirty > 0 || tl !== null || gsap.isTweening(intro)) {
       renderer.render(scene, camera);
       if (dirty > 0) dirty--;
+      if (warmFrames > 0 && --warmFrames === 0) cb.onReady?.();
     }
   }
 
@@ -846,12 +878,37 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
   };
   document.addEventListener("visibilitychange", onVisible);
 
+  // --- load gating: textures decode, programs compile, three frames draw ---
+  let warmFrames = 0;
+  let disposed = false;
+  let firstItems = () => {};
+  const itemsArrived = new Promise<void>((r) => (firstItems = r));
+  const capped = (p: Promise<unknown>, ms: number) => Promise.race([p, new Promise((r) => setTimeout(r, ms))]);
+  void (async () => {
+    await capped(Promise.all(loads), 6000);
+    await itemsArrived;
+    if (disposed) return;
+    // the records nearest the front, which the entrance shows first
+    const n = count();
+    const near = n ? [0, 1, 2, n - 1, n - 2].filter((i, k, a) => i >= 0 && i < n && a.indexOf(i) === k) : [];
+    for (const i of near) artFor({ id: items[i].id, url: items[i].image_url });
+    await capped(Promise.all(near.map((i) => textures.get(items[i]?.id)?.settled)), 6000);
+    if (disposed) return;
+    renderer.compile(scene, camera);
+    for (const t of [faceTex, grooveTex, stockTex, frameTex, floorShadow, dropShadow]) renderer.initTexture(t);
+    for (const t of textures.values()) if (t.ready) renderer.initTexture(t.tex);
+    warmFrames = 3;
+  })();
+
   measure();
   renderer.setAnimationLoop(frame);
-  const introTween = gsap.to(intro, { entry: 1, duration: 0.65, ease: "power2.out", delay: 0.05 });
+  // held: the page's transition drives the entrance (see setEntry())
+  const introTween: gsap.core.Tween | null = opts.held ? null : gsap.to(intro, { entry: 1, duration: 0.65, ease: "power2.out", delay: 0.05 });
+  if (opts.held) observer.disable();
 
   return {
     setItems(next) {
+      if (next.length) firstItems();
       // a removal applies now, even under a pointer; arrivals and reordering
       // wait for the gesture to end, and only the latest list is queued
       const m = mergeOrbitItems(items, next, dragging);
@@ -880,7 +937,7 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
         next.call(arriveWhenSettled, undefined, ">");
         play(next);
       } else {
-        observer.enable();
+        if (inputOn) observer.enable();
         const next = closeTimeline(c);
         next.call(() => cb.onHandBack(), undefined, 0.35);
         play(next);
@@ -903,10 +960,35 @@ export function createGalleryOrbit(host: HTMLElement, frames: OrbitFrame, cb: Or
       next.call(arriveWhenSettled, undefined, ">");
       play(next);
     },
+    setInput(enabled) {
+      if (inputOn === enabled) return;
+      inputOn = enabled;
+      if (enabled && !open) observer.enable();
+      if (!enabled) {
+        observer.disable();
+        clearTimeout(wheelTimer);
+        if (wheelStart !== null || dragging) {
+          wheelStart = null;
+          dragging = false;
+          snap();
+        }
+        setHover(null);
+      }
+    },
+    setEntry(value) {
+      introTween?.kill();
+      intro.entry = clamp(value, 0, 1);
+      dirty = Math.max(dirty, 2);
+    },
+    atRest() {
+      return !dragging && wheelStart === null && phase === target;
+    },
     dispose() {
+      disposed = true;
       renderer.setAnimationLoop(null);
       stopTimeline(false);
-      introTween.kill();
+      introTween?.kill();
+      gsap.killTweensOf(intro);
       gsap.killTweensOf(spinClock);
       clearTimeout(wheelTimer);
       observer.kill();

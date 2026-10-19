@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GalleryGridFallback } from "./components/GalleryGridFallback.tsx";
 import { GalleryOrbit, type OrbitHandle } from "./components/GalleryOrbit.tsx";
+import { GalleryMist } from "./components/GalleryMist.tsx";
 import { RecordView } from "./components/RecordView.tsx";
+import { createGate, takesInput } from "./lib/gallery-progress.ts";
 import { recordReveal } from "./lib/record-reveal.ts";
+import { useEntryProgress, type EntryRefs } from "./lib/useEntryProgress.ts";
 import { useGallery } from "./lib/useGallery.ts";
 import { canDrawOrbit } from "./scene/gallery-orbit.ts";
+import type { Mist } from "./scene/mist.ts";
 import "./styles/gallery.css";
 
 // The Gallery: a record exhibition of things let go (G01–G03). Each sleeve
@@ -16,9 +20,20 @@ function prefersStill(): boolean {
   return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+const TITLE = "The Throwaway Gallery";
+const LEDE = "Images shaped by released notes.";
+
 export function GalleryApp() {
   const g = useGallery();
-  const [orbit, setOrbit] = useState(() => !prefersStill() && canDrawOrbit());
+  const [still] = useState(prefersStill);
+  const [webgl] = useState(canDrawOrbit);
+  const [orbit, setOrbit] = useState(() => !still && webgl);
+  // the entry mist: live on the entry, one still frame under reduced motion,
+  // and the photograph when there is no WebGL or the context is lost
+  const [mistOn, setMistOn] = useState(webgl);
+  const mist = useRef<Mist | null>(null);
+  // the entry plays on every visit where the exhibition can move
+  const [entry] = useState(() => !still && webgl);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   // The scene's timelines own the hand-over: `arriving` holds the HTML
   // record back until the open (or a step) has finished in WebGL, and
@@ -38,6 +53,33 @@ export function GalleryApp() {
   const isOpen = g.selected !== null;
 
   const showOrbit = orbit && g.items.length > 0;
+
+  // --- the entry and its virtual progress p (design 2026-10-19 §1–§3) -------
+  const gate = useMemo(createGate, []);
+  const titleEl = useRef<HTMLHeadingElement>(null);
+  const ledeEl = useRef<HTMLParagraphElement>(null);
+  const enterEl = useRef<HTMLButtonElement>(null);
+  const cornerEl = useRef<HTMLAnchorElement>(null);
+  const mainEl = useRef<HTMLElement>(null);
+  const entryRefs = useMemo<EntryRefs>(() => ({ root: page, title: titleEl, lede: ledeEl, enter: enterEl, corner: cornerEl, exhibition: mainEl }), []);
+  const { stage, advance } = useEntryProgress({
+    enabled: entry && orbit,
+    recordOpen: isOpen,
+    refs: entryRefs,
+    mist,
+    gate,
+    sceneEntry: (v) => orbitRef.current?.setEntry(v),
+    atRest: () => orbitRef.current?.atRest() ?? true,
+  });
+  const live = takesInput(stage);
+  // with no scene to wait for (empty, failed), the exhibition is ready
+  useEffect(() => {
+    if (!g.loading && !showOrbit) gate.set(true);
+  }, [g.loading, showOrbit, gate]);
+  // the exhibition takes input only at p = 1
+  useEffect(() => {
+    orbitRef.current?.setInput(live);
+  }, [live, showOrbit]);
 
   const openRecord = useCallback(
     (id: string) => {
@@ -102,7 +144,7 @@ export function GalleryApp() {
 
   // Left/Right turn the collection while browsing
   useEffect(() => {
-    if (!orbit || isOpen) return;
+    if (!orbit || isOpen || !live) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
       const t = e.target as HTMLElement | null;
@@ -114,7 +156,7 @@ export function GalleryApp() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [orbit, isOpen]);
+  }, [orbit, isOpen, live]);
 
   // the window never retires the record in front
   const { hasMore, loadMore, loadingMore, focus: setWindowFocus } = g;
@@ -142,11 +184,18 @@ export function GalleryApp() {
   const many = g.items.length > 1;
 
   return (
-    <div ref={page} className={`records-page${showOrbit ? " has-orbit" : ""}${isOpen ? " is-open" : ""}${returning && showOrbit && !isOpen ? " is-returning" : ""}`}>
+    <div
+      ref={page}
+      data-stage={stage}
+      className={`records-page${showOrbit ? " has-orbit" : ""}${entry && orbit ? " has-entry" : " is-plain"}${isOpen ? " is-open" : ""}${returning && showOrbit && !isOpen ? " is-returning" : ""}`}
+    >
       <div className="records-surface" aria-hidden="true" />
+      {mistOn && <GalleryMist mist={mist} still={still || !entry} behind={!entry || stage === "exhibition"} onLost={() => setMistOn(false)} />}
       {showOrbit && (
         <GalleryOrbit
           ref={orbitRef}
+          held={stage === "entry" || stage === "returning"}
+          onReady={() => gate.set(true)}
           items={g.items}
           open={isOpen}
           frames={frames}
@@ -166,7 +215,7 @@ export function GalleryApp() {
       </div>
 
       <header className="records-header">
-        <a className="wordmark" href="/">
+        <a ref={cornerEl} className="wordmark" href="/">
           Throwaway
         </a>
         <nav className="records-links" aria-label="Site">
@@ -180,12 +229,30 @@ export function GalleryApp() {
         </nav>
       </header>
 
-      <main className="records-main">
-        <div className="records-intro">
-          <h1 className="records-title">The Gallery</h1>
-          <p className="records-lede">Images shaped by released notes.</p>
-          {g.generationEnabled === false && <p className="records-paused">New records are not being made right now.</p>}
-        </div>
+      {/* the entry (p = 0); with no motion or no WebGL, a plain title above the grid */}
+      <section className="gallery-entry" aria-label="Gallery entry">
+        <h1 ref={titleEl} className="entry-title">
+          {TITLE}
+        </h1>
+        <p ref={ledeEl} className="entry-lede">
+          {LEDE}
+        </p>
+        {entry && orbit && (
+          <button ref={enterEl} type="button" className="entry-enter" onClick={advance}>
+            <span className="entry-enter-hint" aria-hidden="true">
+              <span className="wide-only">Scroll</span>
+              <span className="narrow-only">Swipe up</span>
+            </span>
+            <span className="entry-enter-word">Enter</span>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+        )}
+      </section>
+
+      <main ref={mainEl} className="records-main">
+        {g.generationEnabled === false && <p className="records-paused">New records are not being made right now.</p>}
         <p className="visually-hidden" role="status">
           {g.reconnecting ? "Reconnecting…" : ""}
         </p>

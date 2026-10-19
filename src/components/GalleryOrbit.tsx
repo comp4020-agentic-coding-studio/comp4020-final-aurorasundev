@@ -7,7 +7,14 @@ import { createGalleryOrbit, type GalleryOrbit as Scene, type OrbitFrame } from 
 // it the live collection by id and passes its settled focus back up. The
 // canvas is decorative; every record is reachable by the page's own controls.
 
-export type OrbitHandle = { step: (dir: 1 | -1) => void; focus: (id: string) => void };
+export type OrbitHandle = {
+  step: (dir: 1 | -1) => void;
+  focus: (id: string) => void;
+  // the page's entry (p < 1) owns input and the scene's entrance
+  setInput: (enabled: boolean) => void;
+  setEntry: (value: number) => void;
+  atRest: () => boolean;
+};
 type Props = {
   items: PublicArtifact[];
   open: boolean;
@@ -21,27 +28,37 @@ type Props = {
   onHandBack: () => void;
   // the opened record's HTML reveal, nested into the scene's open timeline
   reveal: () => gsap.core.Timeline | null;
+  // the page's entry is showing as the scene is made: start unseen, no input
+  held?: boolean;
+  // textures decoded, programs compiled, warm-up frames drawn
+  onReady?: () => void;
 };
 
-export const GalleryOrbit = forwardRef<OrbitHandle, Props>(function GalleryOrbit({ items, open, frames, onFocus, onOpen, onLost, onArrive, onHandBack, reveal }, ref) {
+export const GalleryOrbit = forwardRef<OrbitHandle, Props>(function GalleryOrbit({ items, open, frames, onFocus, onOpen, onLost, onArrive, onHandBack, reveal, held, onReady }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<Scene | null>(null);
-  const handlers = useRef({ onFocus, onOpen, onLost, onArrive, onHandBack, reveal });
-  handlers.current = { onFocus, onOpen, onLost, onArrive, onHandBack, reveal };
+  const handlers = useRef({ onFocus, onOpen, onLost, onArrive, onHandBack, reveal, onReady });
+  handlers.current = { onFocus, onOpen, onLost, onArrive, onHandBack, reveal, onReady };
 
   useEffect(() => {
     const f = frames();
     if (!host.current || !f) return;
     let made: Scene | null = null;
     try {
-      made = createGalleryOrbit(host.current, f, {
-        onFocus: (id) => handlers.current.onFocus(id),
-        onOpen: (id) => handlers.current.onOpen(id),
-        onLost: () => handlers.current.onLost(),
-        onArrive: () => handlers.current.onArrive(),
-        onHandBack: () => handlers.current.onHandBack(),
-        reveal: () => handlers.current.reveal(),
-      });
+      made = createGalleryOrbit(
+        host.current,
+        f,
+        {
+          onFocus: (id) => handlers.current.onFocus(id),
+          onOpen: (id) => handlers.current.onOpen(id),
+          onLost: () => handlers.current.onLost(),
+          onArrive: () => handlers.current.onArrive(),
+          onHandBack: () => handlers.current.onHandBack(),
+          reveal: () => handlers.current.reveal(),
+          onReady: () => handlers.current.onReady?.(),
+        },
+        { held },
+      );
     } catch {
       handlers.current.onLost();
       return;
@@ -66,6 +83,9 @@ export const GalleryOrbit = forwardRef<OrbitHandle, Props>(function GalleryOrbit
   useImperativeHandle(ref, () => ({
     step: (dir) => scene.current?.step(dir),
     focus: (id) => scene.current?.focus(id),
+    setInput: (enabled) => scene.current?.setInput?.(enabled),
+    setEntry: (value) => scene.current?.setEntry?.(value),
+    atRest: () => scene.current?.atRest?.() ?? true,
   }));
 
   return <div ref={host} className="gl-stage" />;
