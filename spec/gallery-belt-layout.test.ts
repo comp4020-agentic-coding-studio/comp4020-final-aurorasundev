@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  BACK_ALPHA,
+  backFade,
   beltCards,
+  cardPlacement,
+  DISC_OF_GLOBE,
+  GLOBE_H,
+  LABEL_OF_DISC,
+  MERIDIAN_OPACITY,
+  poleFade,
   beltPoint,
   cardFrame,
   depthScale,
@@ -50,9 +58,11 @@ describe("the belt's latitude curve", () => {
     const right = beltPoint(Math.PI / 2);
     expect(left.x).toBeLessThan(0);
     expect(right.x).toBeGreaterThan(0);
-    expect(left.y).toBeGreaterThan(0);
-    expect(right.y).toBeLessThan(0);
-    expect(beltPoint(0).y).toBeCloseTo(0, 12);
+    expect(left.y).toBeGreaterThan(beltPoint(0).y);
+    expect(right.y).toBeLessThan(beltPoint(0).y);
+    // the whole band rides a little below the equator
+    expect(beltPoint(0).y).toBeLessThan(0);
+    expect(beltPoint(Math.PI).y).toBeCloseTo(beltPoint(0).y, 12);
   });
 
   it("faces each card outward along the surface, with up perpendicular to the belt", () => {
@@ -244,17 +254,26 @@ describe("a phone swipe", () => {
 });
 
 describe("fitting the viewport", () => {
-  it("phone: the band spans the width, the front card about 40 % of it, the record high", () => {
-    const f = fitBelt({ w: 390, h: 844, bandTop: 88, bandH: 560 });
+  it("phone: the band spans the width, the front card about a third of it, the record large and in the stage", () => {
+    const v = { w: 390, h: 844, bandTop: 88, bandH: 560 };
+    const f = fitBelt(v);
     expect(f.phone).toBe(true);
     const W = 390 * f.k;
     // the belt's silhouette reaches the screen's edges
     expect(Math.abs(beltPoint(Math.PI / 2).x * f.S - W / 2)).toBeLessThan(W * 0.01);
-    expect((f.card * f.S) / W).toBeCloseTo(0.4, 2);
-    // the record's centre in CSS px from the top
-    const discCss = 844 / 2 - f.disc.y / f.k;
-    expect(discCss / 844).toBeGreaterThan(0.3);
-    expect(discCss / 844).toBeLessThan(0.45);
+    const cardW = (f.card * f.S) / W;
+    expect(cardW).toBeGreaterThanOrEqual(0.3);
+    expect(cardW).toBeLessThanOrEqual(0.34);
+    // the record is the subject: wider than the front card
+    expect(2 * f.disc.r).toBeGreaterThan(1.5 * f.card * f.S);
+    // the record and the front card stay inside the stage (above the title)
+    const css = (y: number) => v.h / 2 - y / f.k;
+    expect(css(f.disc.y + f.disc.r * Math.cos(f.disc.tilt))).toBeGreaterThanOrEqual(v.bandTop - 1);
+    const frontY = f.cy + beltPoint(0).y * f.S;
+    expect(css(frontY - (f.card / 2) * f.S)).toBeLessThanOrEqual(v.bandTop + v.bandH + 1);
+    // the front card passes across the record's lower half, below its centre
+    expect(frontY).toBeLessThan(f.disc.y);
+    expect(frontY + (f.card / 2) * f.S).toBeGreaterThan(f.disc.y - f.disc.r * Math.cos(f.disc.tilt));
   });
 
   it("desktop and short landscape fit inside the band", () => {
@@ -271,7 +290,7 @@ describe("fitting the viewport", () => {
       expect(beltPoint(Math.PI / 2).x * f.S).toBeLessThan(W / 2);
       const css = (y: number) => v.h / 2 - y / f.k;
       // the front card's bottom stays above the band's bottom (the caption)
-      const cardBottom = css(f.cy - (f.card / 2) * f.S);
+      const cardBottom = css(f.cy + beltPoint(0).y * f.S - (f.card / 2) * f.S);
       expect(cardBottom).toBeLessThanOrEqual(v.bandTop + v.bandH + 1);
       // the record's top stays below the band's top (the header)
       const discTop = css(f.disc.y + f.disc.r * Math.cos(f.disc.tilt));
@@ -280,13 +299,120 @@ describe("fitting the viewport", () => {
   });
 });
 
-describe("the far half's rise", () => {
-  it("leaves the near half and the silhouettes alone and lifts the very back most", async () => {
-    const { backRise, BACK_RISE } = await import("../src/scene/belt-layout.ts");
-    for (const t of [0, 0.5, -1.2, Math.PI / 2, -Math.PI / 2]) expect(backRise(t)).toBeCloseTo(0, 12);
-    expect(backRise(Math.PI)).toBeCloseTo(BACK_RISE, 12);
-    expect(backRise(2.5)).toBeGreaterThan(backRise(2));
-    // continuous at the silhouette
-    expect(backRise(Math.PI / 2 + 0.01)).toBeLessThan(0.03);
+// Desktop and short-landscape viewports the tests below sweep, and the phone.
+const DESKTOPS = [
+  { w: 1920, h: 1080, bandTop: 104, bandH: 830 },
+  { w: 1366, h: 768, bandTop: 104, bandH: 540 },
+  { w: 844, h: 390, bandTop: 50, bandH: 270 },
+  { w: 932, h: 430, bandTop: 50, bandH: 310 },
+];
+const PHONES = [
+  { w: 390, h: 844, bandTop: 88, bandH: 560 },
+  { w: 360, h: 640, bandTop: 80, bandH: 380 },
+];
+
+describe("the composition's hierarchy: the record first, a thin band", () => {
+  it("desktop: the record is about 70 % of the globe's height, on the globe's centre", () => {
+    for (const v of DESKTOPS) {
+      const f = fitBelt(v);
+      const globeH = GLOBE_H * f.S;
+      expect((2 * f.disc.r) / globeH).toBeCloseTo(DISC_OF_GLOBE, 6);
+      expect(DISC_OF_GLOBE).toBeGreaterThanOrEqual(0.65);
+      expect(DISC_OF_GLOBE).toBeLessThanOrEqual(0.75);
+      expect(f.disc.x).toBeCloseTo(f.cx, 9);
+      expect(f.disc.y).toBeCloseTo(f.cy, 9);
+      // tilted back a little, less than before (0.52), so the label reads
+      expect(f.disc.tilt).toBeGreaterThan(0.1);
+      expect(f.disc.tilt).toBeLessThan(0.4);
+    }
+  });
+
+  it("the globe leaves a margin above and below inside the stage", () => {
+    for (const v of DESKTOPS) {
+      const f = fitBelt(v);
+      const band = v.bandH * f.k;
+      const globeH = GLOBE_H * f.S * 1.01;
+      expect(globeH).toBeLessThan(band * 0.95);
+    }
+  });
+
+  it("the front card is smaller than the record, and the band's centre line sits below the record's centre", () => {
+    for (const v of [...DESKTOPS, ...PHONES]) {
+      const f = fitBelt(v);
+      const front = f.card * f.S;
+      expect(front).toBeLessThan(0.75 * 2 * f.disc.r);
+      const bandY = f.cy + beltPoint(0).y * f.S;
+      expect(bandY).toBeLessThan(f.disc.y);
+      // ...but within the record, so the front card crosses its lower half
+      expect(bandY).toBeGreaterThan(f.disc.y - f.disc.r);
+    }
+  });
+
+  it("at rest no front card but the focused one touches the label", () => {
+    for (const v of [...DESKTOPS, ...PHONES]) {
+      const f = fitBelt(v);
+      const ring = ringSize(f.phone, 48);
+      const labelR = LABEL_OF_DISC * f.disc.r;
+      const labelRy = labelR * Math.cos(f.disc.tilt);
+      for (const c of beltCards(0, ring, 48)) {
+        if (c.theta === 0 || halfOf(c.theta) !== "front") continue;
+        const at = cardPlacement(c.theta, f.phone);
+        const half = (f.card * f.S * at.scale) / 2;
+        const x = f.cx + at.p.x * f.S;
+        const y = f.cy + at.p.y * f.S;
+        // the nearest point of the card's (axis-aligned, generous) box to the
+        // label's centre lies outside the label's ellipse
+        const nx = Math.max(Math.abs(x - f.disc.x) - half, 0);
+        const ny = Math.max(Math.abs(y - f.disc.y) - half, 0);
+        expect((nx / labelR) ** 2 + (ny / labelRy) ** 2).toBeGreaterThan(1);
+      }
+    }
+  });
+});
+
+describe("the far half", () => {
+  it("has no rise: a far card sits on the band, exactly behind its near twin", () => {
+    for (const t of [0.4, 1, 1.4, -0.7]) {
+      const near = cardPlacement(t, false).p;
+      const far = cardPlacement(Math.PI - t, false).p;
+      expect(far.x).toBeCloseTo(near.x, 9);
+      expect(far.y).toBeCloseTo(near.y, 9);
+      expect(far.z).toBeCloseTo(-near.z, 9);
+    }
+  });
+
+  it("is a faint, dimmed, smaller silhouette near the sides, gone toward the very back", () => {
+    for (const t of [1.7, 2, -1.8]) {
+      const at = cardPlacement(t, false);
+      expect(at.fade).toBeGreaterThan(0);
+      expect(at.fade).toBeLessThanOrEqual(BACK_ALPHA);
+      expect(BACK_ALPHA).toBeLessThan(0.5);
+      expect(at.tone).toBeLessThan(0.8);
+      expect(at.scale).toBeLessThan(cardPlacement(Math.PI - t, false).scale);
+    }
+    expect(backFade(Math.PI)).toBe(0);
+    expect(backFade(2.6)).toBe(0);
+    // and continuous where it fades out
+    expect(backFade(Math.PI / 2 + 0.01)).toBeGreaterThan(backFade(2));
+    // hidden on a phone
+    expect(cardPlacement(2, true).fade).toBe(0);
+  });
+});
+
+describe("the globe recedes", () => {
+  it("draws its lines at about 0.35, fading out toward the poles", () => {
+    expect(MERIDIAN_OPACITY).toBeGreaterThan(0.25);
+    expect(MERIDIAN_OPACITY).toBeLessThanOrEqual(0.4);
+    // pole: 0 at a pole, 1 at the equator
+    expect(poleFade(0)).toBe(0);
+    expect(poleFade(1)).toBe(1);
+    expect(poleFade(0.05)).toBeLessThan(0.1);
+    expect(poleFade(0.5)).toBe(1);
+    let prev = 0;
+    for (let x = 0; x <= 1; x += 0.01) {
+      const v = poleFade(x);
+      expect(v).toBeGreaterThanOrEqual(prev);
+      prev = v;
+    }
   });
 });

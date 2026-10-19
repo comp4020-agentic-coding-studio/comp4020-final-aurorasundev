@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { gsap } from "gsap";
 import { Observer } from "gsap/Observer";
-import { backRise, beltCards, cardFrame, CAMERA_HALF, depthScale, backFade, backTone, dissolveAt, fitBelt, globeAngle, halfOf, ringSize, RING_DESKTOP, swipeTarget, type Fit } from "./belt-layout.ts";
+import { beltCards, cardFrame, cardPlacement, CAMERA_HALF, dissolveAt, FACE_EDGE, FACE_WINDOW, fitBelt, globeAngle, halfOf, LABEL_OF_DISC, ringSize, RING_DESKTOP, swipeTarget, type Fit } from "./belt-layout.ts";
 import { createBeltGlobe } from "./belt-globe.ts";
 import { mergeOrbitItems, nextFocusIndex, type OrbitItem } from "./orbit-items.ts";
 import { advanceSpin, dampPhase, spinning, wheelItems, wheelSnap, SPIN_GAIN, SPIN_IDLE, SPIN_RESPONSE, WHEEL_QUIET_MS } from "./gallery-motion.ts";
@@ -77,10 +77,6 @@ export type GalleryOrbit = {
 export type OrbitFrame = { band: HTMLElement; art: HTMLElement; disc: HTMLElement };
 
 const TEX = "/textures/gallery/";
-// vinyl-face.png: the record's edge and its label window, as fractions of the
-// plate's half-width (measured from the file's alpha)
-const FACE_EDGE = 0.945;
-const FACE_WINDOW = 0.383;
 const MAX_TEXTURES = 14;
 // the opened record's depth: in front of everything on the belt
 const HERO_Z = 8;
@@ -209,7 +205,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
   rim.rotation.x = Math.PI / 2;
   const labelMat = new THREE.MeshBasicMaterial({ map: stockTex, transparent: true });
   const label = new THREE.Mesh(unitCircle, labelMat);
-  label.scale.setScalar((FACE_WINDOW / FACE_EDGE) * 1.03);
+  label.scale.setScalar(LABEL_OF_DISC);
   label.position.z = -0.002;
   const holeMat = new THREE.MeshBasicMaterial({ color: 0x22221f, transparent: true });
   const hole = new THREE.Mesh(unitCircle, holeMat);
@@ -584,7 +580,8 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
 
   // where the card at azimuth θ sits on the belt: on the curve, facing out
   // along the surface (the far half turns its face to us, through the globe),
-  // smaller and dimmer with depth since an orthographic view has no falloff
+  // smaller and dimmer with depth since an orthographic view has no falloff;
+  // the far half a faint silhouette near the globe's sides (cardPlacement)
   function beltPose(theta: number): Pose {
     const f = cardFrame(theta);
     const facing = Math.cos(theta) >= 0 ? 1 : -1;
@@ -593,15 +590,15 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     vRight.crossVectors(vUp, vFace);
     basis.makeBasis(vRight, vUp, vFace);
     const q = new THREE.Quaternion().setFromRotationMatrix(basis);
-    const back = facing < 0;
+    const at = cardPlacement(theta, L.phone);
     return {
       x: L.cx + f.p.x * L.S,
-      y: L.cy + (f.p.y + backRise(theta)) * L.S,
+      y: L.cy + f.p.y * L.S,
       z: f.p.z * L.S,
-      size: L.card * L.S * depthScale(theta),
+      size: L.card * L.S * at.scale,
       q,
-      fade: back ? (L.phone ? 0 : backFade(theta)) : 1,
-      tone: back ? backTone(theta) : 1,
+      fade: at.fade,
+      tone: at.tone,
     };
   }
 

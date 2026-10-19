@@ -26,6 +26,15 @@ export const GLOBE_SY = 0.905;
 export const BELT_LIFT = 1.01;
 export const MERIDIANS = 7;
 export const MERIDIAN_STEP = Math.PI / MERIDIANS;
+// The globe recedes: fine lines at MERIDIAN_OPACITY, the far half of each ring
+// at GLOBE_BACK of that, and the meridians fade out toward the poles (pole
+// 0 at a pole, 1 at the equator) so the seven rings never stack into a dark
+// point where they meet. The silhouette ellipse does not fade.
+export const MERIDIAN_OPACITY = 0.35;
+export const GLOBE_BACK = 0.12;
+export const POLE_FADE_FROM = 0.03;
+export const POLE_FADE_TO = 0.34;
+export const poleFade = (pole: number) => smooth((pole - POLE_FADE_FROM) / (POLE_FADE_TO - POLE_FADE_FROM));
 // each meridian ring's own turn about the vertical axis
 export const meridianAngle = (i: number) => ((i + 0.5) / MERIDIANS) * Math.PI;
 // the belt's semi-axes
@@ -58,6 +67,12 @@ export const globeAngle = (phase: number, ring: number) => phase * tileStep(ring
 // --- the belt's curve --------------------------------------------------------
 // A latitude shift, not a tilt: a gentle S from upper left to lower right,
 // nearly flat at the front, at most LAT_MAX (0.2 rad, about 11.5°) at the sides.
+// The whole band is also lowered by BAND_DROP (globe units, a plain shift, so
+// the S stays symmetric and the band keeps its width): the record sits on the
+// globe's centre, and the band's centre line passes below it, so the front
+// card crosses the record's lower half with its top edge near the label's
+// lower edge and the label image reads. Raising BAND_DROP lowers the band.
+export const BAND_DROP = 1.08;
 export const LAT_AMP = 0.2;
 export const lat = (theta: number) => {
   const s = Math.sin(theta);
@@ -76,15 +91,18 @@ const cross = (a: Vec3, b: Vec3): Vec3 => ({ x: a.y * b.z - a.z * b.y, y: a.z * 
 export function beltPoint(theta: number): Vec3 {
   const polar = Math.PI / 2 + lat(theta);
   const r = Math.sin(polar);
-  return { x: BELT_AX * r * Math.sin(theta), y: BELT_AY * Math.cos(polar), z: BELT_AZ * r * Math.cos(theta) };
+  return { x: BELT_AX * r * Math.sin(theta), y: BELT_AY * Math.cos(polar) - BAND_DROP, z: BELT_AZ * r * Math.cos(theta) };
 }
 
 // A card's frame on the belt: it faces outward along the surface normal, its
-// right edge runs along the belt and its up is the cross of the two.
+// right edge runs along the belt and its up is the cross of the two. The
+// normal is the sphere's at the undropped point (BAND_DROP is a shift), so the
+// cards stand upright as before.
 export type CardFrame = { p: Vec3; right: Vec3; up: Vec3; out: Vec3 };
 export function cardFrame(theta: number): CardFrame {
   const p = beltPoint(theta);
-  const out = norm({ x: p.x / (BELT_AX * BELT_AX), y: p.y / (BELT_AY * BELT_AY), z: p.z / (BELT_AZ * BELT_AZ) });
+  const ys = p.y + BAND_DROP;
+  const out = norm({ x: p.x / (BELT_AX * BELT_AX), y: ys / (BELT_AY * BELT_AY), z: p.z / (BELT_AZ * BELT_AZ) });
   const h = 1e-3;
   const a = beltPoint(theta - h);
   const b = beltPoint(theta + h);
@@ -110,15 +128,20 @@ export const DEPTH_SHRINK = 0.4;
 export const depthScale = (theta: number) => 1 - DEPTH_SHRINK + DEPTH_SHRINK * frontness(theta);
 // how far round the back a card is, 0..1
 export const backness = (theta: number) => Math.max(0, -Math.cos(theta));
-// the back half dims and fades out toward the very back
-export const backTone = (theta: number) => 1 - 0.45 * backness(theta);
-export const backFade = (theta: number) => Math.pow(1 - backness(theta), 0.8);
-// Orthographic views put the card at π - θ exactly behind the card at θ (same
-// x, same latitude), so the far half would hide behind the near half. The far
-// half rises a little toward the back, as if seen from slightly above; zero
-// (and flat) at the silhouettes, so the near half and its curve are untouched.
-export const BACK_RISE = 1.35;
-export const backRise = (theta: number) => BACK_RISE * Math.sin((backness(theta) * Math.PI) / 2);
+// The far half is a faint silhouette, not a second row. An orthographic view
+// puts the card at π - θ exactly behind the card at θ (same x, same height),
+// smaller, so at rest a full far half is hidden behind the near half and in
+// motion only adds clutter. So it shows only where the band rounds the
+// globe's sides: dimmed, smaller and at low alpha, fading to nothing by
+// BACK_REACH of backness (about 127°) and absent toward the very back. With
+// the dissolve zone (alpha × (1 - dissolve)) it reads only just past each
+// silhouette, which is where step ③'s particles will play.
+export const BACK_ALPHA = 0.42;
+export const BACK_DIM = 0.72;
+export const BACK_SHRINK = 0.88;
+export const BACK_REACH = 0.6;
+export const backTone = (theta: number) => (backness(theta) > 0 ? BACK_DIM * (1 - 0.25 * backness(theta)) : 1);
+export const backFade = (theta: number) => (Math.cos(theta) > 0 ? 1 : BACK_ALPHA * (1 - smooth(backness(theta) / BACK_REACH)));
 
 // A dissolve zone is where the belt rounds the globe's left or right
 // silhouette: a card's dissolve rises from `from` to 1 at `peak` and falls
@@ -151,6 +174,21 @@ export function dissolveAt(theta: number, phone: boolean): number {
 }
 // whether a card shows at all at θ (the phone hides the back half)
 export const shownAt = (theta: number, phone: boolean) => !(phone && halfOf(theta) === "back") && dissolveAt(theta, phone) < 0.999;
+
+// Where a card sits and how it reads at θ, in globe units (the scene scales by
+// Fit.S and adds the centre): on the band, smaller and dimmer with depth, the
+// far half a faint silhouette (hidden on a phone). No rise: the far half stays
+// on the band.
+export type Placement = { p: Vec3; scale: number; fade: number; tone: number };
+export function cardPlacement(theta: number, phone: boolean): Placement {
+  const back = halfOf(theta) === "back";
+  return {
+    p: beltPoint(theta),
+    scale: depthScale(theta) * (back ? BACK_SHRINK : 1),
+    fade: back ? (phone ? 0 : backFade(theta)) : 1,
+    tone: back ? backTone(theta) : 1,
+  };
+}
 
 // --- slots and records --------------------------------------------------------
 // The cards on the ring at a phase: card m sits at θ = (m - phase)·TILE_STEP
@@ -200,10 +238,42 @@ export type Fit = {
 };
 // wider than a phone but this short: gallery.css's compact landscape layout
 export const COMPACT_H = 540;
-// the record above the belt, in globe units, so the front of the belt passes
-// across its lower edge and the label stays clear
-const DISC_Y = 1.3;
-const DISC_R = 1.2;
+
+// --- the composition's proportions (owner's fix, 2026-10-19) ----------------
+// The record is the subject and the belt a thin band round it, as in the
+// reference (one large disc at the centre, a narrow ring of cards passing
+// across its lower half); the globe recedes behind both.
+//
+// vinyl-face.png: the record's edge and its label window, as fractions of the
+// plate's half-width (measured from the file's alpha); the label disc's radius
+// as a fraction of the record's
+export const FACE_EDGE = 0.945;
+export const FACE_WINDOW = 0.383;
+export const LABEL_OF_DISC = (FACE_WINDOW / FACE_EDGE) * 1.03;
+// the globe's visible height in globe units
+export const GLOBE_H = 2 * GLOBE_R * GLOBE_SY;
+// the record's diameter as a share of the globe's visible height, centred on
+// the globe's centre
+export const DISC_OF_GLOBE = 0.7;
+// its tilt back: enough to sit in depth, little enough that the label reads
+export const DISC_TILT = 0.3;
+export const DISC_TILT_COMPACT = 0.26;
+// the front card's edge in globe units: a little over a third of the record's
+// diameter (about 55 % of its earlier on-screen size), so ten cards at 36°
+// leave wide gaps and read as a band, and the neighbours stay off the record
+export const CARD = 1.1;
+// the globe's share of the stage's height, leaving a margin above and below
+export const GLOBE_FILL = 0.8;
+export const GLOBE_FILL_COMPACT = 0.9;
+// Phone: the globe's silhouette on the screen's edges; the record's radius
+// PHONE_DISC_W of the screen's width (larger against the globe than on a
+// desktop, since the phone's globe is much wider than tall); the front card
+// PHONE_CARD_W of the width (the owner's 30–34 %)
+export const PHONE_DISC_W = 0.3;
+export const PHONE_CARD_W = 0.32;
+export const PHONE_TILT = 0.32;
+// the stage's share the phone composition may use
+const PHONE_FILL = 0.94;
 
 export function fitBelt(i: FitInput): Fit {
   const phone = isPhone(i.w);
@@ -213,33 +283,38 @@ export function fitBelt(i: FitInput): Fit {
   const toY = (css: number) => (i.h / 2 - css) * k;
   const bandTop = toY(i.bandTop);
   const bandBottom = toY(i.bandTop + i.bandH);
-  if (phone) {
-    // the globe's silhouette on the screen's edges, the front card about 40 %
-    // of the width, the record at about 40 % of the height
-    const S = W / 2 / BELT_AX;
-    const card = (0.4 * W) / S;
-    const r = 0.3 * W;
-    const tilt = 0.5;
-    let discY = toY(i.h * 0.4);
-    let cy = discY - r * Math.cos(tilt) * 1.05;
-    // keep the front card inside the band, clear of the caption
-    const low = cy - (card * S) / 2;
-    if (low < bandBottom) {
-      const lift = bandBottom - low;
-      cy += lift;
-      discY += lift;
-    }
-    return { phone, compact, k, cx: 0, cy, S, card, disc: { x: 0, y: discY, r, tilt } };
-  }
-  const tilt = compact ? 0.42 : 0.52;
-  const card = compact ? 1.8 : 1.7;
-  // the composition's extent in globe units: the belt's width, the globe's
-  // bottom (or the front card's) and the record's top
-  const halfX = BELT_AX + 0.2;
-  const top = Math.max(BELT_AY, DISC_Y + DISC_R * Math.cos(tilt), BACK_RISE + 0.6 * card * (1 - DEPTH_SHRINK)) + 0.04;
-  const bottom = Math.max(BELT_AY, card / 2 + LAT_MAX) + 0.04;
   const bandHeight = Math.max(bandTop - bandBottom, 0.5);
-  const S = Math.min(((W / 2) * 0.96) / halfX, bandHeight / (top + bottom));
-  const cy = (bandTop + bandBottom) / 2 + ((bottom - top) / 2) * S;
-  return { phone, compact, k, cx: 0, cy, S, card, disc: { x: 0, y: cy + DISC_Y * S, r: DISC_R * S, tilt } };
+  const bandMid = (bandTop + bandBottom) / 2;
+  if (phone) {
+    // The phone's globe is far wider than tall, so the record cannot sit on
+    // its centre without the front card covering the label. The record is
+    // placed first and the band hangs from it: the front card's top meets the
+    // label's lower edge, so the card crosses the record's lower half and the
+    // label reads whole; the globe follows the band. The whole is centred in
+    // the stage and shrinks together if the stage is too short.
+    const tilt = PHONE_TILT;
+    const S0 = W / 2 / BELT_AX;
+    const card = (PHONE_CARD_W * W) / S0;
+    const parts = (f: number) => {
+      const S = S0 * f;
+      const r = PHONE_DISC_W * W * f;
+      // relative to the record's centre
+      const band = -LABEL_OF_DISC * r * Math.cos(tilt) - (card / 2) * S;
+      const globeC = band - beltPoint(0).y * S;
+      const top = Math.max(r * Math.cos(tilt), globeC + BELT_AY * S);
+      const bottom = Math.min(band - (card / 2) * S, globeC - BELT_AY * S);
+      return { S, r, globeC, top, bottom };
+    };
+    const one = parts(1);
+    const p = parts(Math.min(1, (bandHeight * PHONE_FILL) / (one.top - one.bottom)));
+    const discY = bandMid - (p.top + p.bottom) / 2;
+    return { phone, compact, k, cx: 0, cy: discY + p.globeC, S: p.S, card, disc: { x: 0, y: discY, r: p.r, tilt } };
+  }
+  const tilt = compact ? DISC_TILT_COMPACT : DISC_TILT;
+  const card = CARD;
+  const halfX = BELT_AX + card / 2;
+  const fill = compact ? GLOBE_FILL_COMPACT : GLOBE_FILL;
+  const S = Math.min(((W / 2) * 0.96) / halfX, (bandHeight * fill) / (2 * BELT_AY));
+  const cy = bandMid;
+  return { phone, compact, k, cx: 0, cy, S, card, disc: { x: 0, y: cy, r: (DISC_OF_GLOBE * GLOBE_H * S) / 2, tilt } };
 }
