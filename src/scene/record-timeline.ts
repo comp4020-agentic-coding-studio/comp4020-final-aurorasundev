@@ -39,13 +39,13 @@ export const newSwap = (): Swap => ({ incoming: { v: 0 }, outgoing: [] });
 // --- the main durations, seconds (the owner judges them on real hardware) ---
 // each card's own dissolve, and the stagger between one card and the next,
 // nearest the focus first
-export const EXIT_ITEM = 0.7;
+export const EXIT_ITEM = 0.6;
 export const EXIT_STAGGER = 0.06;
 // beyond this rank (the far half's faint silhouettes) cards are out of sight
 export const MAX_RANK = 5;
 export const EXIT_SPAN = EXIT_ITEM + EXIT_STAGGER * MAX_RANK;
 // the sleeve's walk forward to the art frame, after the first neighbours begin
-export const HERO_AT = 0.2;
+export const HERO_AT = 0.16;
 export const HERO_SECONDS = 0.7;
 export const TUCK_SECONDS = 0.45;
 // the record sliding out of the sleeve (desktop; a phone keeps it tucked)
@@ -64,7 +64,7 @@ export const CLOSE_GATHER_AT = 0.4;
 // a step inside an open record: the outgoing sleeve breaks up in place, the
 // incoming gathers a little after, and the record turns once
 export const STEP_OUT_SECONDS = 0.55;
-export const STEP_IN_AT = 0.3;
+export const STEP_IN_AT = 0.38;
 export const STEP_IN_SECONDS = 0.65;
 export const STEP_SPIN_SECONDS = 0.9;
 
