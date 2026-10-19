@@ -12,6 +12,8 @@ import {
   GRID_DESKTOP,
   GRID_PHONE,
   hideStart,
+  HIDE_SECONDS,
+  GATHER_SECONDS,
   meshAlpha,
   imageShown,
   particleAlpha,
@@ -203,6 +205,12 @@ describe("operator hides", () => {
     expect(particleAlpha(hideStart(0))).toBe(1);
     // a card already part-dissolved keeps going from there
     expect(hideStart(0.6)).toBe(0.6);
+  });
+
+  it("take about a second and a half, with the record that shifts into the place gathering a little faster", () => {
+    expect(HIDE_SECONDS).toBeGreaterThanOrEqual(1);
+    expect(HIDE_SECONDS).toBeLessThanOrEqual(2);
+    expect(GATHER_SECONDS).toBeLessThanOrEqual(HIDE_SECONDS);
   });
 
   it("dissolve in place with a particle slot, even at the front", () => {

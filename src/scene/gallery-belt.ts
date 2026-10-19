@@ -10,7 +10,7 @@ import { closeTimeline, local, newChoreo, openTimeline, slideStages, stepTimelin
 import { createSleeveKit, type SleeveMesh } from "./sleeve-kit.ts";
 import { applyVinylSheen } from "./vinyl-sheen.ts";
 import { createCardParticles } from "./card-particles.ts";
-import { driftSign, EXIT_PARTICLES, fastTurn, hideStart, HIDE_SECONDS, IMAGE_FADE_SECONDS, imageShown, meshAlpha, particleAlpha, planParticles, zoneMode, type Candidate, type Mode, type Render } from "./particles-plan.ts";
+import { driftSign, EXIT_PARTICLES, fastTurn, GATHER_SECONDS, hideStart, HIDE_SECONDS, IMAGE_FADE_SECONDS, imageShown, meshAlpha, particleAlpha, planParticles, zoneMode, type Candidate, type Mode, type Render } from "./particles-plan.ts";
 
 // The Gallery's record exhibition as a belt round a globe (design 2026-10-19
 // §4): an orthographic view of a flattened sphere drawn in graphite thread
@@ -161,6 +161,9 @@ type Card = {
   // the image's fade-in (a late decode fades in over blank stock)
   image: { tex: THREE.Texture | null; mix: number; waiting: boolean };
   seed: number;
+  // its record was hidden while it showed: the next record in its place
+  // gathers in
+  gatherNext: boolean;
 };
 
 // A hidden record's last pose, breaking up in place; it holds its texture
@@ -346,6 +349,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       prevM: null,
       image: { tex: null, mix: 1, waiting: false },
       seed: (slot * 0.618034) % 1,
+      gatherNext: false,
     });
   }
 
@@ -379,7 +383,6 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       },
     });
   }
-  void dissolveCard;
   const ghostKey = (i: number) => `g${i}`;
 
   // --- layout from the viewport and the HTML frames ------------------------
@@ -519,12 +522,14 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     // above, carries on in its place)
     for (const card of cards) {
       if (card.id && !keep.has(card.id)) {
+        // its place is kept (prevM), so whichever record shifts into it
+        // gathers in place over the ghost; until then the mesh is hidden
         card.id = null;
         card.m = null;
-        card.prevM = null;
         card.render = "mesh";
         card.image.tex = null;
         card.mesh.group.visible = false;
+        card.gatherNext = !reduced();
         if (hovered === card) setHover(null);
       }
     }
@@ -867,6 +872,16 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       used.add(card.slot);
       const item = items[bc.index];
       if (card.prevM !== bc.m || card.id !== item.id) {
+        // A different record in the same place while it showed (a hide or a
+        // retirement shifted the list): it gathers in place from grain, so
+        // the hidden record's dispersal reads and the newcomer never pops in.
+        // Once per change, never per frame; reduced motion just swaps.
+        if (card.prevM === bc.m && ((card.id !== null && card.mesh.group.visible) || card.gatherNext) && !reduced()) {
+          const req = card.request ?? (card.request = { v: 0, mode: "inplace" });
+          req.v = 1;
+          dissolveCard(card, 0, "inplace", { duration: GATHER_SECONDS, delay: 0.25, ease: "power2.out" });
+        }
+        card.gatherNext = false;
         // a new place (or a new record in it): no motion history, no image yet
         card.prevTheta = bc.theta;
         card.image.tex = null;

@@ -160,5 +160,7 @@ export const EXIT_PARTICLES = false;
 // A hidden card dissolves in place: it takes over from the mesh already
 // opaque (at RELEASE_FROM the particles are whole and the mesh gone) and
 // breaks up over HIDE_SECONDS. Under reduced motion it leaves at once.
-export const HIDE_SECONDS = 1.1;
+export const HIDE_SECONDS = 1.4;
+// a record that shifts into a hidden one's place gathers in over this long
+export const GATHER_SECONDS = 1.1;
 export const hideStart = (current: number) => Math.max(RELEASE_FROM, Math.min(1, current));
