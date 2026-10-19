@@ -6,11 +6,11 @@
 //
 // One value drives a card's particles: `dissolve`, 0 (the solid sleeve) .. 1
 // (fully dispersed). The belt's dissolve zones (belt-layout.ts dissolveAt)
-// give it from where the card is; an operator hide tweens it in place; any
-// other caller (the open's exit, step ④) can hand in its own value with a
-// mode and a drift direction. Nothing here knows about Three.js.
+// give it from where the card is; an operator hide tweens it in place; the
+// open's exit and the close's gather (planExit, record-timeline.ts) hand in
+// their own value with a mode. Nothing here knows about Three.js.
 
-import { wrapAngle, ZONE_DESKTOP, ZONE_PHONE } from "./belt-layout.ts";
+import { halfOf, tileStep, wrapAngle, ZONE_DESKTOP, ZONE_PHONE } from "./belt-layout.ts";
 
 // --- counts and budget --------------------------------------------------------
 // each card in particle form is a grid of GRID² points sampling its image
@@ -152,9 +152,34 @@ export function imageShown(theta: number, phone: boolean): boolean {
 // gathers into blank stock first).
 export const IMAGE_FADE_SECONDS = 0.5;
 
-// A whole caller-driven dissolve (the open's exit, step ④) uses particles
-// only when this is on; the belt draws its exit as the alpha fade until then.
-export const EXIT_PARTICLES = false;
+// --- the open's exit (step ④, design §5) --------------------------------------
+// When a record opens, every other card on the ring leaves, staggered outward
+// from the focus: the nearest first, one after another (record-timeline.ts
+// spaces them EXIT_STAGGER apart by rank). The front-half cards break into
+// grain that drifts back along the band, the nearest first within the
+// budget; the far half's faint silhouettes, and any front card past the
+// budget, take the plain alpha fade. A card's form is fixed for the whole
+// ritual, so none switches from alpha to particles when a slot frees. On a
+// close the same order gathers them back (nearest first again).
+//
+// Keyed by the card's offset from the focused place (m - focus), for every
+// other place on a ring of `ring` cards: offsets in (-ring/2, ring/2].
+export type ExitSlot = { rank: number; particles: boolean };
+export function planExit(ring: number, phone: boolean): Map<number, ExitSlot> {
+  const offs: number[] = [];
+  for (let k = Math.floor(-ring / 2) + 1; k <= Math.floor(ring / 2); k++) if (k !== 0) offs.push(k);
+  // nearest first; of a pair at the same distance, the right-hand one first
+  offs.sort((a, b) => Math.abs(a) - Math.abs(b) || b - a);
+  const out = new Map<number, ExitSlot>();
+  let left = particleBudget(phone);
+  offs.forEach((k, rank) => {
+    const front = halfOf(k * tileStep(ring)) === "front";
+    const particles = front && left > 0;
+    if (particles) left--;
+    out.set(k, { rank, particles });
+  });
+  return out;
+}
 
 // --- hides ------------------------------------------------------------------
 // A hidden card dissolves in place: it takes over from the mesh already
