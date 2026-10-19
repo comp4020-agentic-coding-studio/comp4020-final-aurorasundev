@@ -54,7 +54,9 @@ export type CardParticles = {
 };
 
 // tuned on SwiftShader screenshots: fine grain, not confetti
-const POINT_OVERLAP = 1.55;
+// the coarser phone grid overlaps more, so its lattice never shows
+const POINT_OVERLAP = 1.6;
+const POINT_OVERLAP_PHONE = 1.9;
 const DRIFT_WORLD = 0.95; // drift along the band, in card widths at full travel
 const LIFT = 0.16; // card widths
 const SCATTER = 0.2; // card widths
@@ -77,8 +79,8 @@ function grid(n: number): THREE.BufferGeometry {
     for (let i = 0; i < n; i++) {
       const k = j * n + i;
       // a touch of jitter inside each cell, so the grid never reads as one
-      const u = (i + 0.5 + (rnd() - 0.5) * 0.5) / n;
-      const v = (j + 0.5 + (rnd() - 0.5) * 0.5) / n;
+      const u = Math.min(1, Math.max(0, (i + 0.5 + (rnd() - 0.5) * 0.9) / n));
+      const v = Math.min(1, Math.max(0, (j + 0.5 + (rnd() - 0.5) * 0.9) / n));
       uv[k * 2] = u;
       uv[k * 2 + 1] = v;
       pos[k * 3] = u - 0.5;
@@ -264,7 +266,7 @@ export function createCardParticles(scene: THREE.Scene, stock: THREE.Texture, pa
       (u.uUp.value as THREE.Vector3).copy(up);
       u.uSize.value = d.size;
       const grid = phone ? GRID_PHONE : GRID_DESKTOP;
-      u.uPointPx.value = ((d.size / worldPerPx / grid) * POINT_OVERLAP) * dpr;
+      u.uPointPx.value = (d.size / worldPerPx / grid) * (phone ? POINT_OVERLAP_PHONE : POINT_OVERLAP) * dpr;
       u.uTime.value = time;
       u.uSeedShift.value = d.seed;
       u.uImg.value = d.image ?? stock;
