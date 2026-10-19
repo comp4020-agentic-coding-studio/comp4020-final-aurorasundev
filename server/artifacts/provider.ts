@@ -55,11 +55,37 @@ export class ArtifactError extends Error {
 
 export type GeneratedImage = { bytes: Buffer; width: 1024; height: 1024 };
 
+// Why an inspected image was kept private. Stored as the job's error_code and
+// shown to operators; a fixed list of codes, never a provider body, category
+// score or anything from the note.
+export const INSPECTION_BLOCK_CODES = [
+  // the existing harm screen rejected the image
+  "inspection_harm",
+  // the harm screen could not clear it (its review outcome)
+  "inspection_harm_review",
+  // the visual policy saw legible text, letters or numbers
+  "inspection_text",
+  // ... a human or animal face
+  "inspection_face",
+  // ... an identifiable real place
+  "inspection_place",
+  // ... no flag, but it was not certain
+  "inspection_uncertain",
+  // the visual check declined to look
+  "inspection_refused",
+  // blocked for no single reason above (e.g. a bare "block" decision)
+  "inspection_blocked",
+] as const;
+export type InspectionBlockCode = (typeof INSPECTION_BLOCK_CODES)[number];
+export type InspectionResult = "allow" | InspectionBlockCode;
+export const isInspectionBlockCode = (v: unknown): v is InspectionBlockCode =>
+  typeof v === "string" && (INSPECTION_BLOCK_CODES as readonly string[]).includes(v);
+
 export interface ArtifactProvider {
   readonly name: string;
   extractBrief(source: { text: string; drawing: string | null }, signal: AbortSignal): Promise<CreativeBriefV2>;
   generateImage(brief: CreativeBriefV2, signal: AbortSignal): Promise<GeneratedImage>;
-  inspectImage(image: Buffer, signal: AbortSignal): Promise<"allow" | "blocked">;
+  inspectImage(image: Buffer, signal: AbortSignal): Promise<InspectionResult>;
 }
 
 // --- the creative brief -------------------------------------------------------
@@ -214,13 +240,18 @@ export const VISUAL_INSTRUCTION =
   "Block it if it shows any legible text, letters or numbers; any human or animal face; or an identifiable real place. " +
   "If you are unsure about any of these, set certainty to uncertain. Allow only a clear abstract object.";
 
-// allow only on a clear, consistent answer; anything else blocks
-export function visualVerdict(raw: unknown): "allow" | "blocked" {
+// Allow only on a clear, consistent answer; anything else blocks, with the
+// first specific reason it gives (text, then face, then place, then doubt).
+// A field that is not exactly `false` counts as flagged.
+export function visualVerdict(raw: unknown): InspectionResult {
   if (!isRecord(raw)) throw new ArtifactError("inspection_malformed", "invalid");
   const keys = Object.keys(raw).sort().join(",");
   if (keys !== "certainty,decision,face,identifiable_place,legible_text") throw new ArtifactError("inspection_malformed", "invalid");
-  const clean = raw.legible_text === false && raw.face === false && raw.identifiable_place === false;
-  return raw.decision === "allow" && raw.certainty === "clear" && clean ? "allow" : "blocked";
+  if (raw.legible_text !== false) return "inspection_text";
+  if (raw.face !== false) return "inspection_face";
+  if (raw.identifiable_place !== false) return "inspection_place";
+  if (raw.certainty !== "clear") return "inspection_uncertain";
+  return raw.decision === "allow" ? "allow" : "inspection_blocked";
 }
 
 // --- OpenAI ------------------------------------------------------------------
@@ -333,6 +364,8 @@ export function validateWebp(bytes: Buffer, width = 1024, height = 1024): boolea
   return false;
 }
 
+const REFUSED = Symbol("refused");
+
 export function openAiArtifactProvider(key: string, fetchImpl: typeof fetch = fetch, moderation: Provider | null = null): ArtifactProvider {
   const briefModel = BRIEF_MODEL;
   const imageModel = IMAGE_MODEL;
@@ -398,7 +431,8 @@ export function openAiArtifactProvider(key: string, fetchImpl: typeof fetch = fe
       if (verdict.kind === "unavailable") {
         throw new ArtifactError(`inspection_${verdict.error.code}`, verdict.error.kind === "config" ? "config" : "transient");
       }
-      if (verdict.kind !== "allow") return "blocked";
+      if (verdict.kind === "reject") return "inspection_harm";
+      if (verdict.kind !== "allow") return "inspection_harm_review";
       const raw = await structured(
         fetchImpl,
         key,
@@ -411,10 +445,10 @@ export function openAiArtifactProvider(key: string, fetchImpl: typeof fetch = fe
         "inspection",
       ).catch((err: unknown) => {
         // a refusal to look is not an allow
-        if (err instanceof ArtifactError && err.kind === "refusal") return { decision: "block" };
+        if (err instanceof ArtifactError && err.kind === "refusal") return REFUSED;
         throw err;
       });
-      if (isRecord(raw) && raw.decision === "block" && Object.keys(raw).length === 1) return "blocked";
+      if (raw === REFUSED) return "inspection_refused";
       return visualVerdict(raw);
     },
   };
@@ -436,7 +470,7 @@ export type FixtureControl = {
   // overrides for the next calls, consumed in order
   brief: ((signal: AbortSignal) => Promise<CreativeBriefV2>)[];
   image: ((signal: AbortSignal) => Promise<GeneratedImage>)[];
-  inspection: ((signal: AbortSignal) => Promise<"allow" | "blocked">)[];
+  inspection: ((signal: AbortSignal) => Promise<InspectionResult>)[];
   // what each brief and image request was given, for privacy assertions
   seen: { brief: { text: string; drawing: string | null }[]; image: CreativeBriefV2[] };
 };

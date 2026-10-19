@@ -33,7 +33,7 @@ budget; each result is written only under that lease.
 | --- | --- | --- |
 | Brief (at ignition) | until 15 s after the burn; one attempt | `SOURCE_UNAVAILABLE` with `brief_timeout`, `brief_refusal`, `brief_malformed`, `at_capacity`, `daily_budget` or `source_lost_on_restart`. No record and no fallback |
 | Image | 120 s | explicit 429: one retry after max(30 s, Retry-After). Timeout, lost connection, 5xx or a crash after dispatch: `GENERATION_UNKNOWN`, never resent automatically. 401/403: `FAILED` with `provider_auth`. Refusal: `FAILED` |
-| Inspection | 30 s per request; 3 runs (now, +5 s, +30 s) | blocked or uncertain: `BLOCKED`; exhausted: `FAILED`; file removed either way |
+| Inspection | 30 s per request; 3 runs (now, +5 s, +30 s) | blocked or uncertain: `BLOCKED` with an `inspection_*` reason code (below); exhausted: `FAILED`; file removed either way |
 
 Daily caps (UTC): 20 briefs, 10 images, 20 inspection runs. Every dispatched
 request counts. A job over budget waits with `error_code=daily_budget` until
@@ -81,6 +81,28 @@ pnpm artifacts:retry -- <job-id> --acknowledge-possible-charge
 - **retry**: only for `GENERATION_UNKNOWN`, and only with the flag, because
   the first request may already have produced (and been charged for) an
   image. It sends exactly one more image request.
+
+### Why an image was blocked
+
+A `BLOCKED` job's `error_code` (shown as `error=` by `pnpm artifacts:jobs`
+and as `reason` in the worker log) says which check kept the image private.
+These are fixed codes: no provider text, category scores or note content is
+stored. The file is already gone and the job is never regenerated.
+
+| Code | Meaning |
+| --- | --- |
+| `inspection_harm` | the existing harm screen (category gate or content policy) rejected the image |
+| `inspection_harm_review` | the content policy could not clear it (its review/uncertain outcome) |
+| `inspection_text` | the visual check saw legible text, letters or numbers |
+| `inspection_face` | the visual check saw a human or animal face |
+| `inspection_place` | the visual check saw an identifiable real place |
+| `inspection_uncertain` | no flag was raised, but the visual check was not certain |
+| `inspection_refused` | the visual check declined to look; a refusal never allows |
+| `inspection_blocked` | blocked for no single reason above (e.g. a bare block decision); also the fallback for anything unexpected |
+
+When the visual check raises several flags, the first of text, face, place,
+uncertain is stored. A run of one code (say `inspection_text`) is a hint to
+revisit the style preset, not to loosen the check.
 
 Reports never hide anything on their own, and nothing promises a review
 time. Read the queue regularly while the Gallery is public.

@@ -6,7 +6,17 @@ import { join, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { openDb, type DB } from "../server/db.ts";
 import { burnPaper, createPaper } from "../server/papers.ts";
-import { ArtifactError, ARTIFACT_FIXTURE, fixtureArtifactProvider, fixtureBrief, newFixtureControl, type FixtureControl, type GeneratedImage } from "../server/artifacts/provider.ts";
+import {
+  ArtifactError,
+  ARTIFACT_FIXTURE,
+  fixtureArtifactProvider,
+  fixtureBrief,
+  INSPECTION_BLOCK_CODES,
+  newFixtureControl,
+  type FixtureControl,
+  type GeneratedImage,
+  type InspectionResult,
+} from "../server/artifacts/provider.ts";
 import { enqueueAdminJob } from "../server/artifacts/store.ts";
 import type { CreativeBriefV2, GalleryChange } from "../server/artifacts/types.ts";
 import { createArtifactWorker, DAILY_BUDGET, MAX_EXTRACTIONS } from "../server/artifacts/worker.ts";
@@ -441,12 +451,35 @@ describe("inspection", () => {
     const w = world();
     const id = w.save("RELEASE");
     await w.burnAndSettle(id);
-    w.control.inspection.push(() => Promise.resolve("blocked"));
+    w.control.inspection.push(() => Promise.resolve("inspection_blocked"));
     await w.worker.wake();
     expect(w.job(id)).toMatchObject({ state: "BLOCKED", error_code: "inspection_blocked" });
     expect(readdirSync(w.dir)).toEqual([]);
     expect(w.control.calls.image).toBe(1);
     expect(w.changes).toEqual([]);
+    await w.done();
+  });
+
+  it("stores the specific reason for each blocked outcome, and nothing public", async () => {
+    const w = world();
+    for (const code of INSPECTION_BLOCK_CODES) {
+      const id = w.save("RELEASE");
+      await w.burnAndSettle(id);
+      w.control.inspection.push(() => Promise.resolve(code));
+      await w.worker.wake();
+      expect(w.job(id), code).toMatchObject({ state: "BLOCKED", error_code: code });
+      expect(w.logged.some((line) => line.includes(code))).toBe(true);
+    }
+    // an unexpected verdict is the generic block, never an allow
+    const odd = w.save("RELEASE");
+    await w.burnAndSettle(odd);
+    w.control.inspection.push(() => Promise.resolve("something else" as InspectionResult));
+    await w.worker.wake();
+    expect(w.job(odd)).toMatchObject({ state: "BLOCKED", error_code: "inspection_blocked" });
+    expect(readdirSync(w.dir)).toEqual([]);
+    expect(w.changes).toEqual([]);
+    expect(w.db.prepare("SELECT COUNT(*) AS n FROM artifacts").get()).toEqual({ n: 0 });
+    expect(w.logged.join("\n")).not.toContain(CANARY);
     await w.done();
   });
 
@@ -475,7 +508,7 @@ describe("inspection", () => {
     const w = world();
     const id = w.save("RELEASE");
     await w.burnAndSettle(id);
-    const held = deferred<"allow" | "blocked">();
+    const held = deferred<InspectionResult>();
     w.control.inspection.push(() => held.promise);
     const running = w.worker.wake();
     await vi.waitFor(() => expect(w.job(id).state).toBe("REVIEWING"));

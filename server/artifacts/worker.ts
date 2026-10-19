@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { DB } from "../db.ts";
 import { log } from "../log.ts";
 import type { Ignition } from "../papers.ts";
-import { ARTIFACT_TIMEOUTS, ArtifactError, artifactAlt, artifactTitle, parseBrief, type ArtifactProvider } from "./provider.ts";
+import { ARTIFACT_TIMEOUTS, ArtifactError, artifactAlt, artifactTitle, isInspectionBlockCode, parseBrief, type ArtifactProvider } from "./provider.ts";
 import { checkArtifactCapacity, readArtifactFile, recoverArtifactFile, removeArtifactFile, saveArtifactFile, sweepArtifactFiles } from "./storage.ts";
 import { acceptBrief, applyArtifactAdminJobs, publishArtifact, sourceUnavailable } from "./store.ts";
 import type { CreativeBriefV2, GalleryChange } from "./types.ts";
@@ -218,7 +218,8 @@ export function createArtifactWorker(db: DB, provider: ArtifactProvider | null, 
     try {
       const verdict = await call(ARTIFACT_TIMEOUTS.inspection, (signal) => provider!.inspectImage(bytes, signal));
       if (verdict !== "allow") {
-        fail("BLOCKED", "inspection_blocked");
+        // only a known code is stored; anything else is the generic block
+        fail("BLOCKED", isInspectionBlockCode(verdict) ? verdict : "inspection_blocked");
         return true;
       }
       const brief = parseBrief(JSON.parse(job.brief!));

@@ -10,6 +10,7 @@ import {
   imagePrompt,
   openAiArtifactProvider,
   parseBrief,
+  INSPECTION_BLOCK_CODES,
   validateWebp,
 } from "../server/artifacts/provider.ts";
 import type { CreativeBriefV2 } from "../server/artifacts/types.ts";
@@ -234,24 +235,39 @@ describe("inspection", () => {
     expect(JSON.stringify(api.sent[0].body.input)).toContain("data:image/webp;base64,");
   });
 
-  it("blocks legible text, faces, places, uncertainty and refusals", async () => {
-    for (const answer of [
-      visual({ legible_text: true }),
-      visual({ face: true }),
-      visual({ identifiable_place: true }),
-      visual({ certainty: "uncertain" }),
-      visual({ decision: "block" }),
-      json({ status: "completed", output: [{ type: "message", content: [{ type: "refusal", refusal: "no" }] }] }),
-    ]) {
-      expect((await inspect(answer)).result).toBe("blocked");
+  it("blocks legible text, faces, places, uncertainty and refusals, each with its own code", async () => {
+    const cases: [Response | Record<string, unknown>, string][] = [
+      [visual({ legible_text: true }), "inspection_text"],
+      [visual({ face: true }), "inspection_face"],
+      [visual({ identifiable_place: true }), "inspection_place"],
+      [visual({ certainty: "uncertain" }), "inspection_uncertain"],
+      [visual({ decision: "block" }), "inspection_blocked"],
+      [visual({ decision: "block", face: true, certainty: "uncertain" }), "inspection_face"],
+      [json({ status: "completed", output: [{ type: "message", content: [{ type: "refusal", refusal: SOURCE_CANARY }] }] }), "inspection_refused"],
+    ];
+    for (const [answer, code] of cases) {
+      const { result } = await inspect(answer);
+      expect(result, code).toBe(code);
+      expect(INSPECTION_BLOCK_CODES).toContain(result);
     }
   });
 
   it("blocks on the harm gate without asking the visual check", async () => {
     const gate = json({ results: [{ flagged: true, categories: { ...NO_FLAGS, "sexual/minors": true } }] });
     const { result, api } = await inspect(visual({}), gate);
-    expect(result).toBe("blocked");
+    expect(result).toBe("inspection_harm");
     expect(api.sent).toHaveLength(1);
+  });
+
+  it("keeps an image the content policy could not clear, under its own code", async () => {
+    const api = fakeApi((path) => {
+      if (path.endsWith("/moderations")) return moderationAllows(path)!;
+      return completed({ decision: "review", reason: "uncertain", certainty: "uncertain", policy_version: POLICY_VERSION });
+    });
+    const { openAiProvider } = await import("../server/moderation.ts");
+    const provider = openAiArtifactProvider("k", api.impl, openAiProvider("k", api.impl));
+    expect(await provider.inspectImage(WEBP, signal())).toBe("inspection_harm_review");
+    expect(api.sent.map((s) => s.path)).toEqual(["/v1/moderations", "/v1/responses"]);
   });
 
   it("reports an unavailable check as an error, never an allow", async () => {
