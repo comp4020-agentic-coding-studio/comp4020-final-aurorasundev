@@ -146,3 +146,31 @@ artworks remain runtime output and are not part of this fixed pack.
   generation claim follows from these material checks.
 - **Usage:** [state-by-state composition guidance](../design/gallery-records-2026-10-18/design.md#13-fixed-visual-assets-and-where-to-use-them).
   This pass does not modify the application's current material wiring.
+
+## Gallery G01 mist background — 2026-10-19
+
+The owner requested the same visual background as the supplied “唱片馆.png”, especially its white cloud-like ground haze. That image is byte-identical to the selected G01 in the design folder.
+
+- **Runtime file:** `public/textures/gallery/gallery-stage-mist-v2.jpg`; public URL `/textures/gallery/gallery-stage-mist-v2.jpg`.
+- **Generator:** Codex built-in Image Gen, using G01 as the edit target. No API key or paid project-provider call was used. The exact underlying model ID is not exposed.
+- **Source:** `exec-0f8ac5df-60b6-4b66-a864-41d379585667.png`, generated 1584×993.
+- **Packaging:** JPEG quality 88 using macOS sips, no resize; embedded sRGB IEC61966-2.1; 237,246 bytes.
+- **SHA-256:** `f064130419ef58f0df9af7870672e466da264cf4d722e6cf34bb803754897512`.
+- **Image:** quiet grey-green upper atmosphere, soft white lower ground mist and restrained fine grain. No text, UI, discs, sleeves, artwork or baked object shadows. Occluded parts are reconstructed; pixel-identical recovery of unseen areas is not claimed.
+- **Usage:** replaces the flat mineral-surface composition as the active Gallery backdrop. Keep independent real artwork, live object shadows and HTML above it. Preserve the old surface file for compatibility without loading both background layers.
+- **Prompt and usage:** [exact generation prompt](../design/gallery-records-2026-10-18/asset-prompts.md#6-gallery-stage-mist-v2jpg--2026-10-19), [latest design amendment](../design/gallery-records-2026-10-18/design.md#14-owner-amendment--restore-g01s-white-ground-mist-2026-10-19), and [Claude repair handoff](../design/gallery-records-2026-10-18/claude-revision-prompt-2026-10-19.md).
+- **Verification boundary:** decoded and visually inspected the delivered JPEG; checked dimensions/profile/hash and relative asset links. This delivery edits assets and documentation only; the new backdrop is not yet wired into or browser-verified in the application.
+
+## Homepage window-lit room plate — 2026-10-19
+
+The owner requested the window-cast daylight and tactile wall/floor materials from the supplied “首页背景图.png”, fitted to the existing homepage without replacing the paper scene.
+
+- **Runtime asset:** `public/textures/room/home-window-light-v1.jpg`; URL `/textures/room/home-window-light-v1.jpg`. Metadata: [room manifest](../public/textures/room/manifest.json).
+- **Generator:** Codex built-in Image Gen; no project API key or project-provider call. The underlying model ID is not exposed. The input foreground was removed and the occluded room reconstructed.
+- **Selected source:** `exec-c82b1628-951c-4df0-9411-58a6c95d2d92.png`. Three composition refinements followed the initial generation; only the selected final plate is packaged.
+- **Packaging:** 1672×941 opaque JPEG, quality 88, no resize, embedded sRGB IEC61966-2.1, 328,412 bytes.
+- **SHA-256:** `eeb8b7dbfc992834c358572753834d6124417c829cdf5e454a8a1e909e8b27ff`.
+- **Composition evidence:** the existing camera projects the wall/floor join to about 43.48% height on desktop and 25.03% in portrait. The delivered plate's soft horizontal transition is approximately row 408/941 (43.36%), measured over the quiet central/right region. These are frame-dependent measurements, not new camera settings.
+- **Content:** mineral-grey matte plaster above, pale limestone/microcement below, coherent soft off-camera left-window illumination and mullion shadows. No paper, furnace, fire, ash, text, UI, cloud mist or baked object shadows.
+- **Integration boundary:** apply only to the existing wall/floor background materials, using aligned projection or surface-specific sampling. Preserve floor geometry and physical plane, wall position, camera behavior, real shadow receivers, existing contact-shadow enhancement, paper materials and lighting. Do not paste the plate over the canvas or independently repeat the whole image on both surfaces.
+- **Delivery boundary:** this pass supplies image/metadata/provenance only. It does not modify or browser-verify the new room appearance. The owner requested the Claude implementation prompt in chat, so no prompt file was created.

@@ -213,7 +213,8 @@ Public URLs begin with `/textures/gallery/` — **never `/public/textures/galler
 | [vinyl-grooves-height.png](../../public/textures/gallery/vinyl-grooves-height.png) | 1024×1024 PNG data map | The physical Three.js vinyl face in G01/G02, where live lighting should reveal fine grooves | Load as **NoColorSpace**, use as a restrained bump map, not a visible grey record, normal map or background. Use a charcoal material colour. |
 | [paper-stock.jpg](../../public/textures/gallery/paper-stock.jpg) | 1024×1024 opaque JPEG | Sleeve back/edge and record-label paper substrate in G01/G02/G03 | Reuse the same file for square stock and a circular geometry/CSS mask. This is a blank material, not a second generated note image. |
 | [sleeve-frame.png](../../public/textures/gallery/sleeve-frame.png) | 1024×1024 RGBA PNG | The square orbiting sleeves in G01/G03 and the full artwork sleeve in G02 | Paper stock behind, the complete generated image inset about 10%, frame over it. The large centre is transparent. Keep the full image visible; do not crop the note's artwork to fill a tiny label or cover it with an opaque white card. |
-| [mineral-surface.jpg](../../public/textures/gallery/mineral-surface.jpg) | 1536×1024 opaque JPEG | The Gallery background behind the orbit and record detail in G01/G02/G03 | Use over the selected `#c6cdcc` background with a restrained texture contribution. Do not tint the artwork itself. Lighting/floor depth and object shadows stay separate in CSS/Three.js. |
+| [mineral-surface.jpg](../../public/textures/gallery/mineral-surface.jpg) | 1536×1024 opaque JPEG | Legacy flat mineral material, retained for compatibility | Superseded as the active Gallery backdrop by the 2026-10-19 mist plate below. Do not stack both as competing background textures. |
+| [gallery-stage-mist-v2.jpg](../../public/textures/gallery/gallery-stage-mist-v2.jpg) | 1584×993 opaque sRGB JPEG; 237,246 bytes | **Active Gallery orbit backdrop**, with continuity into detail; selected G01 atmosphere | Use the full clean plate at normal blending/full opacity. Preserve the soft white lower mist. Keep live records, sleeves, object shadows and HTML separate. See section 14. |
 
 ### Layer order
 
@@ -221,7 +222,7 @@ Public URLs begin with `/textures/gallery/` — **never `/public/textures/galler
 
 **Layered record, back to front:** circular paper-stock substrate → circular content-generated image → transparent vinyl-face front plate → a small geometry/mask spindle hole applied to the label stack. Place layers in the correct depth order; the front plate must not paint a white rectangle behind its transparent pixels. In a physically shaded Three.js record, use charcoal geometry plus the groove data map instead of stacking two complete front treatments and doubling their shine.
 
-**Background:** fixed mineral colour → subtle mineral surface texture → code-native stage lighting and shadows → independent records/sleeves → HTML controls. The texture is an even material scan with no baked horizon or objects. Do not substitute the full reference screenshot for a runtime background.
+**Background (revised 2026-10-19):** compatible mineral fallback colour → gallery-stage-mist-v2 clean atmospheric plate → independent live object shadows/records/sleeves → HTML controls. Section 14 supersedes the older flat surface plus code-native atmospheric-lighting approach for the Gallery. The new plate already includes soft environmental light and white ground mist; it contains no objects or object shadows. Do not substitute the complete reference screenshot for this clean runtime background.
 
 ### Runtime material notes
 
@@ -229,7 +230,7 @@ Public URLs begin with `/textures/gallery/` — **never `/public/textures/galler
 - For a record with outer radius 1 scene unit, begin with a small bumpScale around 0.001 and tune within roughly 0.0005–0.002. It should read as fine vinyl grooves, not the folds of a paper ball. These are material tuning targets, not tested final rendering values.
 - The transparent centre is a **preview window** for the dynamic image. Its circular crop is fine on the record because the complete square image is still available on the sleeve/detail. Use the same artifact image URL in every representation of one record.
 - Frame images have real alpha. Native image compositing and appropriate transparent WebGL material settings are required; avoid colour-keying white or adding an opaque image-wrapper fill. A small alphaTest for a WebGL cutout may discard near-zero edge pixels; preserve smooth antialiasing.
-- The five material images total 4,125,514 bytes (about 3.93 MiB), plus the small JSON manifest. Load materials only with the Gallery, reuse each decoded texture, and fetch only those needed for the selected rendering path. Do not add these downloads to the main paper room or preload both 2D and physical-record paths unnecessarily.
+- The original five material images total 4,125,514 bytes (about 3.93 MiB). The new mist plate adds 237,246 bytes; the six-file pack totals 4,362,760 bytes, plus the small JSON manifest. Keeping the legacy file does not mean loading both backgrounds. Load only the active backdrop and rendering-path materials with the Gallery; reuse decoded textures. Do not add these downloads to the main paper room.
 
 ### Elements that do not need another static picture
 
@@ -238,3 +239,19 @@ Arrows, close, play/pause and volume icons remain SVG/HTML. Text remains HTML. C
 Most importantly, **the contents of every sleeve and record label still come from that burned Release note**. No generic cover art was generated into this fixed pack. Generated note images continue through the existing state-gated Gallery image route; do not copy private/publication-gated outputs into these ungated static material files.
 
 Only the selected A references G01, G02 and G03 are retained in `reference-images/`. Unused theme comparison material and its prompts/references have been removed so the implementation has one visual source of truth.
+
+## 14. Owner amendment — restore G01's white ground mist (2026-10-19)
+
+The owner supplied “唱片馆.png” and asked for its exact background direction, especially the white cloud-like layer below the records. Its SHA-256 matches the existing G01 reference, so G01 remains the portable visual source of truth. This amendment supersedes the older flat, evenly lit mineral-surface guidance for the Gallery backdrop only.
+
+The new [gallery-stage-mist-v2.jpg](../../public/textures/gallery/gallery-stage-mist-v2.jpg) is a built-in Image Gen clean-plate reconstruction of G01 with all lettering, controls, records, sleeves, artwork and object shadows removed. It preserves the grey-green upper atmosphere and broad soft milky ground haze below. Areas hidden by the original foreground are reconstructed; this is not a claim of pixel-for-pixel recovery of the unseen background.
+
+![Approved-direction clean mist background](../../public/textures/gallery/gallery-stage-mist-v2.jpg)
+
+Use the runtime URL `/textures/gallery/gallery-stage-mist-v2.jpg`. Start with normal blending, opacity 1, no-repeat, cover and a centred crop. Retain the lower mist across screen sizes; use responsive background positioning when needed rather than stretching, tiling, or adding another grain texture. Disable the old 0.7-opacity surface contribution and competing gradients in `.records-surface` so they cannot erase or discolour the mist. The plate is already atmosphere-lit; interactive object shadows remain separate.
+
+This is a Gallery-only background asset. Keep native text, real generated covers and interactive Three.js geometry independent. Do not make a screenshot of the whole page the background, add literal sky clouds, or introduce an animated volumetric-fog dependency. Do not alter the main paper room or furnace materials. Keep the legacy mineral surface file without loading both backgrounds.
+
+The 1584×993 sRGB JPEG is 237,246 bytes; it was converted at JPEG quality 88 without resizing. Its source and exact generation prompt are in [asset-prompts.md](asset-prompts.md#6-gallery-stage-mist-v2jpg--2026-10-19). The public manifest records its dimensions, hash and active-background role.
+
+This pass supplies the background and [Claude repair prompt](claude-revision-prompt-2026-10-19.md), including the six audited defects, regression requirements and browser checks. It does not change application source or demonstrate the new plate rendered in the live app. Music and real-provider verification remain separate unfinished stages, explicitly identified in the prompt.

@@ -54,3 +54,23 @@ Use case: photorealistic-natural / production background texture. Create ONE ful
 
 The saved runtime images are decoded and inspected directly, with alpha checks for the centre/corners of the two cutouts. A local-file browser preview was not available because the browser rejects file URLs; no browser-rendered fidelity claim is made. The asset pass does not change the running Gallery. Final page fidelity remains a later implementation check.
 
+
+## 6. gallery-stage-mist-v2.jpg — 2026-10-19
+
+Input/edit target: [G01](reference-images/G01-orbit-desktop-mineral.png), identical to the owner's supplied “唱片馆.png” (SHA-256 `1bc013649cab220e7ca735f9a4c8f3374ff80c8e32df6a9c9815dfa87369ffbd`). This is a clean-plate edit/reconstruction, removing the entire foreground and preserving the requested atmosphere and soft white lower mist.
+
+Built-in Image Gen source: `exec-0f8ac5df-60b6-4b66-a864-41d379585667.png`, 1584×993. Export: opaque sRGB JPEG quality 88 with macOS sips, no resize. Runtime asset: [gallery-stage-mist-v2.jpg](../../public/textures/gallery/gallery-stage-mist-v2.jpg). Bytes: 237,246. SHA-256: `f064130419ef58f0df9af7870672e466da264cf4d722e6cf34bb803754897512`.
+
+Exact submitted prompt:
+
+```text
+Use case: precise-object-edit / clean background reconstruction.
+Asset type: a finished opaque website stage background plate, landscape, for the Throwaway record Gallery.
+Input image 1 is the exact approved screen to edit. The user's request is to obtain THIS SAME BACKGROUND WITHOUT THE FOREGROUND. Do not invent a different room or new art direction.
+Remove ALL foreground elements: every word and navigation label, The Gallery heading, subtitles, bottom captions, arrows, the entire vinyl record and its label, every square artwork/sleeve, every piece of paper, and every shadow that belongs to those objects. Reconstruct the obscured background naturally.
+Preserve the original visible backdrop as closely as possible: same desaturated pale sage/mineral-grey palette, soft ivory-white undertone, extremely fine subdued paper/mineral grain, soft studio lighting, identical overall atmospheric depth and luminance balance. It is a quiet infinite studio backdrop with no sharp horizon. Upper approximately 55% is a calm grey-green foggy wall/air, smooth and low contrast. Across the lower half there is the distinctive broad WHITE, CLOUD-LIKE GROUND MIST / soft chalky fog visible in the reference: thin airy horizontal veils and diffuse white swathes drifting laterally across a pale floor, most apparent from about 58% to 86% of the image height, then tapering into a slightly greyer quiet footer. Maintain this exact low-lying milky atmospheric layer and its soft horizontal perspective. This must not become a uniform flat wall texture. The surface and mist should merge without a hard seam.
+Keep the composition, original camera view, original 1586:992 aspect ratio, colour temperature, and background scale. Output the clean plate at the same framing with high image quality. Nothing transparent.
+Constraints: background only, absolutely no text/letters/numbers, UI, borders, frames, discs, artworks, sleeves, paper objects, floating shapes, silhouettes, furniture, plants, people, logos or watermarks. No residual rectangular object shadows or ghost outlines from the removed elements. No strong concrete pores, harsh mottling, noisy sand, orange/rust, blue/purple neon, visible sky or thick cumulus clouds. The white mist is very soft low ground haze from the reference, not literal clouds in the sky or smoke from a fire. Retain the light mineral-grey exhibition atmosphere, premium and restrained.
+```
+
+Verification: inspected the final decoded JPEG for absence of lettering, objects and residual cast shadows; checked dimensions, sRGB profile, byte size and hash. The hidden parts of the reference are reconstructed, not mathematically recovered. No product code was edited or runtime fidelity claimed in this asset delivery.

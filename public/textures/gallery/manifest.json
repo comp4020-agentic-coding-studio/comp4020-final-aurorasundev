@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "theme": "A",
   "generated_on": "2026-10-18",
   "generator": "Codex built-in Image Gen",
@@ -64,7 +64,21 @@
       "color_space": "srgb",
       "alpha": false,
       "wrap": "clamp-to-edge",
-      "usage": "Gallery-only mineral background surface; keep separate from artwork and UI."
+      "usage": "Legacy flat mineral surface retained for compatibility; superseded as the active Gallery backdrop by gallery-stage-mist-v2."
+    },
+    {
+      "id": "gallery-stage-mist-v2",
+      "url": "/textures/gallery/gallery-stage-mist-v2.jpg",
+      "width": 1584,
+      "height": 993,
+      "bytes": 237246,
+      "sha256": "f064130419ef58f0df9af7870672e466da264cf4d722e6cf34bb803754897512",
+      "color_space": "srgb",
+      "alpha": false,
+      "wrap": "clamp-to-edge",
+      "usage": "Active A-theme Gallery backdrop: clean G01 reconstruction with soft white ground mist; normal blending at full opacity behind independent objects and HTML."
     }
-  ]
+  ],
+  "updated_on": "2026-10-19",
+  "active_background": "/textures/gallery/gallery-stage-mist-v2.jpg"
 }
