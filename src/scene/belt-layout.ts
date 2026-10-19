@@ -113,6 +113,12 @@ export const backness = (theta: number) => Math.max(0, -Math.cos(theta));
 // the back half dims and fades out toward the very back
 export const backTone = (theta: number) => 1 - 0.45 * backness(theta);
 export const backFade = (theta: number) => Math.pow(1 - backness(theta), 0.8);
+// Orthographic views put the card at π - θ exactly behind the card at θ (same
+// x, same latitude), so the far half would hide behind the near half. The far
+// half rises a little toward the back, as if seen from slightly above; zero
+// (and flat) at the silhouettes, so the near half and its curve are untouched.
+export const BACK_RISE = 1.35;
+export const backRise = (theta: number) => BACK_RISE * Math.sin((backness(theta) * Math.PI) / 2);
 
 // A dissolve zone is where the belt rounds the globe's left or right
 // silhouette: a card's dissolve rises from `from` to 1 at `peak` and falls
@@ -196,8 +202,8 @@ export type Fit = {
 export const COMPACT_H = 540;
 // the record above the belt, in globe units, so the front of the belt passes
 // across its lower edge and the label stays clear
-const DISC_Y = 1.02;
-const DISC_R = 1.36;
+const DISC_Y = 1.3;
+const DISC_R = 1.2;
 
 export function fitBelt(i: FitInput): Fit {
   const phone = isPhone(i.w);
@@ -226,11 +232,11 @@ export function fitBelt(i: FitInput): Fit {
     return { phone, compact, k, cx: 0, cy, S, card, disc: { x: 0, y: discY, r, tilt } };
   }
   const tilt = compact ? 0.42 : 0.52;
-  const card = compact ? 1.95 : 1.8;
+  const card = compact ? 1.8 : 1.7;
   // the composition's extent in globe units: the belt's width, the globe's
   // bottom (or the front card's) and the record's top
   const halfX = BELT_AX + 0.2;
-  const top = Math.max(BELT_AY, DISC_Y + DISC_R * Math.cos(tilt)) + 0.04;
+  const top = Math.max(BELT_AY, DISC_Y + DISC_R * Math.cos(tilt), BACK_RISE + 0.6 * card * (1 - DEPTH_SHRINK)) + 0.04;
   const bottom = Math.max(BELT_AY, card / 2 + LAT_MAX) + 0.04;
   const bandHeight = Math.max(bandTop - bandBottom, 0.5);
   const S = Math.min(((W / 2) * 0.96) / halfX, bandHeight / (top + bottom));

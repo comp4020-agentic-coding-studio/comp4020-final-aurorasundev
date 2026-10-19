@@ -90,6 +90,8 @@ function ribbon(points: THREE.Vector3[], seed: number, poleOf: (p: THREE.Vector3
 function threadMaterial(uniforms: Record<string, THREE.IUniform>): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     transparent: true,
+    // a ribbon's winding follows the line's screen direction
+    side: THREE.DoubleSide,
     depthTest: false,
     depthWrite: false,
     uniforms,

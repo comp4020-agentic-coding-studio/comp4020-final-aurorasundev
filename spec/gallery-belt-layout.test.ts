@@ -279,3 +279,14 @@ describe("fitting the viewport", () => {
     }
   });
 });
+
+describe("the far half's rise", () => {
+  it("leaves the near half and the silhouettes alone and lifts the very back most", async () => {
+    const { backRise, BACK_RISE } = await import("../src/scene/belt-layout.ts");
+    for (const t of [0, 0.5, -1.2, Math.PI / 2, -Math.PI / 2]) expect(backRise(t)).toBeCloseTo(0, 12);
+    expect(backRise(Math.PI)).toBeCloseTo(BACK_RISE, 12);
+    expect(backRise(2.5)).toBeGreaterThan(backRise(2));
+    // continuous at the silhouette
+    expect(backRise(Math.PI / 2 + 0.01)).toBeLessThan(0.03);
+  });
+});
