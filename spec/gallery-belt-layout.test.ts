@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BACK_ALPHA,
+  BELT_AY,
   backFade,
   beltCards,
   cardPlacement,
@@ -274,6 +275,25 @@ describe("fitting the viewport", () => {
     // the front card passes across the record's lower half, below its centre
     expect(frontY).toBeLessThan(f.disc.y);
     expect(frontY + (f.card / 2) * f.S).toBeGreaterThan(f.disc.y - f.disc.r * Math.cos(f.disc.tilt));
+  });
+
+  it("phone: the composition sits a little above the stage's centre, inside it", () => {
+    for (const v of [
+      { w: 390, h: 844, bandTop: 88, bandH: 560 },
+      { w: 390, h: 480, bandTop: 88, bandH: 220 },
+      { w: 360, h: 740, bandTop: 88, bandH: 470 },
+    ]) {
+      const f = fitBelt(v);
+      const css = (y: number) => v.h / 2 - y / f.k;
+      const top = css(f.disc.y + f.disc.r * Math.cos(f.disc.tilt));
+      const frontY = f.cy + beltPoint(0).y * f.S;
+      // the lower of the front card's bottom and the globe's bottom
+      const bottom = Math.max(css(frontY - (f.card / 2) * f.S), css(f.cy - BELT_AY * f.S));
+      expect(top).toBeGreaterThanOrEqual(v.bandTop - 1);
+      expect(bottom).toBeLessThanOrEqual(v.bandTop + v.bandH + 1);
+      // above the stage's centre where there is room to spare
+      if (v.bandH > 400) expect((top + bottom) / 2).toBeLessThan(v.bandTop + v.bandH / 2 - 20);
+    }
   });
 
   it("desktop and short landscape fit inside the band", () => {

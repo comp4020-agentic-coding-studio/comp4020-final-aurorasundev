@@ -274,6 +274,10 @@ export const PHONE_CARD_W = 0.32;
 export const PHONE_TILT = 0.32;
 // the stage's share the phone composition may use
 const PHONE_FILL = 0.94;
+// where the phone composition's centre sits in the stage, from its top (0.5
+// would centre it): a little above centre, so the record sits closer under
+// the header and the title block below keeps clear (owner, 2026-10-19)
+export const PHONE_CENTRE = 0.4;
 
 export function fitBelt(i: FitInput): Fit {
   const phone = isPhone(i.w);
@@ -307,7 +311,11 @@ export function fitBelt(i: FitInput): Fit {
     };
     const one = parts(1);
     const p = parts(Math.min(1, (bandHeight * PHONE_FILL) / (one.top - one.bottom)));
-    const discY = bandMid - (p.top + p.bottom) / 2;
+    // the composition's centre PHONE_CENTRE down the stage, kept inside it
+    const span = p.top - p.bottom;
+    const want = bandTop - PHONE_CENTRE * bandHeight;
+    const centre = Math.min(bandTop - span / 2, Math.max(bandBottom + span / 2, want));
+    const discY = (span <= bandHeight ? centre : bandMid) - (p.top + p.bottom) / 2;
     return { phone, compact, k, cx: 0, cy: discY + p.globeC, S: p.S, card, disc: { x: 0, y: discY, r: p.r, tilt } };
   }
   const tilt = compact ? DISC_TILT_COMPACT : DISC_TILT;
