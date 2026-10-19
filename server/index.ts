@@ -67,9 +67,13 @@ app.use("/api", (_req, res) => {
 });
 
 // The Gallery is a page of the same client build, opened without the room:
-// the space's preloads of the crumple model are dropped from its HTML.
+// the space's preloads of the crumple model are dropped from its HTML, and
+// only the Gallery preloads its display face (the room never loads it).
+const GALLERY_FONT_PRELOAD = '<link rel="preload" as="font" type="font/woff2" href="/fonts/gloock-latin-400.woff2" crossorigin />';
 const galleryHtml = existsSync(resolve(dist, "index.html"))
-  ? readFileSync(resolve(dist, "index.html"), "utf8").replace(/^\s*<link rel="preload"[^>]*\/vat\/[^>]*>\n/gm, "")
+  ? readFileSync(resolve(dist, "index.html"), "utf8")
+      .replace(/^\s*<link rel="preload"[^>]*\/vat\/[^>]*>\n/gm, "")
+      .replace("</head>", `    ${GALLERY_FONT_PRELOAD}\n  </head>`)
   : null;
 app.get(/^\/gallery\/?$/, (_req, res, next) => {
   if (!galleryHtml) return next();

@@ -6,6 +6,9 @@
   --line: #cfcbc2;
   --error: #8a2f22;
   --serif: Georgia, "Times New Roman", "Songti SC", serif;
+  /* the Gallery's display face (entry title, corner wordmark, record
+     titles); declared in gallery.css, so only the Gallery ever loads it */
+  --display: "Gloock", "Bodoni 72", "Didot", Georgia, "Times New Roman", "Songti SC", serif;
   --sans: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif;
   --gutter: 48px;
   --radius: 6px;
