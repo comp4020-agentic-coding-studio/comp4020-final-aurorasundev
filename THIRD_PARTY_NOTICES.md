@@ -83,3 +83,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
+
+## Gloock (`public/fonts/gloock-latin-400.woff2`)
+
+The Gallery's display face. Copyright 2022 The Gloock Project Authors
+(https://github.com/duartp/gloock). Licensed under the SIL Open Font License,
+Version 1.1; the full licence is in `public/fonts/OFL-Gloock.txt`. The file is
+the Latin subset served by Google Fonts (v8), self-hosted unmodified.
