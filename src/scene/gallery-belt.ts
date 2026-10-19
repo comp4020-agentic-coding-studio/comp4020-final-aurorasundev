@@ -89,6 +89,8 @@ const TEX = "/textures/gallery/";
 const MAX_TEXTURES = 14;
 // the opened record's depth: in front of everything on the belt
 const HERO_Z = 8;
+// the record face's albedo scale (linear), against its texture's own charcoal
+const VINYL_ALBEDO = 0.11;
 
 const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -239,7 +241,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
   const disc = new THREE.Group();
   const spin = new THREE.Group();
   disc.add(spin);
-  const rimMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1b, roughness: 0.5, transparent: true });
+  const rimMat = new THREE.MeshStandardMaterial({ color: 0x161615, roughness: 0.7, envMapIntensity: 0.15, transparent: true });
   const rim = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.012, 128, 1, true), rimMat);
   rim.rotation.x = Math.PI / 2;
   const labelMat = new THREE.MeshBasicMaterial({ map: stockTex, transparent: true });
@@ -250,13 +252,19 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
   const hole = new THREE.Mesh(unitCircle, holeMat);
   hole.scale.setScalar(0.03);
   hole.position.z = 0.001;
+  // Deep matte charcoal (owner, 2026-10-19): the face plate's own charcoal
+  // is about sRGB 85, and under the scene's hemisphere, sun and room
+  // environment it read mid-grey. Its albedo is scaled down to a near-black
+  // base (about #181817 lit), rougher and with little environment, so the
+  // grooves stay dark and only the sheen's narrow band catches the light.
   const faceMat = new THREE.MeshStandardMaterial({
     map: faceTex,
+    color: new THREE.Color(VINYL_ALBEDO, VINYL_ALBEDO, VINYL_ALBEDO),
     bumpMap: grooveTex,
-    bumpScale: 0.6,
-    roughness: 0.42,
+    bumpScale: 0.35,
+    roughness: 0.82,
     metalness: 0,
-    envMapIntensity: 0.55,
+    envMapIntensity: 0.04,
     transparent: true,
     alphaTest: 0.01,
   });

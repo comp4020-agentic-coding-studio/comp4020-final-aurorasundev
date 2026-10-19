@@ -30,7 +30,7 @@ export function applyVinylSheen(material: THREE.MeshStandardMaterial, o: VinylSh
   const uniforms = {
     uSheenAxis: { value: 0 },
     uSheenAmount: { value: 1 },
-    uSheenStrength: { value: o.strength ?? 0.055 },
+    uSheenStrength: { value: o.strength ?? 0.07 },
     uSheenBand: { value: new THREE.Vector2(o.inner, o.outer) },
   };
   material.onBeforeCompile = (shader) => {
@@ -52,8 +52,9 @@ uniform vec2 uSheenBand;`,
   float r = length(p) * 2.0;
   float ang = atan(p.y, p.x);
   float band = smoothstep(uSheenBand.x + 0.02, uSheenBand.x + 0.07, r) * (1.0 - smoothstep(uSheenBand.y - 0.05, uSheenBand.y - 0.005, r));
-  // bow-tie: two narrow lobes along the axis, through the centre
-  float bowtie = pow(abs(cos(ang - uSheenAxis)), 6.0);
+  // bow-tie: two narrow lobes along the axis, through the centre (a high
+  // power keeps it a restrained band, never a lift over the whole face)
+  float bowtie = pow(abs(cos(ang - uSheenAxis)), 22.0);
   // fine groove relief breaks the glint into rings rather than a smear
   float groove = 0.7 + 0.6 * texture2D(bumpMap, vBumpMapUv).r;
   // a little brighter toward the middle of the grooved band
@@ -63,7 +64,7 @@ uniform vec2 uSheenBand;`,
 #include <opaque_fragment>`,
       );
   };
-  material.customProgramCacheKey = () => "throwaway-vinyl-sheen-v1";
+  material.customProgramCacheKey = () => "throwaway-vinyl-sheen-v2";
   material.needsUpdate = true;
 
   const q = new THREE.Quaternion();
