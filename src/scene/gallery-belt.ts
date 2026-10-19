@@ -2,13 +2,15 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { gsap } from "gsap";
 import { Observer } from "gsap/Observer";
-import { beltCards, cardFrame, cardPlacement, CAMERA_HALF, dissolveAt, FACE_EDGE, FACE_WINDOW, fitBelt, globeAngle, halfOf, LABEL_OF_DISC, ringSize, RING_DESKTOP, swipeTarget, type Fit } from "./belt-layout.ts";
+import { beltCards, beltPoint, cardFrame, cardPlacement, CAMERA_HALF, dissolveAt, FACE_EDGE, FACE_WINDOW, fitBelt, globeAngle, halfOf, LABEL_OF_DISC, ringSize, RING_DESKTOP, swipeTarget, type Fit } from "./belt-layout.ts";
 import { createBeltGlobe } from "./belt-globe.ts";
 import { mergeOrbitItems, nextFocusIndex, type OrbitItem } from "./orbit-items.ts";
 import { advanceSpin, dampPhase, spinning, wheelItems, wheelSnap, SPIN_GAIN, SPIN_IDLE, SPIN_RESPONSE, WHEEL_QUIET_MS } from "./gallery-motion.ts";
 import { closeTimeline, local, newChoreo, openTimeline, slideStages, stepTimeline, type SpinClock } from "./record-timeline.ts";
 import { createSleeveKit, type SleeveMesh } from "./sleeve-kit.ts";
 import { applyVinylSheen } from "./vinyl-sheen.ts";
+import { createCardParticles } from "./card-particles.ts";
+import { driftSign, EXIT_PARTICLES, fastTurn, hideStart, HIDE_SECONDS, IMAGE_FADE_SECONDS, imageShown, meshAlpha, particleAlpha, planParticles, zoneMode, type Candidate, type Mode, type Render } from "./particles-plan.ts";
 
 // The Gallery's record exhibition as a belt round a globe (design 2026-10-19
 // §4): an orthographic view of a flattened sphere drawn in graphite thread
@@ -27,9 +29,16 @@ import { applyVinylSheen } from "./vinyl-sheen.ts";
 // state stays here, never in React. Text is HTML; only the generated images
 // and the fixed materials in /textures/gallery/ are drawn.
 //
-// Hooks for the next steps: each card carries `dissolve` (0 whole .. 1 gone)
-// from the layout's dissolve zones (belt-layout.ts dissolveZones), read here
-// as a plain alpha fade; step ③ turns it into particles.
+// Particles (step ③): each card carries `dissolve` (0 solid .. 1 fully
+// dispersed). Where the band rounds the globe's sides (belt-layout.ts
+// dissolveZones) a slowly turning card breaks into grain that drifts back
+// along the band, and a card coming round gathers from it; a fast turn, an
+// exhausted budget or reduced motion uses the plain alpha fade instead
+// (particles-plan.ts decides; card-particles.ts draws). A card shows its
+// image only in front of the zone's peak, so a record that changed at the
+// back first appears by gathering in the arriving zone. An operator hide
+// leaves a ghost that breaks up in place. Step ④ drives the same path for
+// the open's exit through `card.request` (see the Card type).
 //
 // It imports nothing from the room: no paper scene, furnace, fire or physics.
 
@@ -133,6 +142,36 @@ type Card = {
   lift: { v: number };
   // each material's own colour, so the depth tone can dim it
   base: THREE.Color[];
+  // where the dissolve came from this frame: the zone, and the open's exit
+  zone: number;
+  aside: number;
+  // A caller's own dissolve (step ④: the open's exit and the close's
+  // gather): tween `v` 0..1 with gsap and set `mode` ("leave"/"gather" drift
+  // along the band toward the back, "inplace" breaks up where it stands).
+  // While `v` > 0 the card dissolves by max(zone, v) and takes a particle
+  // slot ahead of zone cards. Null when unused.
+  request: { v: number; mode: Mode } | null;
+  // the particle bookkeeping
+  render: Render;
+  mode: Mode;
+  prevTheta: number;
+  prevM: number | null;
+  // the image's fade-in (a late decode fades in over blank stock)
+  image: { tex: THREE.Texture | null; mix: number; waiting: boolean };
+  seed: number;
+};
+
+// A hidden record's last pose, breaking up in place; it holds its texture
+// until it has fully dispersed.
+type Ghost = {
+  pose: Pose;
+  tangent: THREE.Vector3;
+  tex: THREE.Texture | null;
+  // whether the ghost owns the texture (it left the LRU with the hide)
+  owns: boolean;
+  d: number;
+  seed: number;
+  rank: number;
 };
 
 export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: OrbitCallbacks, opts: OrbitOptions = {}): GalleryOrbit {
@@ -256,8 +295,13 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     entry.tex.anisotropy = maxAniso;
     textures.set(item.id, entry);
     if (textures.size > MAX_TEXTURES) {
+      // a texture still drawn (a card's image, possibly mid-dissolve, or a
+      // hide's ghost) is never evicted while it shows
+      const live = new Set<THREE.Texture>();
+      for (const card of cards) if (card.image.tex) live.add(card.image.tex);
+      for (const g of ghosts) if (g.tex) live.add(g.tex);
       let oldest: string | null = null;
-      for (const [id, t] of textures) if (!oldest || t.used < textures.get(oldest)!.used) oldest = id;
+      for (const [id, t] of textures) if (!live.has(t.tex) && (!oldest || t.used < textures.get(oldest)!.used)) oldest = id;
       if (oldest && oldest !== item.id) {
         textures.get(oldest)!.tex.dispose();
         textures.delete(oldest);
@@ -275,8 +319,60 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     mesh.group.visible = false;
     scene.add(mesh.group);
     const base = mesh.mats.map((m) => (m as THREE.MeshStandardMaterial).color.clone());
-    cards.push({ slot, mesh, m: null, id: null, theta: 0, pose: null, dissolve: 0, lift: { v: 0 }, base });
+    cards.push({
+      slot,
+      mesh,
+      m: null,
+      id: null,
+      theta: 0,
+      pose: null,
+      dissolve: 0,
+      lift: { v: 0 },
+      base,
+      zone: 0,
+      aside: 0,
+      request: null,
+      render: "mesh",
+      mode: "leave",
+      prevTheta: 0,
+      prevM: null,
+      image: { tex: null, mix: 1, waiting: false },
+      seed: (slot * 0.618034) % 1,
+    });
   }
+
+  // --- the shared particle system and the hides' ghosts --------------------
+  // the sleeve's paper, for the grain outside the image
+  const paper = new THREE.Color(0xe6dccb);
+  const grain = createCardParticles(scene, stockTex, paper);
+  const ghosts: Ghost[] = [];
+  let ghostSeed = 0;
+  let fast = false;
+  const inParticles = new Set<string>();
+  const cardKey = (card: Card) => `c${card.m}`;
+  // The reusable per-card dissolve (step ④: the open's exit and the close's
+  // gather). Tweens the card's own dissolve to `to` (1 dispersed, 0 solid)
+  // with the given drift mode; the frame loop draws it as particles within
+  // the budget (alpha under reduced motion or past the budget). Returns the
+  // tween so a timeline can nest it; the request clears itself at 0.
+  function dissolveCard(card: Card, to: number, mode: Mode, vars: gsap.TweenVars = {}): gsap.core.Tween {
+    const req = card.request ?? (card.request = { v: 0, mode });
+    req.mode = mode;
+    return gsap.to(req, {
+      v: to,
+      duration: 0.7,
+      ease: to > req.v ? "power1.in" : "power2.out",
+      overwrite: true,
+      ...vars,
+      onUpdate: () => (dirty = Math.max(dirty, 1)),
+      onComplete: () => {
+        if (req.v <= 0 && card.request === req) card.request = null;
+        dirty = Math.max(dirty, 2);
+      },
+    });
+  }
+  void dissolveCard;
+  const ghostKey = (i: number) => `g${i}`;
 
   // --- layout from the viewport and the HTML frames ------------------------
   let L: Layout;
@@ -317,6 +413,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     globeRoot.position.set(L.cx, L.cy, 0);
     globeRoot.scale.setScalar(L.S);
     globe.setScale(L.S);
+    grain.setScreen(L.k, dpr, L.phone);
     dirty = 4;
   }
 
@@ -353,6 +450,15 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     dirty = 4;
   };
   still?.addEventListener?.("change", onStill);
+  const reduced = () => !!still?.matches;
+
+  // the band's direction toward the back at θ, in world space
+  const tangentAt = (theta: number, out: THREE.Vector3) => {
+    const h = 1e-3;
+    const a = beltPoint(theta - h);
+    const b = beltPoint(theta + h);
+    return out.set(b.x - a.x, b.y - a.y, b.z - a.z).normalize().multiplyScalar(driftSign(theta));
+  };
 
   const count = () => items.length;
   const ring = () => ringSize(L.phone, count());
@@ -365,6 +471,25 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     const fraction = target - Math.round(target);
     items = next;
     const keep = new Set(next.map((i) => i.id));
+    // a removed record's card breaks up where it is, at once, holding its
+    // texture until it has dispersed (reduced motion: it simply leaves)
+    const held = new Set<THREE.Texture>();
+    for (const card of cards) {
+      if (!card.id || keep.has(card.id) || !card.pose) continue;
+      const shown = card.mesh.group.visible || card.render === "particles";
+      if (!shown || reduced()) continue;
+      const tex = card.image.tex;
+      if (tex) held.add(tex);
+      ghosts.push({
+        pose: { ...card.pose, q: card.pose.q.clone(), fade: card.pose.fade * (card.render === "alpha" ? 1 - card.dissolve : 1) },
+        tangent: tangentAt(card.theta, new THREE.Vector3()),
+        tex,
+        owns: false,
+        d: hideStart(card.render === "particles" ? card.dissolve : 0),
+        seed: (ghostSeed++ * 0.377) % 1,
+        rank: 0,
+      });
+    }
     for (const [id, t] of textures) {
       if (keep.has(id)) continue;
       if (labelMat.map === t.tex) {
@@ -377,14 +502,20 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
           card.mesh.artMat.needsUpdate = true;
         }
       }
-      t.tex.dispose();
       textures.delete(id);
+      const ghost = ghosts.find((g) => g.tex === t.tex);
+      if (ghost && held.has(t.tex)) ghost.owns = true;
+      else t.tex.dispose();
     }
-    // a removed record's card leaves at once, wherever it is
+    // a removed record's card leaves at once, wherever it is (its ghost,
+    // above, carries on in its place)
     for (const card of cards) {
       if (card.id && !keep.has(card.id)) {
         card.id = null;
         card.m = null;
+        card.prevM = null;
+        card.render = "mesh";
+        card.image.tex = null;
         card.mesh.group.visible = false;
         if (hovered === card) setHover(null);
       }
@@ -609,7 +740,9 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     let p = beltPose(card.theta);
     const focusWeight = clamp(1 - Math.abs(s), 0, 1);
     const aside = local(c.exit, Math.abs(s), c.order) * (1 - focusWeight);
-    card.dissolve = Math.max(dissolveAt(card.theta, L.phone), aside);
+    card.zone = dissolveAt(card.theta, L.phone);
+    card.aside = aside;
+    card.dissolve = Math.max(card.zone, aside, card.request?.v ?? 0);
     if (aside > 0) {
       // a small step outward along the belt as it goes
       p.x = L.cx + (p.x - L.cx) * (1 + 0.12 * aside);
@@ -659,6 +792,26 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     return dp;
   }
 
+  const vTan = new THREE.Vector3();
+  const vPos = new THREE.Vector3();
+  const frontnessOf = (theta: number) => (Math.cos(theta) + 1) / 2;
+  function drawGrain(p: Pose, tangent: THREE.Vector3, dissolve: number, mode: Mode, alpha: number, image: THREE.Texture | null, imageMix: number, renderOrder: number, seed: number) {
+    grain.draw({
+      position: vPos.set(p.x, p.y, p.z),
+      quaternion: p.q,
+      size: p.size,
+      dissolve,
+      mode,
+      tangent,
+      alpha,
+      tone: p.tone,
+      image,
+      imageMix,
+      renderOrder,
+      seed,
+    });
+  }
+
   function tint(card: Card, tone: number) {
     card.mesh.mats.forEach((m, i) => {
       (m as THREE.MeshStandardMaterial).color.copy(card.base[i]).multiplyScalar(tone);
@@ -695,46 +848,109 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
 
     // the ring's cards
     const placed = n ? beltCards(phase, R, n) : [];
+    // a fast turn draws the zones as the plain alpha fade (with hysteresis)
+    fast = fastTurn(dt > 0 ? (phase - prev) / dt : 0, fast);
     const used = new Set<number>();
     const order: Card[] = [];
+    const cands: Candidate[] = [];
     let heroPose: Pose | null = null;
     for (const bc of placed) {
       const card = cards[mod(bc.m, R)];
       used.add(card.slot);
       const item = items[bc.index];
+      if (card.prevM !== bc.m || card.id !== item.id) {
+        // a new place (or a new record in it): no motion history, no image yet
+        card.prevTheta = bc.theta;
+        card.image.tex = null;
+        card.image.mix = 1;
+        card.image.waiting = false;
+        card.render = "mesh";
+      }
       card.m = bc.m;
       card.id = item.id;
       card.theta = bc.theta;
+      card.mode = card.request && card.request.v > 0 ? card.request.mode : zoneMode(bc.theta, card.prevTheta, card.mode);
       const s = bc.m - phase;
       const p = cardPose(card, s);
       card.pose = p;
       if (bc.m === Math.round(phase)) heroPose = p;
-      const alpha = p.fade * (1 - card.dissolve);
-      const g = card.mesh.group;
-      g.visible = alpha > 0.01;
-      if (!g.visible) continue;
-      g.position.set(p.x, p.y, p.z);
-      g.quaternion.copy(p.q);
-      g.scale.setScalar(p.size);
-      // the card's image; the blank stock until it decodes. A card changes
-      // record only at the very back, where it is faded out (or hidden).
-      const tex = artFor({ id: item.id, url: item.image_url }) ?? stockTex;
-      if (card.mesh.artMat.map !== tex) {
-        card.mesh.artMat.map = tex;
-        card.mesh.artMat.needsUpdate = true;
+      // every card on the ring keeps its image warm (ring ≤ 10 of the 14), but
+      // shows it only in front of the zone's peak: a record that changed at
+      // the back first shows its image while it gathers in the arriving zone
+      const art = artFor({ id: item.id, url: item.image_url });
+      const tex = imageShown(bc.theta, L.phone) ? art : null;
+      if (tex !== card.image.tex) {
+        // an image that decoded late, while the card is plainly on screen,
+        // fades in over the blank stock it gathered into; otherwise
+        // (dispersed, or out of sight) it is simply there
+        const solid = p.fade * (1 - card.dissolve);
+        card.image.mix = tex && card.image.waiting && solid > 0.05 ? 0 : 1;
+        card.image.tex = tex;
       }
-      card.mesh.setOpacity(alpha);
-      tint(card, p.tone);
-      order.push(card);
+      card.image.waiting = !art && imageShown(bc.theta, L.phone);
+      if (card.image.mix < 1) {
+        card.image.mix = Math.min(1, card.image.mix + dt / IMAGE_FADE_SECONDS);
+        dirty = Math.max(dirty, 1);
+      }
+      card.prevTheta = bc.theta;
+      card.prevM = bc.m;
+      // the open's exit stays the alpha fade until step ④ moves it to
+      // particles; the zones and a caller's request are particle candidates
+      const req = card.request?.v ?? 0;
+      const byExit = !EXIT_PARTICLES && card.aside > Math.max(card.zone, req);
+      if (p.fade > 0.01 && card.dissolve > 0.001 && !byExit) {
+        cands.push({ key: cardKey(card), dissolve: card.dissolve, kind: req >= card.zone && req > 0 ? "request" : "zone", weight: frontnessOf(card.theta) });
+      }
+      card.render = byExit ? "alpha" : "mesh";
     }
     for (const card of cards) {
       if (used.has(card.slot)) continue;
       card.m = null;
+      card.prevM = null;
       card.id = null;
       card.pose = null;
+      card.image.tex = null;
+      card.render = "mesh";
       card.mesh.group.visible = false;
     }
+    // the hides' ghosts break up where they were
+    for (let i = ghosts.length - 1; i >= 0; i--) {
+      const g = ghosts[i];
+      g.d = Math.min(1, g.d + dt / HIDE_SECONDS);
+      if (g.d >= 1) {
+        if (g.owns && g.tex) g.tex.dispose();
+        ghosts.splice(i, 1);
+      }
+    }
+    ghosts.forEach((g, i) => cands.push({ key: ghostKey(i), dissolve: g.d, kind: "hide", weight: 1 }));
+    if (ghosts.length) dirty = Math.max(dirty, 1);
+    const plan = planParticles(cands, { phone: L.phone, reduced: reduced(), fast, previous: inParticles });
+    inParticles.clear();
+    for (const [k, r] of plan) if (r === "particles") inParticles.add(k);
 
+    for (const bc of placed) {
+      const card = cards[mod(bc.m, R)];
+      const p = card.pose!;
+      if (card.render !== "alpha") card.render = plan.get(cardKey(card)) ?? (card.dissolve > 0.001 ? "alpha" : "mesh");
+      const alpha = p.fade * meshAlpha(card.dissolve, card.render);
+      const g = card.mesh.group;
+      g.visible = alpha > 0.01;
+      if (g.visible) {
+        g.position.set(p.x, p.y, p.z);
+        g.quaternion.copy(p.q);
+        g.scale.setScalar(p.size);
+        const tex = card.image.tex ?? stockTex;
+        if (card.mesh.artMat.map !== tex) {
+          card.mesh.artMat.map = tex;
+          card.mesh.artMat.needsUpdate = true;
+        }
+        card.mesh.setOpacity(alpha);
+        // a late image fades in over the face's blank stock beneath it
+        card.mesh.artMat.opacity = alpha * (card.image.tex ? card.image.mix : 1);
+        tint(card, p.tone);
+      }
+      if (g.visible || card.render === "particles") order.push(card);
+    }
     // the record
     const dp = discPoseFor(heroPose);
     disc.position.set(dp.x, dp.y, dp.z);
@@ -758,21 +974,38 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       labelMat.needsUpdate = true;
     }
 
-    // back to front: the far half, the record, the near half
-    order.sort((a, b) => a.pose!.z - b.pose!.z);
+    // back to front: the far half, the record, the near half (the grain
+    // takes its card's place in the order; a ghost its own)
+    type Drawn = { z: number; card?: Card; ghost?: number };
+    const drawn: Drawn[] = order.map((card) => ({ z: card.pose!.z, card }));
+    ghosts.forEach((g, i) => plan.get(ghostKey(i)) === "particles" && drawn.push({ z: g.pose.z, ghost: i }));
+    drawn.sort((a, b) => a.z - b.z);
     let rank = 1;
     let discRanked = false;
     const rankDisc = () => {
       for (const o of discParts) o.renderOrder = rank++;
       discRanked = true;
     };
-    for (const card of order) {
-      if (!discRanked && card.pose!.z > dp.z) rankDisc();
-      card.mesh.group.renderOrder = rank;
-      card.mesh.body.renderOrder = rank++;
-      card.mesh.art.renderOrder = rank++;
-      card.mesh.frame.renderOrder = rank++;
+    grain.begin();
+    grain.setTime(clock.elapsedTime);
+    for (const d of drawn) {
+      if (!discRanked && d.z > dp.z) rankDisc();
+      if (d.card) {
+        const card = d.card;
+        const p = card.pose!;
+        card.mesh.group.renderOrder = rank;
+        card.mesh.body.renderOrder = rank++;
+        card.mesh.art.renderOrder = rank++;
+        card.mesh.frame.renderOrder = rank++;
+        if (card.render === "particles") {
+          drawGrain(p, tangentAt(card.theta, vTan), card.dissolve, card.mode, p.fade * particleAlpha(card.dissolve), card.image.tex, card.image.mix, rank++, card.seed);
+        }
+      } else {
+        const g = ghosts[d.ghost!];
+        drawGrain(g.pose, g.tangent, g.d, "inplace", g.pose.fade * particleAlpha(g.d), g.tex, 1, rank++, g.seed);
+      }
     }
+    grain.end();
     if (!discRanked) rankDisc();
 
     // render on demand: only while something moves, or the record turns
@@ -820,8 +1053,11 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     // keeps them hidden), so no program waits for its first draw
     const shown = [...cards.map((c) => c.mesh.group), disc].map((o) => [o, o.visible] as const);
     for (const [o] of shown) o.visible = true;
+    grain.warm();
     renderer.compile(scene, camera);
     for (const [o, v] of shown) o.visible = v;
+    grain.begin();
+    grain.end();
     for (const t of [faceTex, grooveTex, stockTex, frameTex]) renderer.initTexture(t);
     for (const t of textures.values()) if (t.ready) renderer.initTexture(t.tex);
     warmFrames = 3;
@@ -915,7 +1151,10 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       introTween?.kill();
       gsap.killTweensOf(intro);
       gsap.killTweensOf(spinClock);
-      for (const card of cards) gsap.killTweensOf(card.lift);
+      for (const card of cards) {
+        gsap.killTweensOf(card.lift);
+        if (card.request) gsap.killTweensOf(card.request);
+      }
       clearTimeout(wheelTimer);
       observer.kill();
       resize.disconnect();
@@ -928,6 +1167,9 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       renderer.domElement.removeEventListener("webglcontextlost", onLost);
       for (const card of cards) card.mesh.dispose();
       kit.dispose();
+      grain.dispose();
+      for (const g of ghosts) if (g.owns && g.tex) g.tex.dispose();
+      ghosts.length = 0;
       globe.dispose();
       for (const t of textures.values()) t.tex.dispose();
       textures.clear();
