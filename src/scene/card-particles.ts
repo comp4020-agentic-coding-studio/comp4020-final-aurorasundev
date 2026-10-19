@@ -148,12 +148,12 @@ void main() {
     + jitter * (${(SCATTER * 0.4).toFixed(3)} * p);
   world.xyz += mix(band, inPlace, uInPlace) * uSize;
 
-  vAlpha = 1.0 - smoothstep(0.25, 1.0, p);
+  vAlpha = (1.0 - smoothstep(0.2, 0.95, p)) * (1.0 - 0.35 * p * aSeed.z);
   vec4 mv = viewMatrix * world;
   gl_Position = projectionMatrix * mv;
   // screen-space size: the card's grid pitch on screen, a little overlapped
   // while whole so the card reads solid, finer as each grain flies
-  gl_PointSize = max(1.0, uPointPx * (1.0 - 0.45 * p) * (0.8 + 0.4 * aSeed.w));
+  gl_PointSize = max(1.0, uPointPx * (1.0 - 0.6 * p) * (0.8 + 0.4 * aSeed.w));
 }
 `;
 
