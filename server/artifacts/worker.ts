@@ -144,6 +144,13 @@ export function createArtifactWorker(db: DB, provider: ArtifactProvider | null, 
 
   // --- startup recovery -------------------------------------------------------
 
+  // Ownership rule for this single-process Fly deployment: `recover()` runs
+  // once, before this process's own loop claims anything. Any job already in
+  // EXTRACTING, GENERATING or REVIEWING at that moment cannot belong to a
+  // request this process is making (it has made none yet), so it is always
+  // orphaned here, whatever its lease_until says. A lease only protects a
+  // job from *this* process's own later, concurrent steps; it was never a
+  // sound way to tell an old process's abandoned work from a live one's.
   async function recover(): Promise<void> {
     const t = now();
     // an extraction that was in flight when the process stopped: its note
@@ -156,14 +163,14 @@ export function createArtifactWorker(db: DB, provider: ArtifactProvider | null, 
       }
     }
     // an inspection that was in flight: inspect again (counted against its cap)
-    db.prepare(
-      "UPDATE artifact_jobs SET state = 'REVIEW_QUEUED', lease_token = NULL, lease_until = NULL, next_attempt_at = ?, updated_at = ? WHERE state = 'REVIEWING' AND (lease_until IS NULL OR lease_until < ?)",
-    ).run(t, t, t);
+    const reviewing = db.prepare("UPDATE artifact_jobs SET state = 'REVIEW_QUEUED', lease_token = NULL, lease_until = NULL, next_attempt_at = ?, updated_at = ? WHERE state = 'REVIEWING'").run(
+      t,
+      t,
+    ).changes;
+    if (reviewing) log("artifact", { outcome: "reviewing_recovered", count: reviewing });
     // an image request that was in flight: if its file was finalized, adopt
     // it and inspect; otherwise its outcome is unknown and it is not resent
-    const generating = db
-      .prepare("SELECT id, public_id FROM artifact_jobs WHERE state = 'GENERATING' AND (lease_until IS NULL OR lease_until < ?)")
-      .all(t) as { id: string; public_id: string }[];
+    const generating = db.prepare("SELECT id, public_id FROM artifact_jobs WHERE state = 'GENERATING'").all() as { id: string; public_id: string }[];
     for (const job of generating) {
       const fileKey = await recoverArtifactFile(dir, job.public_id);
       if (fileKey) {
@@ -355,12 +362,36 @@ export function createArtifactWorker(db: DB, provider: ArtifactProvider | null, 
     timer.unref?.();
   }
 
+  // Operator actions never wait behind a provider request: an image call can
+  // take two minutes, and a hide must take effect within about a second. They
+  // are synchronous transactions (no await), so applying them here, beside a
+  // runner that is parked on a network call, cannot interleave with any of
+  // that runner's own writes; its late result is still guarded by its lease
+  // and job state. A separate short timer keeps them moving while the main
+  // runner is busy.
+  let adminTimer: ReturnType<typeof setInterval> | undefined;
+  function adminTick(): void {
+    if (stopped || !started) return;
+    try {
+      applyAdmin();
+    } catch {
+      log("artifact", { outcome: "admin_error" });
+    }
+  }
+
   // Runs everything due now; concurrent wakes coalesce into one more pass,
   // never a second runner.
   function wake(): Promise<void> {
     if (stopped) return Promise.resolve();
+    if (!adminTimer) {
+      adminTimer = setInterval(adminTick, Math.min(poll, 1_000));
+      adminTimer.unref?.();
+    }
     if (running) {
       again = true;
+      // a wake while the runner waits on a provider still applies operator
+      // actions now
+      adminTick();
       return running;
     }
     running = drain()
@@ -380,6 +411,7 @@ export function createArtifactWorker(db: DB, provider: ArtifactProvider | null, 
     async stop(): Promise<void> {
       stopped = true;
       clearTimeout(timer);
+      clearInterval(adminTimer);
       for (const controller of inFlight) controller.abort();
       await running;
     },

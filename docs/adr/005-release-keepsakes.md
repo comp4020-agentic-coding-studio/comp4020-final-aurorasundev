@@ -26,6 +26,7 @@ a way back to a paper.
 | Can the public object be traced to its paper? | reuse the paper id; a separate id | **An independent random UUID**, and an allowlisted public shape with no paper, job, brief, owner or timestamps | an observer may still infer a link from timing; absolute unlinkability is not claimed |
 | What if an image request's outcome is unknown? | retry automatically; mark it unknown | **`GENERATION_UNKNOWN`, never resent automatically.** An operator retry requires acknowledging a possible extra charge | a timed-out image may need a person |
 | Who removes an object? | report count thresholds; automated review of reports; operator | **An operator**, through a private CLI. Reports only queue for review | removal depends on someone reading the queue; no response time is promised |
+| What does a restart do to in-flight work? | trust leases; wait for them to expire | **Revised 2026-10-19: startup owns everything.** One process runs on Fly, so any job found mid-request at startup is orphaned regardless of its lease and is settled at once (see the runbook). Operator actions run on a separate tick so a hide never waits behind a slow image request | a second concurrent process would need a real ownership scheme; none is run |
 
 ## What is stored
 

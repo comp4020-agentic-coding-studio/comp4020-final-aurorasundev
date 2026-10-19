@@ -38,9 +38,20 @@ budget; each result is written only under that lease.
 Daily caps (UTC): 20 briefs, 10 images, 20 inspection runs. Every dispatched
 request counts. A job over budget waits with `error_code=daily_budget` until
 the next UTC day. A job without storage room waits with `storage_full` and is
-rechecked each minute. On startup the worker adopts a finalized image whose
-job state was lost, marks an interrupted dispatch `GENERATION_UNKNOWN`, and
-removes abandoned staging files.
+rechecked each minute. On startup, before it claims anything, the worker
+treats every job still in `EXTRACTING`, `GENERATING` or `REVIEWING` as
+orphaned by the previous process, whatever its lease says (Fly runs one
+process; a lease only guards this process's own concurrent steps). It marks
+a lost extraction `SOURCE_UNAVAILABLE`, adopts a finalized image whose job
+state was lost, marks an interrupted dispatch `GENERATION_UNKNOWN` (never
+resent), requeues an interrupted inspection, and removes abandoned staging
+files.
+
+Operator actions run on their own one-second tick, not behind the image
+loop: a hide commits, bumps the version and Gallery revision once, is
+broadcast, then its file is unlinked, within about a second even while an
+image request is still waiting (up to 120 s). A late result from that
+request is still bound to its own job and lease and cannot undo a hide.
 
 The Fly machine stops when idle. Queued jobs persist and resume when the app
 next runs; nothing here wakes it. A queue is not a completion time.

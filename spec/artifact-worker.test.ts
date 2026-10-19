@@ -380,6 +380,47 @@ describe("images that may have been generated", () => {
     w.restore();
   });
 
+  // A quick restart: the old process's lease has not expired yet. Before the
+  // fix, startup skipped such jobs and nothing ever revisited them.
+  for (const enabled of [true, false]) {
+    it(`a restart before the lease expires still recovers orphaned work (${enabled ? "enabled" : "paused"})`, async () => {
+      const w = world();
+      const lost = w.save("RELEASE");
+      const kept = w.save("RELEASE");
+      const reviewed = w.save("RELEASE");
+      for (const id of [lost, kept, reviewed]) await w.burnAndSettle(id);
+      await w.worker.stop();
+      const future = w.now() + 120_000;
+      const set = (id: string, state: string) =>
+        w.db.prepare("UPDATE artifact_jobs SET state = ?, image_attempts = 1, lease_token = 'old-process', lease_until = ?, not_before = 0 WHERE paper_id = ?").run(state, future, id);
+      set(lost, "GENERATING");
+      set(kept, "GENERATING");
+      set(reviewed, "REVIEWING");
+      writeFileSync(join(w.dir, `${w.job(kept).public_id}.webp`), WEBP);
+      writeFileSync(join(w.dir, `${w.job(reviewed).public_id}.webp`), WEBP);
+      w.db.prepare("UPDATE artifact_jobs SET file_key = ? WHERE paper_id = ?").run(`${w.job(reviewed).public_id}.webp`, reviewed);
+      const next = world({ db: w.db, dir: w.dir, enabled });
+      await next.worker.wake();
+      // and past the old lease's expiry, nothing is left stranded
+      next.advance(200_000);
+      await next.worker.wake();
+      // a dispatched image with no file is unknown, never resent
+      expect(next.job(lost)).toMatchObject({ state: "GENERATION_UNKNOWN", error_code: "interrupted_after_dispatch" });
+      expect(next.control.calls.image).toBe(0);
+      if (enabled) {
+        // a finalized file is adopted and inspected; a lost review is redone
+        expect(next.job(kept).state).toBe("PUBLISHED");
+        expect(next.job(reviewed).state).toBe("PUBLISHED");
+      } else {
+        expect(next.job(kept).state).toBe("REVIEW_QUEUED");
+        expect(next.job(reviewed).state).toBe("REVIEW_QUEUED");
+      }
+      for (const id of [lost, kept, reviewed]) expect(["GENERATING", "REVIEWING"]).not.toContain(next.job(id).state);
+      await next.done();
+      w.restore();
+    });
+  }
+
   it("an operator retry of an unknown generation sends exactly one more", async () => {
     const w = world();
     const id = w.save("RELEASE");
@@ -480,6 +521,39 @@ describe("limits", () => {
     await w.worker.wake();
     expect(w.job(id)).toMatchObject({ state: "IMAGE_QUEUED", error_code: "storage_full" });
     expect(w.control.calls.image).toBe(0);
+    await w.done();
+  });
+
+  it("applies a hide within a second while an unrelated image request is still held", async () => {
+    const w = world();
+    const shown = w.save("RELEASE");
+    await w.burnAndSettle(shown);
+    await w.worker.wake();
+    const published = w.changes[0] as Extract<GalleryChange, { type: "artifact:published" }>;
+    const pid = published.artifact.id;
+    const slow = w.save("RELEASE");
+    await w.burnAndSettle(slow);
+    const held = deferred<GeneratedImage>();
+    w.control.image.push(() => held.promise);
+    const running = w.worker.wake();
+    await vi.waitFor(() => expect(w.job(slow).state).toBe("GENERATING"));
+    enqueueAdminJob(w.db, "hide", pid, "reported", Date.now());
+    void w.worker.wake();
+    // the generation is still unresolved while we check
+    await vi.waitFor(
+      () => expect(w.db.prepare("SELECT status, version FROM artifacts WHERE id = ?").get(pid)).toEqual({ status: "HIDDEN", version: 2 }),
+      { timeout: 1_200 },
+    );
+    expect(w.job(slow).state).toBe("GENERATING");
+    const hides = w.changes.filter((c) => c.type === "artifact:hidden");
+    expect(hides).toEqual([{ type: "artifact:hidden", revision: published.revision + 1, total: 0, id: pid, version: 2 }]);
+    await vi.waitFor(() => expect(existsSync(join(w.dir, `${pid}.webp`))).toBe(false));
+    // the late result goes on to publish its own record and cannot undo the hide
+    held.resolve({ bytes: WEBP, width: 1024, height: 1024 });
+    await running;
+    await w.worker.wake();
+    expect(w.db.prepare("SELECT status FROM artifacts WHERE id = ?").get(pid)).toEqual({ status: "HIDDEN" });
+    expect(w.job(slow).state).toBe("PUBLISHED");
     await w.done();
   });
 
