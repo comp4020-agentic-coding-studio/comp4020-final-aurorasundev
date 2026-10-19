@@ -568,10 +568,14 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       // the open record was hidden: its ghost breaks up in the hero frame,
       // and whichever record shifts into its place gathers in on the belt
       // with the close the page now asks for (no sleeve is left half-swapped)
+      const wasClosing = closing;
       stopTimeline(false);
       c.hero = 0;
       swap.outgoing.length = 0;
       swap.incoming.v = reduced() ? 0 : 1;
+      // hidden mid-close: the page is not going to ask again, so the close
+      // carries on from here and still hands back once everything gathers
+      if (wasClosing && !open) startClose();
     }
     wheelStart = null;
     const fromPlace = Math.round(target);
@@ -630,6 +634,13 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
   // incoming sleeve gathers from wherever its own exit has it now
   function moveHero(m: number): number {
     return retarget(swap, c, heroM, m, cardRitual(m, heroM, c, swap, exits, closing).dissolve);
+  }
+  // the close; its hand back is its last beat, once every card has gathered
+  function startClose() {
+    const next = closeTimeline(c, swap, () => {
+      if (tl === next) cb.onHandBack();
+    });
+    play(next, true);
   }
   function arriveWhenSettled() {
     arriveDue = true;
@@ -1198,11 +1209,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
         play(next);
       } else {
         if (inputOn) observer.enable();
-        // the hand back is the close's last beat: every card has gathered
-        const next = closeTimeline(c, swap, () => {
-          if (tl === next) cb.onHandBack();
-        });
-        play(next, true);
+        startClose();
       }
       dirty = 4;
     },
