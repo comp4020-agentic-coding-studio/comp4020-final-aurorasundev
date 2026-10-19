@@ -77,6 +77,36 @@ describe("the brief request at ignition", () => {
     expect(parts[1]).toEqual({ type: "input_image", image_url: "data:image/png;base64,AAAA", detail: "low" });
   });
 
+  it("samples the brief with variety, while every check stays deterministic", async () => {
+    const briefApi = fakeApi(() => completed(brief));
+    await openAiArtifactProvider("k", briefApi.impl).extractBrief({ text: "w", drawing: null }, signal());
+    const briefTemperature = briefApi.sent[0].body.temperature as number;
+    expect(briefTemperature).toBeGreaterThanOrEqual(0.8);
+    expect(briefTemperature).toBeLessThanOrEqual(1);
+
+    let responses = 0;
+    const checkApi = fakeApi((path) => {
+      if (path.endsWith("/moderations")) return json({ results: [{ flagged: false, categories: NO_FLAGS }] });
+      responses++;
+      if (responses === 1) return completed({ decision: "allow", reason: "none", certainty: "clear", policy_version: POLICY_VERSION });
+      return completed({ decision: "allow", legible_text: false, face: false, identifiable_place: false, certainty: "clear" });
+    });
+    const { openAiProvider } = await import("../server/moderation.ts");
+    await openAiArtifactProvider("k", checkApi.impl, openAiProvider("k", checkApi.impl)).inspectImage(WEBP, signal());
+    const checks = checkApi.sent.filter((s) => s.path === "/v1/responses");
+    expect(checks).toHaveLength(2);
+    for (const check of checks) expect(check.body.temperature).toBe(0);
+  });
+
+  it("a brief at any temperature is still held to the exact schema", async () => {
+    for (const bad of [{ ...brief, palette: "neon" }, { ...brief, note: SOURCE_CANARY }]) {
+      const err = await openAiArtifactProvider("k", fakeApi(() => completed(bad)).impl)
+        .extractBrief({ text: "w", drawing: null }, signal())
+        .catch((e: unknown) => e);
+      expect((err as ArtifactError).code).toBe("brief_malformed");
+    }
+  });
+
   it("rejects unknown keys, nested extras, values outside the lists and free text", () => {
     for (const bad of [
       { ...brief, title: "my secret" },
