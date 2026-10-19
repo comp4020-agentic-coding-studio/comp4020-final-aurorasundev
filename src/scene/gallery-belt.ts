@@ -1,0 +1,955 @@
+import * as THREE from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { gsap } from "gsap";
+import { Observer } from "gsap/Observer";
+import { backRise, beltCards, cardFrame, CAMERA_HALF, depthScale, backFade, backTone, dissolveAt, fitBelt, globeAngle, halfOf, ringSize, RING_DESKTOP, swipeTarget, type Fit } from "./belt-layout.ts";
+import { createBeltGlobe } from "./belt-globe.ts";
+import { mergeOrbitItems, nextFocusIndex, type OrbitItem } from "./orbit-items.ts";
+import { advanceSpin, dampPhase, spinning, wheelItems, wheelSnap, SPIN_GAIN, SPIN_IDLE, SPIN_RESPONSE, WHEEL_QUIET_MS } from "./gallery-motion.ts";
+import { closeTimeline, local, newChoreo, openTimeline, slideStages, stepTimeline, type SpinClock } from "./record-timeline.ts";
+import { createSleeveKit, type SleeveMesh } from "./sleeve-kit.ts";
+import { applyVinylSheen } from "./vinyl-sheen.ts";
+
+// The Gallery's record exhibition as a belt round a globe (design 2026-10-19
+// §4): an orthographic view of a flattened sphere drawn in graphite thread
+// that counter-rotates against a belt of square sleeves on its equator, with
+// the charcoal record in front of the globe at the centre. Back to front: the
+// globe's lines, the belt's far half (dimmed, fading toward the back), the
+// record, the belt's near half (passing across the record's lower edge).
+//
+// Everything moves from one shared phase, as in the orbit before it: input
+// changes a target, one ticker damps toward it (the only damping), and a
+// settled gesture reports a focused id once. Card m sits at azimuth
+// (m - phase)·step and shows record m mod n of the 48-record window, so
+// turning on wraps through the whole window; a card changes record only at
+// the very back. Opening and closing are the record-timeline.ts timelines;
+// every pose is a pure function of the phase and those values. Per-frame
+// state stays here, never in React. Text is HTML; only the generated images
+// and the fixed materials in /textures/gallery/ are drawn.
+//
+// Hooks for the next steps: each card carries `dissolve` (0 whole .. 1 gone)
+// from the layout's dissolve zones (belt-layout.ts dissolveZones), read here
+// as a plain alpha fade; step ③ turns it into particles.
+//
+// It imports nothing from the room: no paper scene, furnace, fire or physics.
+
+gsap.registerPlugin(Observer);
+
+export type { OrbitItem };
+export type OrbitCallbacks = {
+  onFocus: (id: string) => void;
+  onOpen: (id: string) => void;
+  onLost: () => void;
+  // an open (or a step inside one) has finished: the sleeve and record rest
+  // exactly on the HTML frames, which can take over now
+  onArrive: () => void;
+  // a close has gone far enough for the browsing page to come back
+  onHandBack: () => void;
+  // the HTML half of an open, nested into the scene's timeline (optional)
+  reveal?: () => gsap.core.Timeline | null;
+  // the scene has decoded its textures, compiled and drawn its warm-up frames
+  onReady?: () => void;
+};
+export type OrbitOptions = {
+  // the page's entry is showing: the scene starts unseen and without input,
+  // and the page's transition drives its entrance (setEntry()) instead
+  held?: boolean;
+  // an optional slow idle turn of the globe's meridians, radians per second
+  // (0, the default, keeps every rest pose the same composition)
+  drift?: number;
+};
+export type GalleryOrbit = {
+  setItems: (items: OrbitItem[]) => void;
+  setOpen: (open: boolean) => void;
+  focus: (id: string) => void;
+  step: (dir: 1 | -1) => void;
+  // whether wheel, drag and clicks reach the scene (off while p < 1)
+  setInput: (enabled: boolean) => void;
+  // the scene's entrance, 0..1, set by the page's transition while held
+  setEntry: (value: number) => void;
+  // nothing turning: no drag, no wheel gesture, the phase on its target
+  atRest: () => boolean;
+  dispose: () => void;
+};
+// The page lays out three HTML boxes the scene follows: the browsing band,
+// and where the opened record's square art and disc sit (G02), so the WebGL
+// objects arrive exactly where the HTML record takes over.
+export type OrbitFrame = { band: HTMLElement; art: HTMLElement; disc: HTMLElement };
+
+const TEX = "/textures/gallery/";
+// vinyl-face.png: the record's edge and its label window, as fractions of the
+// plate's half-width (measured from the file's alpha)
+const FACE_EDGE = 0.945;
+const FACE_WINDOW = 0.383;
+const MAX_TEXTURES = 14;
+// the opened record's depth: in front of everything on the belt
+const HERO_Z = 8;
+
+const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const smooth = (a: number, b: number, x: number) => {
+  const t = clamp((x - a) / (b - a), 0, 1);
+  return t * t * (3 - 2 * t);
+};
+const mod = (n: number, m: number) => ((n % m) + m) % m;
+// signed ring distance in (-m/2, m/2]
+const ringDelta = (n: number, m: number) => {
+  const d = mod(n, m);
+  return d > m / 2 ? d - m : d;
+};
+
+type Pose = { x: number; y: number; z: number; size: number; q: THREE.Quaternion; fade: number; tone: number };
+const IDENTITY = new THREE.Quaternion();
+function blend(a: Pose, b: Pose, t: number): Pose {
+  return {
+    x: lerp(a.x, b.x, t),
+    y: lerp(a.y, b.y, t),
+    z: lerp(a.z, b.z, t),
+    size: lerp(a.size, b.size, t),
+    q: a.q.clone().slerp(b.q, t),
+    fade: lerp(a.fade, b.fade, t),
+    tone: lerp(a.tone, b.tone, t),
+  };
+}
+
+type Layout = Fit & {
+  w: number;
+  h: number;
+  disc: Fit["disc"] & { q: THREE.Quaternion };
+  hero: Pose;
+  discDetail: Pose;
+};
+
+// One card of the ring: a pooled sleeve that shows whichever record its
+// place on the belt holds now.
+type Card = {
+  slot: number;
+  mesh: SleeveMesh;
+  // the belt position it holds this frame (null: not on the ring)
+  m: number | null;
+  id: string | null;
+  theta: number;
+  pose: Pose | null;
+  // 0 whole .. 1 gone: the dissolve zones, the open's exit and an operator
+  // hide all land here. Step ③ draws it as particles; for now it is alpha.
+  dissolve: number;
+  // the pointer's hover lift, 0..1, eased by its own small tween
+  lift: { v: number };
+  // each material's own colour, so the depth tone can dim it
+  base: THREE.Color[];
+};
+
+export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: OrbitCallbacks, opts: OrbitOptions = {}): GalleryOrbit {
+  const band = frames.band;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.setClearColor(0x000000, 0);
+  host.appendChild(renderer.domElement);
+  renderer.domElement.setAttribute("aria-hidden", "true");
+  const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+
+  const scene = new THREE.Scene();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const room = new RoomEnvironment(renderer);
+  const envTarget = pmrem.fromScene(room, 0.04);
+  scene.environment = envTarget.texture;
+  room.dispose();
+  pmrem.dispose();
+  scene.add(new THREE.HemisphereLight(0xf6f5f0, 0x8d9695, 1.5));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+  sun.position.set(-0.55, 0.8, 0.7);
+  scene.add(sun);
+  const sunDir = sun.position.clone().normalize();
+
+  // Orthographic, as in the reference: the belt neither bulges nor steepens,
+  // and the globe's ellipses stay exact. Half-height CAMERA_HALF world units.
+  const camera = new THREE.OrthographicCamera(-CAMERA_HALF, CAMERA_HALF, CAMERA_HALF, -CAMERA_HALF, 0.1, 100);
+  camera.position.set(0, 0, 40);
+
+  // --- fixed materials, decoded once ---------------------------------------
+  const loader = new THREE.TextureLoader();
+  const loads: Promise<void>[] = [];
+  const fixed = (name: string, color = true) => {
+    let done = () => {};
+    loads.push(new Promise<void>((r) => (done = r)));
+    const t = loader.load(
+      TEX + name,
+      () => {
+        dirty = 4;
+        done();
+      },
+      undefined,
+      () => done(),
+    );
+    t.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    t.anisotropy = maxAniso;
+    return t;
+  };
+  const faceTex = fixed("vinyl-face.png");
+  const grooveTex = fixed("vinyl-grooves-height.png", false);
+  const stockTex = fixed("paper-stock.jpg");
+  const frameTex = fixed("sleeve-frame.png");
+
+  const unitPlane = new THREE.PlaneGeometry(1, 1);
+  const unitCircle = new THREE.CircleGeometry(1, 96);
+
+  // --- the globe -----------------------------------------------------------
+  const globe = createBeltGlobe();
+  const globeRoot = new THREE.Group();
+  globeRoot.add(globe.group);
+  globe.group.traverse((o) => (o.renderOrder = -100));
+  scene.add(globeRoot);
+
+  // --- the record ----------------------------------------------------------
+  const disc = new THREE.Group();
+  const spin = new THREE.Group();
+  disc.add(spin);
+  const rimMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1b, roughness: 0.5, transparent: true });
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.012, 128, 1, true), rimMat);
+  rim.rotation.x = Math.PI / 2;
+  const labelMat = new THREE.MeshBasicMaterial({ map: stockTex, transparent: true });
+  const label = new THREE.Mesh(unitCircle, labelMat);
+  label.scale.setScalar((FACE_WINDOW / FACE_EDGE) * 1.03);
+  label.position.z = -0.002;
+  const holeMat = new THREE.MeshBasicMaterial({ color: 0x22221f, transparent: true });
+  const hole = new THREE.Mesh(unitCircle, holeMat);
+  hole.scale.setScalar(0.03);
+  hole.position.z = 0.001;
+  const faceMat = new THREE.MeshStandardMaterial({
+    map: faceTex,
+    bumpMap: grooveTex,
+    bumpScale: 0.6,
+    roughness: 0.42,
+    metalness: 0,
+    envMapIntensity: 0.55,
+    transparent: true,
+    alphaTest: 0.01,
+  });
+  const sheen = applyVinylSheen(faceMat, { inner: FACE_WINDOW, outer: FACE_EDGE });
+  const face = new THREE.Mesh(unitPlane, faceMat);
+  face.scale.setScalar(2 / FACE_EDGE);
+  face.position.z = 0.003;
+  spin.add(rim, label, hole, face);
+  scene.add(disc);
+  const discParts: THREE.Object3D[] = [rim, label, hole, face];
+  const discMats: THREE.Material[] = [rimMat, labelMat, holeMat, faceMat];
+
+  // --- images: a bounded LRU on the GPU --------------------------------------
+  const textures = new Map<string, { tex: THREE.Texture; used: number; ready: boolean; settled: Promise<void> }>();
+  let useClock = 0;
+  function artFor(item: { id: string; url: string }): THREE.Texture | null {
+    const known = textures.get(item.id);
+    if (known) {
+      known.used = ++useClock;
+      return known.ready ? known.tex : null;
+    }
+    let settle = () => {};
+    const entry = { tex: null as unknown as THREE.Texture, used: ++useClock, ready: false, settled: new Promise<void>((r) => (settle = r)) };
+    entry.tex = loader.load(
+      item.url,
+      () => {
+        entry.ready = true;
+        dirty = 4;
+        settle();
+      },
+      undefined,
+      // a hidden or missing image keeps the blank stock
+      () => settle(),
+    );
+    entry.tex.colorSpace = THREE.SRGBColorSpace;
+    entry.tex.anisotropy = maxAniso;
+    textures.set(item.id, entry);
+    if (textures.size > MAX_TEXTURES) {
+      let oldest: string | null = null;
+      for (const [id, t] of textures) if (!oldest || t.used < textures.get(oldest)!.used) oldest = id;
+      if (oldest && oldest !== item.id) {
+        textures.get(oldest)!.tex.dispose();
+        textures.delete(oldest);
+      }
+    }
+    return null;
+  }
+
+  // --- the ring's pooled cards -------------------------------------------------
+  const kit = createSleeveKit(stockTex, frameTex);
+  const cards: Card[] = [];
+  for (let slot = 0; slot < RING_DESKTOP; slot++) {
+    const mesh = kit.make();
+    mesh.body.userData.slot = slot;
+    mesh.group.visible = false;
+    scene.add(mesh.group);
+    const base = mesh.mats.map((m) => (m as THREE.MeshStandardMaterial).color.clone());
+    cards.push({ slot, mesh, m: null, id: null, theta: 0, pose: null, dissolve: 0, lift: { v: 0 }, base });
+  }
+
+  // --- layout from the viewport and the HTML frames ------------------------
+  let L: Layout;
+  function measure() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, w <= 600 ? 1.25 : 1.5);
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(w, h);
+    const aspect = w / h;
+    camera.left = -CAMERA_HALF * aspect;
+    camera.right = CAMERA_HALF * aspect;
+    camera.top = CAMERA_HALF;
+    camera.bottom = -CAMERA_HALF;
+    camera.updateProjectionMatrix();
+    globe.setResolution(w, h, dpr);
+
+    const r = band.getBoundingClientRect();
+    const fit = fitBelt({ w, h, bandTop: r.height > 0 ? r.top : h * 0.16, bandH: r.height > 0 ? r.height : h * 0.66 });
+    const k = fit.k;
+    const toY = (cssY: number) => (h / 2 - cssY) * k;
+    const box = (el: HTMLElement) => {
+      const b = el.getBoundingClientRect();
+      return b.width > 0 ? { x: (b.left + b.width / 2 - w / 2) * k, y: toY(b.top + b.height / 2), size: b.width * k } : null;
+    };
+    const art = box(frames.art);
+    const rec = box(frames.disc);
+    const still = (x: number, y: number, z: number, size: number): Pose => ({ x, y, z, size, q: IDENTITY.clone(), fade: 1, tone: 1 });
+    L = {
+      ...fit,
+      w,
+      h,
+      disc: { ...fit.disc, q: new THREE.Quaternion().setFromEuler(new THREE.Euler(-fit.disc.tilt, fit.phone ? 0 : -0.16, 0)) },
+      hero: art ? still(art.x, art.y, HERO_Z, art.size) : still(0, fit.cy, HERO_Z, fit.card * fit.S * 1.4),
+      // compact: the record tucks behind the sleeve, as the HTML one does
+      discDetail: rec ? still(rec.x, rec.y, HERO_Z + (fit.compact ? -0.05 : 0.05), rec.size / 2) : still(-w * k * 0.28, fit.cy, HERO_Z + 0.05, h * k * 0.29),
+    };
+    globeRoot.position.set(L.cx, L.cy, 0);
+    globeRoot.scale.setScalar(L.S);
+    globe.setScale(L.S);
+    dirty = 4;
+  }
+
+  // --- the shared phase and the choreography -------------------------------
+  let items: OrbitItem[] = [];
+  let pending: OrbitItem[] | null = null;
+  let phase = 0;
+  let target = 0;
+  let reported: string | null = null;
+  let dragging = false;
+  let dragStart = 0;
+  let dragDx = 0;
+  // the whole item a wheel gesture began on, while it is under way
+  let wheelStart: number | null = null;
+  let dirty = 4;
+  let open = false;
+  const intro = { entry: 0 };
+  let inputOn = !opts.held;
+  const c = newChoreo();
+  const spinClock: SpinClock = { angle: 0, boost: 0 };
+  let tl: gsap.core.Timeline | null = null;
+  let arriveDue = false;
+  let revealTl: gsap.core.Timeline | null = null;
+  // the globe stops counter-rotating while a record is open: it holds the
+  // angle of the record that opened and catches up again as it closes
+  let heldGlobe = 0;
+  let drift = 0;
+  const still = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+  let idleRate = still?.matches ? 0 : SPIN_IDLE;
+  let driftRate = still?.matches ? 0 : (opts.drift ?? 0);
+  const onStill = () => {
+    idleRate = still?.matches ? 0 : SPIN_IDLE;
+    driftRate = still?.matches ? 0 : (opts.drift ?? 0);
+    dirty = 4;
+  };
+  still?.addEventListener?.("change", onStill);
+
+  const count = () => items.length;
+  const ring = () => ringSize(L.phone, count());
+  const focusIndex = () => (count() ? mod(Math.round(target), count()) : -1);
+
+  function applyItems(next: OrbitItem[]) {
+    const prev = items;
+    const prevIndex = focusIndex();
+    const offset = phase - Math.round(target);
+    const fraction = target - Math.round(target);
+    items = next;
+    const keep = new Set(next.map((i) => i.id));
+    for (const [id, t] of textures) {
+      if (keep.has(id)) continue;
+      if (labelMat.map === t.tex) {
+        labelMat.map = stockTex;
+        labelMat.needsUpdate = true;
+      }
+      for (const card of cards) {
+        if (card.mesh.artMat.map === t.tex) {
+          card.mesh.artMat.map = stockTex;
+          card.mesh.artMat.needsUpdate = true;
+        }
+      }
+      t.tex.dispose();
+      textures.delete(id);
+    }
+    // a removed record's card leaves at once, wherever it is
+    for (const card of cards) {
+      if (card.id && !keep.has(card.id)) {
+        card.id = null;
+        card.m = null;
+        card.mesh.group.visible = false;
+        if (hovered === card) setHover(null);
+      }
+    }
+    const lost = prevIndex >= 0 && !keep.has(prev[prevIndex].id);
+    if (lost && c.hero > 0) {
+      stopTimeline(false);
+      c.hero = 0;
+    }
+    wheelStart = null;
+    if (!next.length) {
+      phase = target = 0;
+    } else {
+      const idx = nextFocusIndex(prev, prevIndex, next);
+      if (dragging) {
+        dragStart += idx - Math.round(target);
+        target = idx + fraction;
+      } else target = idx;
+      phase = idx + clamp(offset, -0.5, 0.5);
+    }
+    // the globe's angle is a function of the phase; a whole-step jump here
+    // lands on the same composition (globeSpin is snapped)
+    dirty = 4;
+    settle(!dragging || !next.some((i) => i.id === reported));
+  }
+
+  // one focus report per settled position, never one per frame
+  function settle(force = false) {
+    if (!count()) {
+      reported = null;
+      return;
+    }
+    if (!force && (dragging || wheelStart !== null || Math.abs(target - phase) > 0.02)) return;
+    const id = items[focusIndex()].id;
+    if (id !== reported) {
+      reported = id;
+      cb.onFocus(id);
+    }
+  }
+
+  function snap(to?: number) {
+    target = to ?? Math.round(target);
+    dirty = 4;
+  }
+
+  function stopTimeline(keepText: boolean) {
+    if (revealTl) {
+      if (keepText) revealTl.progress(1);
+      (revealTl.data as { revert?: () => void } | undefined)?.revert?.();
+    }
+    revealTl = null;
+    arriveDue = false;
+    tl?.kill();
+    tl = null;
+  }
+  function arriveWhenSettled() {
+    arriveDue = true;
+    dirty = Math.max(dirty, 1);
+  }
+  function play(next: gsap.core.Timeline) {
+    tl = next;
+    next.eventCallback("onUpdate", () => (dirty = Math.max(dirty, 1)));
+    next.eventCallback("onComplete", () => {
+      if (tl === next) tl = null;
+      dirty = 4;
+    });
+  }
+
+  // --- input: wheel, drag and swipe on the stage only ------------------------
+  let wheelTimer = 0;
+  const pxPerItem = () => (L.phone ? 150 : 280);
+  const observer = Observer.create({
+    target: host,
+    type: "wheel,touch,pointer",
+    tolerance: 4,
+    dragMinimum: 4,
+    lockAxis: true,
+    onWheel: (self) => {
+      const e = self.event as WheelEvent;
+      if (open || !inputOn || !count() || e.ctrlKey || e.metaKey) return;
+      e.preventDefault();
+      if (wheelStart === null) wheelStart = Math.round(target);
+      target += wheelItems(e);
+      dirty = 4;
+      // snap once the wheel goes quiet, so a trackpad's glide is never cut
+      // off; a hard flick may cross several cards, with no cap
+      clearTimeout(wheelTimer);
+      wheelTimer = window.setTimeout(() => {
+        const start = wheelStart;
+        wheelStart = null;
+        snap(start === null ? undefined : wheelSnap(start, target));
+      }, WHEEL_QUIET_MS);
+    },
+    onPress: () => {
+      if (open || !inputOn || !count()) return;
+      dragStart = Math.round(target);
+      dragDx = 0;
+    },
+    onDragStart: () => {
+      if (open || !inputOn || !count()) return;
+      dragging = true;
+      setHover(null);
+    },
+    onDrag: (self) => {
+      if (!dragging) return;
+      dragDx += self.deltaX;
+      target -= self.deltaX / pxPerItem();
+      dirty = 4;
+    },
+    onDragEnd: (self) => {
+      if (!dragging) return;
+      dragging = false;
+      if (L.phone) {
+        // a swipe ignores how far it went: exactly one step from where it began
+        snap(swipeTarget(dragStart, dragDx, self.velocityX));
+      } else {
+        snap(clamp(Math.round(target - self.velocityX / pxPerItem() / 6), dragStart - 3, dragStart + 3));
+      }
+      if (pending) {
+        const next = pending;
+        pending = null;
+        applyItems(next);
+      }
+    },
+  });
+
+  // a click (not a drag) opens the record, or turns a card to the front
+  const raycaster = new THREE.Raycaster();
+  const ndc = new THREE.Vector2();
+  const pickable = (card: Card) => card.m !== null && card.mesh.group.visible && card.pose !== null && halfOf(card.theta) === "front" && card.pose.fade * (1 - card.dissolve) > 0.5;
+  function pick(x: number, y: number): THREE.Intersection | undefined {
+    ndc.set((x / L.w) * 2 - 1, -(y / L.h) * 2 + 1);
+    raycaster.setFromCamera(ndc, camera);
+    const targets: THREE.Object3D[] = [];
+    for (const card of cards) if (pickable(card)) targets.push(card.mesh.body);
+    if (disc.visible) targets.push(face, label);
+    return raycaster.intersectObjects(targets, false)[0];
+  }
+  let down: { x: number; y: number; t: number } | null = null;
+  const onDown = (e: PointerEvent) => {
+    down = { x: e.clientX, y: e.clientY, t: performance.now() };
+  };
+  const onUp = (e: PointerEvent) => {
+    const d = down;
+    down = null;
+    if (!d || open || !inputOn || !count()) return;
+    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || performance.now() - d.t > 500) return;
+    const hit = pick(e.clientX, e.clientY);
+    if (!hit) return;
+    const slot = hit.object.userData.slot as number | undefined;
+    const front = Math.round(target);
+    const card = slot === undefined ? null : cards[slot];
+    // the record, or the card in front: open it
+    if (!card || card.m === front) {
+      if (Math.abs(target - phase) < 0.3) cb.onOpen(items[focusIndex()].id);
+      return;
+    }
+    if (card.m !== null) snap(card.m);
+  };
+  host.addEventListener("pointerdown", onDown);
+  host.addEventListener("pointerup", onUp);
+
+  // hover: on a desktop pointer a front-half card lifts a little
+  let hovered: Card | null = null;
+  function setHover(next: Card | null) {
+    if (next === hovered) return;
+    for (const [s, v] of [
+      [hovered, 0],
+      [next, 1],
+    ] as const) {
+      if (!s) continue;
+      gsap.to(s.lift, { v, duration: v ? 0.32 : 0.45, ease: v ? "power2.out" : "power2.inOut", overwrite: true, onUpdate: () => (dirty = Math.max(dirty, 1)) });
+    }
+    hovered = next;
+    host.style.cursor = next ? "pointer" : "";
+  }
+  const onMove = (e: PointerEvent) => {
+    if (e.pointerType !== "mouse" || L.phone || open || !inputOn || dragging || !count()) return setHover(null);
+    const hit = pick(e.clientX, e.clientY);
+    const slot = hit?.object.userData.slot as number | undefined;
+    setHover(slot === undefined ? null : cards[slot]);
+    if (slot === undefined && hit) host.style.cursor = "pointer";
+  };
+  const onLeave = () => setHover(null);
+  host.addEventListener("pointermove", onMove);
+  host.addEventListener("pointerleave", onLeave);
+
+  // --- poses -----------------------------------------------------------------
+  const basis = new THREE.Matrix4();
+  const vRight = new THREE.Vector3();
+  const vUp = new THREE.Vector3();
+  const vFace = new THREE.Vector3();
+
+  // where the card at azimuth θ sits on the belt: on the curve, facing out
+  // along the surface (the far half turns its face to us, through the globe),
+  // smaller and dimmer with depth since an orthographic view has no falloff
+  function beltPose(theta: number): Pose {
+    const f = cardFrame(theta);
+    const facing = Math.cos(theta) >= 0 ? 1 : -1;
+    vUp.set(f.up.x, f.up.y, f.up.z);
+    vFace.set(f.out.x * facing, f.out.y * facing, f.out.z * facing);
+    vRight.crossVectors(vUp, vFace);
+    basis.makeBasis(vRight, vUp, vFace);
+    const q = new THREE.Quaternion().setFromRotationMatrix(basis);
+    const back = facing < 0;
+    return {
+      x: L.cx + f.p.x * L.S,
+      y: L.cy + (f.p.y + backRise(theta)) * L.S,
+      z: f.p.z * L.S,
+      size: L.card * L.S * depthScale(theta),
+      q,
+      fade: back ? (L.phone ? 0 : backFade(theta)) : 1,
+      tone: back ? backTone(theta) : 1,
+    };
+  }
+
+  // the card at belt place m, given the choreography: the others fade aside
+  // one after another, the chosen one comes forward to the HTML art frame,
+  // a hovered one lifts, and the page's entrance gathers them from the front
+  function cardPose(card: Card, s: number): Pose {
+    let p = beltPose(card.theta);
+    const focusWeight = clamp(1 - Math.abs(s), 0, 1);
+    const aside = local(c.exit, Math.abs(s), c.order) * (1 - focusWeight);
+    card.dissolve = Math.max(dissolveAt(card.theta, L.phone), aside);
+    if (aside > 0) {
+      // a small step outward along the belt as it goes
+      p.x = L.cx + (p.x - L.cx) * (1 + 0.12 * aside);
+      p.size *= 1 - 0.12 * aside;
+    }
+    if (c.hero > 0 && focusWeight > 0) {
+      p = blend(p, L.hero, c.hero * focusWeight);
+      card.dissolve *= 1 - c.hero * focusWeight;
+    }
+    const lift = card.lift.v;
+    if (lift > 0) {
+      p.y += 0.05 * p.size * lift;
+      p.z += 0.2 * lift;
+      p.size *= 1 + 0.045 * lift;
+    }
+    // the entrance: the cards gather one by one from the front outward
+    const g = smooth(0.35 + 0.05 * Math.min(Math.abs(s), 5), 0.75 + 0.05 * Math.min(Math.abs(s), 5), intro.entry);
+    p.size *= 0.85 + 0.15 * g;
+    p.fade *= g;
+    return p;
+  }
+
+  // the record: at the centre, tucked into the chosen sleeve, then slid out
+  // of it onto the HTML disc frame
+  function discPoseFor(hp: Pose | null): Pose {
+    let dp: Pose = { x: L.disc.x, y: L.disc.y, z: 0, size: L.disc.r, q: L.disc.q.clone(), fade: 1, tone: 1 };
+    if (hp && c.tuck > 0) {
+      const tucked: Pose = { x: hp.x, y: hp.y, z: hp.z - 0.05, size: hp.size * 0.46, q: hp.q.clone(), fade: 1, tone: 1 };
+      dp = blend(dp, tucked, c.tuck);
+      if (c.slide > 0) {
+        const { out, settle: rest } = slideStages(c.slide);
+        const D = L.discDetail;
+        // a record that rests in front of the sleeve first clears its edge,
+        // so it never passes through the paper
+        const front = D.z >= L.hero.z;
+        const halfW = (L.w * L.k) / 2;
+        const clearX = front ? Math.max(Math.min(D.x, L.hero.x - L.hero.size / 2 - D.size * 0.98), -halfW + D.size * 0.8) : D.x;
+        const mid: Pose = { x: clearX, y: lerp(hp.y, D.y, 0.5), z: tucked.z, size: D.size, q: IDENTITY.clone(), fade: 1, tone: 1 };
+        dp = blend(blend(dp, mid, out), D, rest);
+        dp.z = lerp(tucked.z, D.z, smooth(0, 0.15, rest));
+      }
+    }
+    // the entrance: the record rises from the centre and tilts to rest
+    const e = smooth(0.15, 0.7, intro.entry);
+    dp.y -= (1 - e) * 0.35 * L.disc.r;
+    if (e < 1) dp.q = IDENTITY.clone().slerp(dp.q, e);
+    return dp;
+  }
+
+  function tint(card: Card, tone: number) {
+    card.mesh.mats.forEach((m, i) => {
+      (m as THREE.MeshStandardMaterial).color.copy(card.base[i]).multiplyScalar(tone);
+    });
+  }
+
+  // --- per frame -----------------------------------------------------------
+  const clock = new THREE.Clock();
+  function frame() {
+    if (document.hidden) return;
+    if (warmFrames > 0) dirty = Math.max(dirty, 1);
+    const dt = Math.min(clock.getDelta(), 0.05);
+    const prev = phase;
+    phase = dampPhase(phase, target, dt);
+    const moving = phase !== prev;
+    settle();
+    if (arriveDue && open && phase === target) {
+      arriveDue = false;
+      cb.onArrive();
+    }
+
+    const n = count();
+    const R = ring();
+    const entry = intro.entry;
+    const fi = n ? mod(Math.round(phase), n) : -1;
+
+    // the globe: counter-rotates against the belt, held while a record is
+    // open, and draws in from the poles on the page's entrance
+    const live = R ? globeAngle(phase, R) : 0;
+    if (driftRate) drift += driftRate * dt * (1 - c.hero);
+    globe.spin.rotation.y = lerp(live, heldGlobe, c.hero) + drift;
+    globe.setDraw(smooth(0, 0.5, entry));
+    globe.setOpacity(1 - 0.7 * c.hero);
+
+    // the ring's cards
+    const placed = n ? beltCards(phase, R, n) : [];
+    const used = new Set<number>();
+    const order: Card[] = [];
+    let heroPose: Pose | null = null;
+    for (const bc of placed) {
+      const card = cards[mod(bc.m, R)];
+      used.add(card.slot);
+      const item = items[bc.index];
+      card.m = bc.m;
+      card.id = item.id;
+      card.theta = bc.theta;
+      const s = bc.m - phase;
+      const p = cardPose(card, s);
+      card.pose = p;
+      if (bc.m === Math.round(phase)) heroPose = p;
+      const alpha = p.fade * (1 - card.dissolve);
+      const g = card.mesh.group;
+      g.visible = alpha > 0.01;
+      if (!g.visible) continue;
+      g.position.set(p.x, p.y, p.z);
+      g.quaternion.copy(p.q);
+      g.scale.setScalar(p.size);
+      // the card's image; the blank stock until it decodes. A card changes
+      // record only at the very back, where it is faded out (or hidden).
+      const tex = artFor({ id: item.id, url: item.image_url }) ?? stockTex;
+      if (card.mesh.artMat.map !== tex) {
+        card.mesh.artMat.map = tex;
+        card.mesh.artMat.needsUpdate = true;
+      }
+      card.mesh.setOpacity(alpha);
+      tint(card, p.tone);
+      order.push(card);
+    }
+    for (const card of cards) {
+      if (used.has(card.slot)) continue;
+      card.m = null;
+      card.id = null;
+      card.pose = null;
+      card.mesh.group.visible = false;
+    }
+
+    // the record
+    const dp = discPoseFor(heroPose);
+    disc.position.set(dp.x, dp.y, dp.z);
+    disc.quaternion.copy(dp.q);
+    disc.scale.setScalar(dp.size);
+    const idle = idleRate * c.idle;
+    if (!gsap.isTweening(spinClock)) {
+      const phaseVelocity = dt > 0 ? (phase - prev) / dt : 0;
+      Object.assign(spinClock, advanceSpin(spinClock, dt, { idle, phaseVelocity, gain: idleRate ? SPIN_GAIN : 0, response: SPIN_RESPONSE }));
+    }
+    spin.rotation.z = spinClock.angle + (1 - entry) * 0.8;
+    // the phone's opened record is the art alone; the record goes into it
+    const discFade = smooth(0.15, 0.6, entry) * (L.phone ? 1 - smooth(0.35, 0.95, c.tuck) : 1);
+    for (const m of discMats) m.opacity = discFade;
+    disc.visible = discFade > 0.01;
+    if (disc.visible) sheen.update(spin, camera, sunDir, idle + spinClock.boost);
+    const labelItem = fi >= 0 ? items[fi] : null;
+    const labelTex = labelItem ? artFor({ id: labelItem.id, url: labelItem.image_url }) : null;
+    if (labelMat.map !== (labelTex ?? stockTex)) {
+      labelMat.map = labelTex ?? stockTex;
+      labelMat.needsUpdate = true;
+    }
+
+    // back to front: the far half, the record, the near half
+    order.sort((a, b) => a.pose!.z - b.pose!.z);
+    let rank = 1;
+    let discRanked = false;
+    const rankDisc = () => {
+      for (const o of discParts) o.renderOrder = rank++;
+      discRanked = true;
+    };
+    for (const card of order) {
+      if (!discRanked && card.pose!.z > dp.z) rankDisc();
+      card.mesh.group.renderOrder = rank;
+      card.mesh.body.renderOrder = rank++;
+      card.mesh.art.renderOrder = rank++;
+      card.mesh.frame.renderOrder = rank++;
+    }
+    if (!discRanked) rankDisc();
+
+    // render on demand: only while something moves, or the record turns
+    const turning = disc.visible && spinning(spinClock, idle);
+    if (moving || turning || driftRate !== 0 || dirty > 0 || tl !== null || gsap.isTweening(intro)) {
+      renderer.render(scene, camera);
+      if (dirty > 0) dirty--;
+      if (warmFrames > 0 && --warmFrames === 0) cb.onReady?.();
+    }
+  }
+
+  const resize = new ResizeObserver(() => measure());
+  resize.observe(host);
+  resize.observe(band);
+  resize.observe(frames.art);
+  resize.observe(frames.disc);
+  const onLost = (e: Event) => {
+    e.preventDefault();
+    cb.onLost();
+  };
+  renderer.domElement.addEventListener("webglcontextlost", onLost);
+  const onVisible = () => {
+    clock.getDelta();
+    dirty = 4;
+  };
+  document.addEventListener("visibilitychange", onVisible);
+
+  // --- load gating: textures decode, programs compile, three frames draw ---
+  let warmFrames = 0;
+  let disposed = false;
+  let firstItems = () => {};
+  const itemsArrived = new Promise<void>((r) => (firstItems = r));
+  const capped = (p: Promise<unknown>, ms: number) => Promise.race([p, new Promise((r) => setTimeout(r, ms))]);
+  void (async () => {
+    await capped(Promise.all(loads), 6000);
+    await itemsArrived;
+    if (disposed) return;
+    // the records nearest the front, which the entrance shows first
+    const n = count();
+    const near = n ? [0, 1, 2, n - 1, n - 2].filter((i, k, a) => i >= 0 && i < n && a.indexOf(i) === k) : [];
+    for (const i of near) artFor({ id: items[i].id, url: items[i].image_url });
+    await capped(Promise.all(near.map((i) => textures.get(items[i]?.id)?.settled)), 6000);
+    if (disposed) return;
+    // every card and the record visible for one compile (the held entrance
+    // keeps them hidden), so no program waits for its first draw
+    const shown = [...cards.map((c) => c.mesh.group), disc].map((o) => [o, o.visible] as const);
+    for (const [o] of shown) o.visible = true;
+    renderer.compile(scene, camera);
+    for (const [o, v] of shown) o.visible = v;
+    for (const t of [faceTex, grooveTex, stockTex, frameTex]) renderer.initTexture(t);
+    for (const t of textures.values()) if (t.ready) renderer.initTexture(t.tex);
+    warmFrames = 3;
+  })();
+
+  measure();
+  renderer.setAnimationLoop(frame);
+  const introTween: gsap.core.Tween | null = opts.held ? null : gsap.to(intro, { entry: 1, duration: 0.9, ease: "power2.out", delay: 0.05 });
+  if (opts.held) observer.disable();
+
+  return {
+    setItems(next) {
+      if (next.length) firstItems();
+      // a removal applies now, even under a pointer; arrivals and reordering
+      // wait for the gesture to end, and only the latest list is queued
+      const m = mergeOrbitItems(items, next, dragging);
+      pending = m.queued;
+      if (m.now !== items) applyItems(m.now);
+    },
+    setOpen(value) {
+      if (open === value) return;
+      open = value;
+      stopTimeline(false);
+      if (value) {
+        observer.disable();
+        clearTimeout(wheelTimer);
+        wheelStart = null;
+        setHover(null);
+        snap();
+        // the globe holds the open record's rest pose (lerped in by `hero`)
+        heldGlobe = ring() ? globeAngle(Math.round(target), ring()) : 0;
+        const next = openTimeline(c, spinClock, { phone: L.phone });
+        const reveal = cb.reveal?.() ?? null;
+        if (reveal) {
+          next.add(reveal, "land");
+          revealTl = reveal;
+        }
+        next.call(arriveWhenSettled, undefined, ">");
+        play(next);
+      } else {
+        if (inputOn) observer.enable();
+        const next = closeTimeline(c);
+        next.call(() => cb.onHandBack(), undefined, 0.35);
+        play(next);
+      }
+      dirty = 4;
+    },
+    focus(id) {
+      const i = items.findIndex((x) => x.id === id);
+      if (i < 0 || i === focusIndex()) return;
+      snap(Math.round(target) + Math.round(ringDelta(i - Math.round(target), count())));
+    },
+    step(dir) {
+      if (!count()) return;
+      snap(Math.round(target) + dir);
+      if (!open) return;
+      // inside an open record: the belt carries the next sleeve forward
+      // behind it and the record turns once to rest upright
+      stopTimeline(true);
+      const next = stepTimeline(c, spinClock, { phone: L.phone });
+      next.call(arriveWhenSettled, undefined, ">");
+      play(next);
+    },
+    setInput(enabled) {
+      if (inputOn === enabled) return;
+      inputOn = enabled;
+      if (enabled && !open) observer.enable();
+      if (!enabled) {
+        observer.disable();
+        clearTimeout(wheelTimer);
+        if (wheelStart !== null || dragging) {
+          wheelStart = null;
+          dragging = false;
+          snap();
+        }
+        setHover(null);
+      }
+    },
+    setEntry(value) {
+      introTween?.kill();
+      intro.entry = clamp(value, 0, 1);
+      dirty = Math.max(dirty, 2);
+    },
+    atRest() {
+      return !dragging && wheelStart === null && phase === target;
+    },
+    dispose() {
+      disposed = true;
+      renderer.setAnimationLoop(null);
+      stopTimeline(false);
+      introTween?.kill();
+      gsap.killTweensOf(intro);
+      gsap.killTweensOf(spinClock);
+      for (const card of cards) gsap.killTweensOf(card.lift);
+      clearTimeout(wheelTimer);
+      observer.kill();
+      resize.disconnect();
+      still?.removeEventListener?.("change", onStill);
+      host.removeEventListener("pointerdown", onDown);
+      host.removeEventListener("pointerup", onUp);
+      host.removeEventListener("pointermove", onMove);
+      host.removeEventListener("pointerleave", onLeave);
+      document.removeEventListener("visibilitychange", onVisible);
+      renderer.domElement.removeEventListener("webglcontextlost", onLost);
+      for (const card of cards) card.mesh.dispose();
+      kit.dispose();
+      globe.dispose();
+      for (const t of textures.values()) t.tex.dispose();
+      textures.clear();
+      for (const m of discMats) m.dispose();
+      for (const t of [faceTex, grooveTex, stockTex, frameTex]) t.dispose();
+      for (const g of [unitPlane, unitCircle, rim.geometry]) g.dispose();
+      envTarget.dispose();
+      renderer.dispose();
+      renderer.domElement.remove();
+    },
+  };
+}
+
+// Whether this browser can draw the exhibition at all.
+export function canDrawOrbit(): boolean {
+  try {
+    const c = document.createElement("canvas");
+    return !!(c.getContext("webgl2") || c.getContext("webgl"));
+  } catch {
+    return false;
+  }
+}
