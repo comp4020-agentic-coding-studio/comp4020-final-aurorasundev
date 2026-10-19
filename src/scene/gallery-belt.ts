@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { gsap } from "gsap";
 import { Observer } from "gsap/Observer";
-import { beltCards, beltPoint, cardFrame, cardPlacement, CAMERA_HALF, dissolveAt, FACE_EDGE, FACE_WINDOW, fitBelt, globeAngle, halfOf, LABEL_OF_DISC, ringSize, RING_DESKTOP, swipeTarget, type Fit } from "./belt-layout.ts";
+import { beltCards, beltPoint, cardFrame, cardPlacement, CAMERA_HALF, dissolveAt, FACE_EDGE, FACE_WINDOW, fitBelt, globeAngle, GLOBE_OPEN, halfOf, LABEL_OF_DISC, ringSize, RING_DESKTOP, swipeTarget, type Fit } from "./belt-layout.ts";
 import { createBeltGlobe } from "./belt-globe.ts";
 import { mergeOrbitItems, nextFocusIndex, type OrbitItem } from "./orbit-items.ts";
 import { advanceSpin, dampPhase, spinning, wheelItems, wheelSnap, SPIN_GAIN, SPIN_IDLE, SPIN_RESPONSE, WHEEL_QUIET_MS } from "./gallery-motion.ts";
@@ -923,7 +923,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     if (driftRate) drift += driftRate * dt * (1 - c.hero);
     globe.spin.rotation.y = lerp(live, heldGlobe, c.hero) + drift;
     globe.setDraw(smooth(0, 0.5, entry));
-    globe.setOpacity(1 - 0.7 * c.hero);
+    globe.setOpacity(lerp(1, GLOBE_OPEN, c.hero));
 
     // the open's exit order for this ring (recomputed only when it changes)
     const ef = `${R}:${L.phone}`;

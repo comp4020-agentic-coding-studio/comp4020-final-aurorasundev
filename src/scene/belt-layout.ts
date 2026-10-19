@@ -255,6 +255,9 @@ export const GLOBE_H = 2 * GLOBE_R * GLOBE_SY;
 // the record's diameter as a share of the globe's visible height, centred on
 // the globe's centre
 export const DISC_OF_GLOBE = 0.7;
+// the globe's opacity behind an opened record: its rings run behind the
+// record's text column on desktop, so they recede to a faint trace
+export const GLOBE_OPEN = 0.12;
 // its tilt back: enough to sit in depth, little enough that the label reads
 export const DISC_TILT = 0.3;
 export const DISC_TILT_COMPACT = 0.26;

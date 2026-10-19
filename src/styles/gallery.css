@@ -383,8 +383,12 @@
   outline: none;
 }
 
+/* No wash while the scene's sleeve and record arrive under the dialog: it
+   would lift the WebGL record's charcoal (about sRGB 55 against the HTML
+   record's 25–40) and the hand-over would show a jump. The wash comes in
+   once the HTML record has taken over (below). */
 .record-dialog::backdrop {
-  background: rgb(198 205 204 / 0.18);
+  background: transparent;
 }
 
 /* The layout both the dialog and the scene's hidden ghost use, so the
