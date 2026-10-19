@@ -36,9 +36,23 @@ readable centre. Keep phone controls and captions clear of the paper.
   paper's fire holds until extraction settles (at most 15 s, never under
   4.8 s). Public objects use an allowlisted shape and an independent id, with
   no link back. An image request with an unknown outcome is never resent
-  automatically. It is an unordered record exhibition (design
-  `design/gallery-records-2026-10-18/`, G01–G03; no feed, ranking, likes or
-  comments), and loads no room code. Sound is **not implemented**. Its selected
+  automatically. It is an unordered record exhibition (no feed, ranking,
+  counts, likes or comments), and loads no room code. The browse layout
+  is `design/gallery-belt-2026-10-19/design.md`, which supersedes G01's
+  orbit; G02/G03 (opened record, report) keep their content. An entry
+  screen with the centred title (Gloock, self-hosted) over an interactive
+  mist shader leads by one gesture into the exhibition: a deep-charcoal
+  vinyl idle-spinning at the centre, a counter-rotating graphite globe
+  behind it and a belt of 10 cards (6 on phone) on Goodgrowth's
+  latitude-curved band, under an orthographic camera. Cards break into
+  and gather from particles only in the dissolve zones at the globe's
+  sides, where replaced records arrive; operator hides dissolve in place.
+  Opening a record is one timeline (neighbours dissolve, sleeve forward,
+  disc slides out, title letter by letter); the HTML takes over only on
+  its completion. Pure rules live in `src/scene/belt-layout.ts`,
+  `particles-plan.ts`, `record-timeline.ts` and `gallery-motion.ts`, with
+  specs; reduced motion or no WebGL gets the grid. Sound is **not
+  implemented**. Its selected
   design is `design/gallery-records-2026-10-18/music-design.md` (ADR 006):
   reuse the existing AI musical directions, compose/store one versioned
   score and fixed seed at image publication, then perform it with native
