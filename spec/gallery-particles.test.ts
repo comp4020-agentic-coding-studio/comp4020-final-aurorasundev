@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { beltCards, dissolveAt, tileStep, ZONE_DESKTOP, ZONE_PHONE } from "../src/scene/belt-layout.ts";
 import {
-  arrivalDissolve,
   BUDGET_DESKTOP,
   BUDGET_PHONE,
   CROSS_IN,
@@ -14,7 +13,7 @@ import {
   GRID_PHONE,
   hideStart,
   meshAlpha,
-  onScreen,
+  imageShown,
   particleAlpha,
   planParticles,
   POOL,
@@ -157,42 +156,42 @@ describe("the crossfade", () => {
 });
 
 describe("replacement", () => {
-  it("a card changes record only out of sight, and the new record becomes visible only in the arriving zone", () => {
+  it("a card changes record only out of sight, and the new record's image first shows while it gathers in the arriving zone", () => {
     for (const phone of [false, true]) {
       const ring = phone ? 6 : 10;
       const z = phone ? ZONE_PHONE : ZONE_DESKTOP;
-      // turn slowly on past the wrap; a newly placed card's record
       const before = beltCards(0.99, ring, 48);
       const after = beltCards(1.01, ring, 48);
       const come = after.find((c) => !before.some((b) => b.m === c.m))!;
+      // the swap itself is at the very back
       expect(Math.abs(come.theta)).toBeGreaterThan(Math.PI * 0.99);
-      // follow it round toward the front, never seen before
-      let firstShown: number | null = null;
-      for (let phase = 1.01; phase < 1.01 + ring / 2; phase += 0.01) {
+      // follow the newcomer round toward the front
+      let first: { theta: number; dissolve: number } | null = null;
+      for (let phase = 1.01; phase < 1.01 + ring / 2; phase += 0.005) {
         const theta = (come.m - phase) * tileStep(ring);
-        const raw = phone && Math.cos(theta) <= 0 ? 1 : dissolveAt(theta, phone);
-        const d = arrivalDissolve(theta, phone, raw, false);
-        if (d < 0.999) {
-          firstShown = Math.abs(theta);
+        if (imageShown(theta, phone)) {
+          first = { theta: Math.abs(theta), dissolve: dissolveAt(theta, phone) };
           break;
         }
       }
-      expect(firstShown).not.toBeNull();
-      // it first shows inside the arriving zone, between the peak and the front edge
-      expect(firstShown!).toBeLessThanOrEqual(z.peak + 1e-9);
-      expect(firstShown!).toBeGreaterThanOrEqual(z.from);
+      expect(first).not.toBeNull();
+      // inside the arriving zone, just in front of its peak...
+      expect(first!.theta).toBeLessThan(z.peak);
+      expect(first!.theta).toBeGreaterThan(z.from);
+      // ...where the card is still dispersed, so the image arrives by gathering
+      expect(first!.dissolve).toBeGreaterThan(0.95);
     }
   });
 
-  it("a card already on screen keeps the zone's own dissolve", () => {
-    expect(arrivalDissolve(deg(100), false, dissolveAt(deg(100), false), true)).toBeCloseTo(dissolveAt(deg(100), false), 12);
-    expect(arrivalDissolve(deg(100), false, dissolveAt(deg(100), false), false)).toBe(1);
-  });
-
-  it("a card is remembered once it shows and forgotten once it is gone", () => {
-    expect(onScreen(1, 0.5)).toBe(true);
-    expect(onScreen(1, 1)).toBe(false);
-    expect(onScreen(0, 0)).toBe(false);
+  it("the image never shows beyond the peak, so the far half and the swap stay blank stock", () => {
+    expect(imageShown(0, false)).toBe(true);
+    expect(imageShown(deg(85), false)).toBe(true);
+    expect(imageShown(deg(95), false)).toBe(false);
+    expect(imageShown(deg(-120), false)).toBe(false);
+    expect(imageShown(Math.PI, true)).toBe(false);
+    // the switch point is where the zone is fully dispersed
+    expect(dissolveAt(deg(90), false)).toBe(1);
+    expect(dissolveAt(deg(90), true)).toBe(1);
   });
 });
 

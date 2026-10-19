@@ -137,21 +137,24 @@ export function planParticles(cands: readonly Candidate[], o: PlanInput): Map<st
 // --- arrivals and replacement ------------------------------------------------------
 // A card changes record only at the very back, out of sight (belt-layout.ts
 // beltCards). The visible moment a different record arrives is the arriving
-// zone: a card whose record was not on screen the frame before stays
-// dispersed (dissolve 1) while it is beyond the zone's peak, then gathers
-// from particles with its image. On a phone the back is hidden, so every
-// arrival already comes this way; on a desktop it also covers the faint far
-// half, which would otherwise show the new record before the zone.
-export function arrivalDissolve(theta: number, phone: boolean, zoneDissolve: number, seen: boolean): number {
-  if (seen) return zoneDissolve;
-  const peak = (phone ? ZONE_PHONE : ZONE_DESKTOP).peak;
-  return Math.abs(wrapAngle(theta)) >= peak ? 1 : zoneDissolve;
+// zone: beyond the zone's peak (the far side of the globe's silhouette) a
+// card shows the blank paper stock, never its image, and in front of the peak
+// its image. At the peak a card is fully dispersed, so the switch is never
+// seen: a record that came round from the back first shows its image while
+// it gathers from particles in the arriving zone. A card leaving the same way
+// loses its image at the peak, and its faint far-half silhouette (desktop) is
+// blank stock. On a phone the far half is hidden anyway.
+export function imageShown(theta: number, phone: boolean): boolean {
+  return Math.abs(wrapAngle(theta)) < (phone ? ZONE_PHONE : ZONE_DESKTOP).peak;
 }
 
-// Whether the card counts as on screen from where it sits (its placement fade
-// and dissolve, not the page's entrance): a card that goes out of sight is
-// forgotten, and one that has gathered past the crossfade is remembered.
-export const onScreen = (fade: number, dissolve: number) => fade * (1 - dissolve) > 0.01;
+// A late image fades in over this long once it has decoded (the card
+// gathers into blank stock first).
+export const IMAGE_FADE_SECONDS = 0.5;
+
+// A whole caller-driven dissolve (the open's exit, step ④) uses particles
+// only when this is on; the belt draws its exit as the alpha fade until then.
+export const EXIT_PARTICLES = false;
 
 // --- hides ------------------------------------------------------------------
 // A hidden card dissolves in place: it takes over from the mesh already
