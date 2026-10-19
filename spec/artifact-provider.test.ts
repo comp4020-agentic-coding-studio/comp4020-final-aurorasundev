@@ -11,9 +11,10 @@ import {
   openAiArtifactProvider,
   parseBrief,
   INSPECTION_BLOCK_CODES,
+  STYLE_PRESET_VERSION,
   validateWebp,
 } from "../server/artifacts/provider.ts";
-import type { CreativeBriefV2 } from "../server/artifacts/types.ts";
+import { MATERIALS, PALETTES, type CreativeBriefV2 } from "../server/artifacts/types.ts";
 
 // The OpenAI keepsake adapter against a fake fetch: what is sent, what is
 // accepted, and how every failure is classified. Nothing here calls OpenAI.
@@ -155,10 +156,49 @@ describe("content shapes the image", () => {
     const prompt = imagePrompt(brief);
     expect(prompt).toMatch(/ribbon or thread/);
     expect(prompt).toMatch(/gap that the connection does not close/);
-    expect(prompt).toMatch(/risograph/);
     expect(prompt).toMatch(/no text/i);
     expect(imagePrompt({ ...brief })).toBe(prompt);
     expect(artifactTitle(brief)).toBe("An unfinished thread");
+  });
+});
+
+describe("the shared style", () => {
+  // the part every prompt shares, i.e. the style preset
+  const commonSuffix = (prompts: string[]): string => {
+    let n = 0;
+    while (prompts.every((p) => p.length > n && p[p.length - 1 - n] === prompts[0][prompts[0].length - 1 - n])) n++;
+    return prompts[0].slice(prompts[0].length - n);
+  };
+  const variants = <K extends "palette" | "material">(key: K, values: readonly CreativeBriefV2[K][]) =>
+    values.map((v) => imagePrompt({ ...brief, [key]: v }));
+
+  it("is a new preset version", () => {
+    expect(STYLE_PRESET_VERSION).toBe("mineral-record-v2");
+  });
+
+  it("lets each palette and material lead: they differ before the shared style, which names neither", () => {
+    for (const [key, prompts] of [["palette", variants("palette", PALETTES)], ["material", variants("material", MATERIALS)]] as const) {
+      expect(new Set(prompts).size).toBe(prompts.length);
+      const shared = commonSuffix(prompts);
+      expect(shared).toMatch(/no text/i);
+      // where the prompts first differ comes before the shared style starts
+      let first = 0;
+      while (prompts.every((p) => p[first] === prompts[0][first])) first++;
+      expect(first).toBeLessThan(prompts[0].length - shared.length);
+      // the palette is stated before the subject, not after it
+      if (key === "palette") expect(first).toBeLessThan(prompts[0].indexOf("ribbon"));
+    }
+  });
+
+  it("gives every palette its own colour words", () => {
+    const words = variants("palette", PALETTES).map((p) => p.slice(0, p.indexOf(".")).toLowerCase().match(/[a-z]+/g)!);
+    for (let i = 0; i < words.length; i++) {
+      for (let j = i + 1; j < words.length; j++) {
+        // more distinct than shared: no two palettes reduce to the same description
+        const shared = words[i].filter((w) => words[j].includes(w) && w !== "and" && w !== "against" && w !== "colour");
+        expect(shared.length, `${PALETTES[i]} vs ${PALETTES[j]}`).toBeLessThan(3);
+      }
+    }
   });
 });
 

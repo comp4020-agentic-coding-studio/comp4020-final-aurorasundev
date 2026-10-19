@@ -196,29 +196,41 @@ const SPACE_PHRASE: Record<CreativeBriefV2["space"], string> = {
   open: "with wide open space around it",
   distant: "small within a deep, distant space",
 };
+// Materials name surface and texture only; colour comes from the palette, so
+// the two never pull against each other.
 const MATERIAL_PHRASE: Record<CreativeBriefV2["material"], string> = {
-  paper_stone: "made of creased ivory paper and weathered slate-blue stone",
-  frosted_glass: "made of frosted smoky glass with paper",
-  ink_fibre: "made of ink-washed paper fibre",
+  paper_stone: "made of heavy creased paper and weathered, pitted stone",
+  frosted_glass: "made of frosted, translucent glass with thin paper showing through",
+  ink_fibre: "made of soft paper fibre soaked with bleeding ink washes",
 };
+// Each palette is a distinct hue family, so no two collapse to the same grey:
+// cool pale blue-grey; deep green; saturated blue against warm amber.
 const PALETTE_PHRASE: Record<CreativeBriefV2["palette"], string> = {
-  slate_ivory: "muted slate blue, mist and ivory",
-  sage_charcoal: "soft sage, mineral grey and charcoal",
-  cobalt_paper: "faded cobalt blue and warm paper",
+  slate_ivory: "pale cool slate blue and powder blue-grey against bright ivory white, high-key and airy",
+  sage_charcoal: "deep sage and moss green layered over soft charcoal black, low-key and heavy",
+  cobalt_paper: "saturated cobalt and ultramarine blue against warm ochre and amber-cream paper",
 };
 
 // how every image is rendered: one shared style for the whole exhibition
-export const STYLE_PRESET_VERSION = "mineral-record-v1";
+// It sets form, light and the exclusions; it deliberately names no colour or
+// grain, so the brief's palette and material lead every image. Not stored:
+// the prompt is rebuilt from the stored brief when the image is made, and a
+// published record keeps its own title and alt, so a new version needs no
+// migration and leaves old records valid.
+export const STYLE_PRESET_VERSION = "mineral-record-v2";
 const STYLE_PRESET =
-  "Square album-cover artwork. Abstract material collage photographed as a quiet dimensional still life: scanned paper " +
-  "fibres, subtle risograph halftone grain, soft diffuse daylight, gentle shadows, a calm mineral-grey and ivory world " +
-  "with restrained colour. Generous empty space, centred composition, no frame or border. " +
+  "Square album-cover artwork for one record in a series. An abstract material still life, photographed: the colours " +
+  "and surfaces named above fill the whole image, including the background, with the fine texture of those materials " +
+  "visible up close. Soft natural daylight from one side, gentle shadows, generous empty space, centred composition, " +
+  "no frame or border. " +
   "Strictly no text, letters, numbers, symbols, signatures, people, faces, hands, animals, recognisable places or logos.";
 
+// colour and material lead; the shared style closes
 export function imagePrompt(brief: CreativeBriefV2): string {
   return (
+    `Colour: ${PALETTE_PHRASE[brief.palette]}. ` +
     `${METAPHOR_PHRASE[brief.metaphor]}, ${MATERIAL_PHRASE[brief.material]}: ${RELATION_PHRASE[brief.relation]}; ` +
-    `${MOTION_PHRASE[brief.motion]}, ${SPACE_PHRASE[brief.space]}. Palette: ${PALETTE_PHRASE[brief.palette]}. ` +
+    `${MOTION_PHRASE[brief.motion]}, ${SPACE_PHRASE[brief.space]}. ` +
     STYLE_PRESET
   );
 }
