@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GLOBE_R, GLOBE_SX, GLOBE_SY, MERIDIANS, meridianAngle } from "./belt-layout.ts";
+import { GLOBE_BACK, GLOBE_R, GLOBE_SX, GLOBE_SY, MERIDIAN_OPACITY, MERIDIANS, meridianAngle, POLE_FADE_FROM, POLE_FADE_TO } from "./belt-layout.ts";
 
 // The belt's globe (design 2026-10-19 §4, option A): seven meridian rings and
 // the silhouette ellipse of a flattened sphere, drawn as fine graphite thread.
@@ -7,7 +7,10 @@ import { GLOBE_R, GLOBE_SX, GLOBE_SY, MERIDIANS, meridianAngle } from "./belt-la
 // CSS pixels whatever the scale, and varies a little along its length (slow
 // noise per ring), the way a hand-wound thread or a lantern rib thickens and
 // thins. No fill, no texture, no dither. The far half of each ring is a faint
-// trace, so the globe reads as a paper lantern rather than a wire cage.
+// trace, so the globe reads as a paper lantern rather than a wire cage, and
+// the meridians fade toward the poles (belt-layout.ts poleFade) so the seven
+// rings never stack into a dark point where they meet. The globe recedes
+// behind the record: its lines sit at MERIDIAN_OPACITY.
 //
 // The rings turn inside `spin` (the counter-rotation), which sits inside the
 // flattened `globe`; the silhouette never turns. `draw` (0..1) draws the
@@ -133,6 +136,8 @@ function threadMaterial(uniforms: Record<string, THREE.IUniform>): THREE.ShaderM
       uniform float uBack;
       uniform float uDraw;
       uniform float uWidth;
+      uniform float uPoleFade;
+      uniform vec2 uPoleRange;
       varying float vSide;
       varying float vFront;
       varying float vPole;
@@ -144,7 +149,9 @@ function threadMaterial(uniforms: Record<string, THREE.IUniform>): THREE.ShaderM
         // a soft pixel edge on each side of the thread
         float edge = 1.0 - smoothstep(hw - 0.35, hw + 0.6, abs(vSide));
         float tone = 0.72 + 0.28 * clamp(vWeight, 0.0, 1.0);
-        float a = uOpacity * edge * tone * mix(uBack, 1.0, vFront);
+        // fade toward the poles, where the rings converge (meridians only)
+        float pf = mix(1.0, smoothstep(uPoleRange.x, uPoleRange.y, vPole), uPoleFade);
+        float a = uOpacity * edge * tone * pf * mix(uBack, 1.0, vFront);
         if (a < 0.003) discard;
         gl_FragColor = vec4(uInk, a);
         #include <colorspace_fragment>
@@ -163,13 +170,16 @@ export function createBeltGlobe(): BeltGlobe {
     uWidth: { value: WIDTH },
     uRadius: { value: GLOBE_R },
     uInk: { value: INK },
-    uOpacity: { value: 0.62 },
-    uBack: { value: 0.16 },
+    uOpacity: { value: MERIDIAN_OPACITY },
+    uBack: { value: GLOBE_BACK },
     uDraw: { value: 1 },
+    uPoleFade: { value: 1 },
+    uPoleRange: { value: new THREE.Vector2(POLE_FADE_FROM, POLE_FADE_TO) },
   };
   const material = threadMaterial(uniforms);
-  // the silhouette lies on z = 0: it is never "behind", so it keeps full tone
-  const outline = threadMaterial({ ...uniforms, uBack: { value: 1 } });
+  // the silhouette lies on z = 0: it is never "behind", so it keeps full tone,
+  // and it has no convergence to fade
+  const outline = threadMaterial({ ...uniforms, uBack: { value: 1 }, uPoleFade: { value: 0 } });
   const geometries: THREE.BufferGeometry[] = [];
 
   // a meridian ring in the y–z plane, turned about y by its own angle
@@ -207,7 +217,7 @@ export function createBeltGlobe(): BeltGlobe {
       uniforms.uDraw.value = v;
     },
     setOpacity(v) {
-      uniforms.uOpacity.value = 0.62 * v;
+      uniforms.uOpacity.value = MERIDIAN_OPACITY * v;
     },
     setResolution(w, h, dpr) {
       uniforms.uResolution.value.set(w * dpr, h * dpr);
