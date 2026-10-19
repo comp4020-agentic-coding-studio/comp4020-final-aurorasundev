@@ -183,3 +183,7 @@ without leaving.
   stays on the system stack. **Chosen: Gloock** (OFL, single weight 400;
   specimen in `font-specimen.html`).
 - **Globe:** option A, fine graphite lines.
+- **Trackpad flick:** a hard flick may cross several cards. The wheel path
+  rounds the whole travelled distance, inertia tail included, with no cap
+  (pinned by `spec/gallery-motion.test.ts`). Desktop drag throws keep their
+  ±3 cap, and a phone swipe stays one step.
