@@ -157,7 +157,7 @@ After the functional fixes:
 - Reuse the existing vinyl/paper/frame assets. The new background is the only new visual asset required by this task.
 - Keep the room free of Gallery downloads. Retain bounded decoded textures, dispose retired resources, and avoid full-screen postprocessing for static mist.
 
-**Music remains a separate unfinished design stage.** This repair pass does not require introducing an entire paid music subsystem. The disabled Listen button is not a working player. Preserve truthful image-only copy; do not add a fake waveform, duration, playback animation, reused stock loop, or claim music generation is complete. Record the remaining provider/audio-job/gated-media/player work explicitly in the handoff, following technical-notes sections 6–7 if the owner later authorizes that stage.
+**Music implementation remains separate from this completed repair pass.** The owner selected [AI-directed parameters performed with Web Audio](music-design.md) on 2026-10-19; that complete design supersedes the old external-provider/audio-file proposal. The disabled Listen button is not a working player. Until implementation, preserve truthful image-only copy and add no fake waveform, duration or playback animation. Future music work reuses the current brief, saves one deterministic score and adds one browser player plus gated score reads; it adds no music service, audio job or paid generation call. Follow music-design.md and technical-notes sections 6–7, rather than the superseded provider plan.
 
 Real note-to-image semantics, image-model access, and the real image-policy service have not been verified by fixture tests. Do not claim these are validated or silently make paid calls. Identify the remaining real-service smoke test separately.
 

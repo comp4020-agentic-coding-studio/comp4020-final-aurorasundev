@@ -123,3 +123,45 @@ To roll back, unset `ARTIFACTS_ENABLED` (or set it to `0`): provider calls
 stop and new burns read nothing, everything else continues, and jobs that
 already have a brief wait. Hiding objects works
 while paused.
+
+## Planned Web Audio music extension — not implemented
+
+The selected [music design](../design/gallery-records-2026-10-18/music-design.md)
+and [ADR 006](adr/006-browser-synthesised-record-music.md) replace the old
+separate music-service/MP3 proposal. Do not configure a music-service key,
+audio endpoint or music quota for this design.
+
+The future implementation reuses the existing `CreativeBriefV2` from the
+ignition request. A bounded local composer saves one score and fixed seed
+atomically with accepted-image publication; browser Web Audio renders it
+only after a visitor clicks Play. Playback/Resume/Replay make no AI request.
+Existing image budgets, source deletion, unknown-outcome handling and the
+4.8–15-second fire stay unchanged.
+
+Proposed configuration, **not supported by the current application yet**:
+
+| Variable | Default | Planned effect |
+| --- | --- | --- |
+| `GALLERY_MUSIC_ENABLED` | `0` | `1` permits score creation for fresh published images and gated serving of valid stored scores; independent of `ARTIFACTS_ENABLED` |
+
+A later implementation appends the next migration after v9 for nullable
+`artifacts.music_score`; legacy objects remain image-only and there is no
+automatic backfill. Include the database in the existing consistent backup;
+there are no new audio files to back up. `GET /api/gallery/:id/score` will be
+publication-gated/no-store, and the existing hide event will stop playback.
+Already downloaded data cannot be recalled.
+
+Before enabling music in a later release: verify strict score validation,
+repeatable composition, all three timbres/endings with real-browser
+listening, explicit-start/pause/resume/replay/volume, A→B and hide-during-render
+races, reconnect/background stop, no-WebGL/reduced-motion access and real
+phone render cost. Existing image Gallery tests must still pass. No
+additional paid music smoke test or account permission is required for
+local synthesis; any real OpenAI image/brief evaluation remains a separate
+authorized check.
+
+Planned rollback is `GALLERY_MUSIC_ENABLED=0` followed by the normal restart:
+stored scores/images remain, new snapshots/config show no sound, and
+reconnecting clients stop local playback. Pausing AI generation alone does
+not revoke stored music. This documentation pass performs none of these
+configuration, migration or release actions.

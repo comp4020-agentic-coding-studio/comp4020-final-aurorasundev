@@ -1,8 +1,10 @@
 # Throwaway — a record exhibition of things let go
 
-Date: 2026-10-18. Status: **Direction A selected by the owner; application implementation has not started in this design pass**.
+Date: 2026-10-18; music amendment 2026-10-19. Status: **Direction A selected; the image exhibition exists at `9501f73`. The selected Web Audio music extension is designed, not implemented.**
 
-The owner selected **A — the mineral-grey record exhibition** on 2026-10-18. G01, G02 and G03 are the only active visual references. Keep the existing `plans-gallery-ai.md` and completed implementation intact; this selection records the visual direction and does not by itself approve all proposed timing/music details or start product implementation.
+For music, [music-design.md](music-design.md) is authoritative. It supersedes the earlier separate music-provider/audio-file proposal; it does not approve or replace the separate belt-layout draft.
+
+The owner selected **A — the mineral-grey record exhibition** on 2026-10-18. G01, G02 and G03 are the only active visual references. Preserve the completed image Gallery and burn flow. The later owner decision selects AI-directed parameters performed with Web Audio, as specified in the music amendment. This document does not itself implement or enable sound.
 
 ## 1. What this Gallery means
 
@@ -17,7 +19,7 @@ The owner's latest requirements take precedence over the earlier plan:
 - Each image must derive from its own note's text/drawing. A common art direction does not mean a generic image shared by every note.
 - Extract the creative meaning **when the paper is ignited**, alongside the existing burn; do not add a new pre-ignition waiting screen or make writing wait for this step.
 - Prefer small changes to the completed app. Keep the furnace, source-deletion transaction, permissions, witnessing, existing burn request/receipt and paper real-time behavior.
-- A short instrumental is a proposed extension, not an already configured or verified service.
+- The owner selected a short instrumental directed by the existing OpenAI brief and synthesized with Web Audio. Its design is complete in the music amendment; sound remains unimplemented and unverified.
 
 ## 2. Reference study and what to borrow
 
@@ -85,7 +87,7 @@ The view states “The original note is gone.” It must not provide an AI-writt
 
 Sound starts only from a direct Listen/Play action. Turning the ring, hovering, focusing or opening a record does not start music. Only one record plays at a time. Switching, closing, hiding, leaving the page or losing the active view stops it with a short fade. The disc spins slowly while playback is active, decelerates on pause and stays still under reduced motion.
 
-G02's waveform/time represent a proposed **real playing** state. Runtime time comes from audio metadata/currentTime; waveform comes from the actual audio. Do not animate fake audio activity when a track is pending, failed, disabled or absent. Image-only records remain fully viewable.
+G02's waveform/time represent a future **real playing** state. A 24-second stored score is rendered locally after Play; elapsed time follows the live audio clock and any waveform is derived from the rendered PCM. No playback starts before that succeeds. Image-only records remain fully viewable. See [the player states and accessibility contract](music-design.md#6-browser-synthesis-and-playback).
 
 ### Returning and live changes
 
@@ -117,24 +119,22 @@ Recommended minimal-change choreography:
 1. The existing drop/Place action confirms destruction with its existing operation key.
 2. In the same synchronous handler, capture a private, bounded in-memory snapshot of that ACTIVE Release paper. Execute the existing authorized conditional burn transaction, which clears content/drawing and records the final receipt. Discard the snapshot unless the result is a **fresh successful Release destruction**.
 3. After commit, deliver the existing burn response and paper SSE immediately. Start one bounded creative-brief request from the volatile snapshot while clients play the existing fire. Do not await the model in the burn response or hold a database transaction open around it.
-4. When the brief is valid, discard all application references to the source snapshot and persist only the constrained derivative. Image and optional instrumental jobs use this same derivative.
-5. Publish inspected image output independently. Attach an inspected/reviewed track later. Their completion is not required to end the fire or return to the space.
+4. When the brief is valid, discard all application references to the source snapshot and persist only the constrained derivative. The image request uses this derivative; after inspection, a local deterministic composer can use it for the stored instrumental score without another AI request.
+5. Publish the inspected image and optional validated music score atomically. No audio file/job or later attachment event is introduced in v1. Their completion is not required to end the existing fire or return to the space.
 
 **Privacy change to make explicit:** database deletion still happens at confirmed ignition, but the source temporarily exists in the one in-flight AI request/application memory. No raw source is saved in an artifact job, file, log or retry queue. This replaces the older plan's stronger requirement that no post-burn request uses a source snapshot. It does not promise instant physical memory erasure or deletion from a provider's systems. The Write/About disclosure must explain processing accurately.
 
-**Timing recommendation, still for design approval:** preserve the existing `BURN_DURATION_MS = 4800`. Start extraction and fire together. If extraction finishes early, hold image publication until at least that visual ending time. If it finishes late, the ash/ending completes normally while derivative processing continues. Aim to finish extraction within the burn, but do not promise that a network call always takes exactly 4.8 seconds. A bounded request deadline around 8 seconds is a starting point to measure, not a demonstrated latency.
-
-Strict equality would need variable burn timing and a completion signal to the initiator/spectators, adding changes to the working ritual. Holding flames indefinitely, animating fake completion or keeping a raw durable source copy would be poor ways to achieve equality. The recommended version meets the owner's “start together, change little” intent, but the equality requirement is not silently treated as implemented or already approved.
+**Current timing to preserve (`9501f73`):** the burn reply returns immediately. The existing visual fire lasts at least 4.8 seconds and holds while the one extraction runs, settling by its existing 15-second deadline through `paper:extraction_settled`. Music must add no request, wait or event to this protocol. Image generation/inspection continue separately. Do not restore the superseded fixed-fire/eight-second proposal or add a pre-ignition screen.
 
 On extraction failure, burn still succeeds. The job records a safe `brief_unavailable`/`source_unavailable` outcome and no unrelated keepsake is manufactured. A process restart can lose this volatile source; that job cannot recover by rereading a deleted original. This is the explicit durability cost of extracting at ignition with immediate deletion and no raw archive.
 
 ## 7. Image and sound use one content-derived brief
 
-Replace the old four-value recipe with a versioned constrained `CreativeBriefV2` detailed in [technical-notes.md](technical-notes.md). It should describe metaphor, relation, movement, space, material/colour and a small musical vocabulary. No raw quote, name, actual place, free-form source summary or complete drawing is persisted. The provider must treat the source as data, not instructions.
+The versioned constrained `CreativeBriefV2` is already implemented at `9501f73`, as detailed in [technical-notes.md](technical-notes.md). It describes metaphor, relation, movement, space, material/colour and a small musical vocabulary. Reuse it unchanged for music. No raw quote, name, actual place, free-form source summary or complete drawing is persisted. The provider must treat the source as data, not instructions.
 
 A new brief is valid only after the model has actually processed this note's source snapshot. Bind the pending result to its private job ID/lease. Merely choosing allowed enum values from a random public ID is not a content-derived result.
 
-Current local source at `7204e31` has `neutralRecipe(publicId)` in `server/artifacts/store.ts`, and `queueDestroyedRelease` uses it if preparation is not ready. This was an intentional fallback in the old plan, but conflicts with the owner's clarified requirement. **Remove that fallback from the new generation path.** Current `server/artifacts/provider.ts` also requests only four enums and a quiet still-life style; it needs the richer brief and the selected new art direction.
+Historical source at `7204e31` used a neutral fallback; this was removed by the current ignition-brief implementation. Preserve the current no-fallback behavior and richer brief instead of rebuilding the old preparation path. The new music composer may vary a valid content-derived brief, but may not manufacture sound when that brief was unavailable.
 
 Already ended papers cannot be reconstructed. Existing legitimate content-prepared images may remain viewable; content-independent legacy outputs must not be represented as content-derived. Identify them by stored provenance and decide their visibility deliberately, without silently deleting unrelated records or charging for regeneration.
 
@@ -149,37 +149,27 @@ Already ended papers cannot be reconstructed. Existing legitimate content-prepar
 | Text, focus and controls | HTML/CSS/native dialog | Legibility, keyboard access, responsive layout and existing report behavior |
 | Content extraction | Existing server OpenAI Responses adapter with a strict versioned schema | A bounded shared creative brief, not copied note text |
 | Cover generation | Existing server image adapter/model, updated prompt | Actual individual images from the shared brief and common style preset |
-| Short instrumental | Proposed ElevenLabs Music adapter | Actual model-generated music, separate service/key; not TTS or a stock loop |
-| Playback and spectrum | One HTMLAudioElement + optional Web Audio graph | Playback is independent from Three.js; pause/fade/analyser are local effects, not AI generation |
-| Persistence | Existing SQLite jobs and private volume; a small audio-job extension | Preserve safe IDs, operator hiding, limits and restart rules |
+| Short instrumental | Existing AI musical directions → deterministic stored score → native Web Audio | Selected 2026-10-19; no second model request, music-service credential or recorded track |
+| Playback and waveform | One AudioContext; short OfflineAudioContext render after Play | Pause/resume/replay reuse the buffer; waveform comes from PCM, independently of Three.js |
+| Persistence | Existing image jobs/files; nullable music score on the public artifact | Atomically publish image and optional score; no audio job or file storage |
 
 The GSAP [Observer documentation](https://gsap.com/docs/v3/Plugins/Observer/) supports wheel/touch/pointer input. Three's [orthographic camera](https://threejs.org/docs/pages/OrthographicCamera.html) is suitable for stable editorial composition. The precise controller/math and component boundary are in the technical notes; latest documentation must be checked against the pinned Three version before adding properties.
 
-## 9. Music: an extension with a clear boundary
+## 9. Music: selected browser-synthesis flow
 
-Recommend a roughly **24-second instrumental**, individually generated from the same brief as its cover. It should be a small composition with a beginning and an ending, without lyrics, a quoted note or imitation of a named performer. It is not a voice reading and should not become a mandatory emotional soundtrack for the entire room.
+The authoritative [music design](music-design.md) and [ADR 006](../../docs/adr/006-browser-synthesised-record-music.md) replace the previous external music-service recommendation. A 24-second instrumental uses the **existing** note-derived `CreativeBriefV2.music` plus its visual semantics. A bounded local composer and a random seed produce a stored score once, at inspected-image publication; there is no extra model request or change to ignition timing.
 
-[ElevenLabs' compose endpoint](https://elevenlabs.io/docs/api-reference/music/compose) accepts a prompt, explicit duration and an instrumental setting. A candidate is `music_v2`, 24,000 ms, MP3 output, `force_instrumental:true`; actual account access, cost and aesthetic quality are unverified. Existing OpenAI credentials do not configure this separate service. No music API was called for this design.
+Only an explicit Play creates/resumes the browser audio context, reads the current published score and renders its buffer. One player owns pause/resume/replay/volume and stops on switch, close, reporting, hide, reconnect, backgrounding or leaving. No autoplay, voice, lyrics, sample download, MP3, audio endpoint or music job is required. Images remain complete when music is disabled, missing or unsupported.
 
-There are three implementation levels:
-
-| Level | What it actually is | Trade-off |
-| --- | --- | --- |
-| Reused ambient loop | Existing licensed audio with a visual disc | Fast, but not individually generated; does not meet the proposed final experience |
-| AI-selected score + browser synthesis | Model chooses notes/tempo; Web Audio performs them | Lower external cost, predictable instrumental output; more synthetic sound |
-| **Model-generated instrumental audio** | Music API returns a separate piece for this note | Best fit for the desired exhibition; adds latency, cost, output checks and storage |
-
-Treat the third as the proposed target; do not label either earlier level as an already working music-generation service. Image publication need not wait for the track. If music is disabled, missing or rejected, show a complete image-only record and truthful copy.
-
-Audio cannot be safety-checked by the existing image policy. Use a bounded private file, duration/format/level checks and the instrumental constraint, and manually approve the initial generated tracks before publishing audio. Later fully automatic audio release needs an independently validated audio-content pipeline; this design does not claim that pipeline exists. The existing public report action can report the whole record, and hiding the record gates both media URLs and stops playback.
+The chosen output is **AI-directed generative music**, with synthesized soft keys, glass or pads; do not call it a model-generated recording. Fixed versions and the stored note list preserve the piece across repeat playback. v1 leaves old image-only records unchanged. Technical limits, failure states, public-score gating, visual controls and acceptance checks are specified in the music design; they remain future implementation work.
 
 ## 10. Small, staged changes to the completed implementation
 
 Do not rerun the entire old feature plan. Its real Gallery state, image routing, private files, reporting, leases and operator tools already exist in local code. Preserve them and adapt only the necessary boundaries:
 
-1. **Exhibition surface:** replace the grid-first presentation with an isolated orbit and focused record view; retain the grid as low-motion/no-WebGL access. No paper scene, furnace mesh, material or physics changes.
-2. **Content fidelity:** replace neutral fallback and eager preparation with the ignition snapshot pipeline and constrained versioned brief. Keep burn rights/receipts/response timing. Add tests that one actual source is used, retries do not dispatch twice, and no raw source becomes durable.
-3. **Optional soundtrack:** add provider, private audio assets, independent status/inspection, one player and an artifact-updated event. Gate it separately; image-only records keep working.
+1. **Completed exhibition boundary:** preserve the current isolated orbit/record view and low-motion/no-WebGL grid. Music changes neither the paper scene nor its furnace, material, physics or camera.
+2. **Completed content boundary:** preserve the ignition snapshot pipeline, constrained V2 brief, no neutral fallback, burn rights/receipts/timing and existing privacy/idempotency tests. Music reuses this result rather than changing extraction.
+3. **Selected music extension:** reuse the existing brief; add the versioned composer, nullable stored score, gated read route and one Web Audio player. Use the existing publication event, with no music provider/files/job or new SSE event. Gate music separately; image-only records keep working. Follow [music-design.md](music-design.md), not the completed original image-Gallery plan.
 
 This is a staged design, not an instruction to build only visual scaffolding and declare the complete feature finished. Source-to-art correctness is as important as animation. A detailed execution checklist should be written after the direction/timing trade-offs are accepted.
 
@@ -191,19 +181,19 @@ This is a staged design, not an instruction to build only visual scaffolding and
 - Two notes with clearly different sample meanings produce meaningfully different validated briefs. A neutral-ID fallback fails this test.
 - A source is read only for a fresh authorized Release burn. Keep, forbidden, cancelled/pre-drop, duplicated and quarantined paths send no creative source request.
 - The server clears originals in the existing transaction, returns promptly and broadcasts the existing burn. No new pre-ignition waiting page is introduced.
-- Recipe/image/audio failures do not revive the note or stall the fire; no unrelated fallback is displayed.
+- Brief/image/music failures do not revive the note or extend the existing bounded fire; no unrelated fallback is displayed.
 - One object can be opened and optionally heard with mouse, keyboard and touch. Sound never starts merely because the user scrolls.
 - Reconnect, new arrivals and removal do not duplicate items, shift focus unexpectedly or restore hidden media.
-- Main room entry does not download GSAP/music/Gallery scene chunks. Gallery does not load the room's physics/fire/model. Release detail downloads only the selected full-resolution image and, after a play action, its audio.
+- Main room entry does not download Gallery/music modules. Gallery does not load the room's physics/fire/model. The score is read and its synthesis module loaded only after Play; no audio file is downloaded.
 - Test at 1920×1080, 1366×768, 1280×720 and 390×844; phones have usable controls and no page-wide horizontal overflow. Under reduced motion or no WebGL, all items remain reachable through the existing plain collection.
 
-## 12. What is delivered now
+## 12. Delivery history and current amendment
 
-Three inspected visual references, the generated fixed assets in public/textures/gallery, this design proposal, [technical notes and illustrative code](technical-notes.md), and [image-generation prompts/provenance](image-prompts.md). Application behavior, existing plans, dependencies, database, credentials, commits and deployment are unchanged. This asset pass adds the public material files and their documentation; it does not wire them into the app yet.
+The original asset-only pass delivered three visual references, fixed assets in public/textures/gallery, [technical notes](technical-notes.md) and [generation provenance](image-prompts.md); runtime wiring was completed later on the image-Gallery branch. Preserve that wiring. The 2026-10-19 amendment adds the full [music design](music-design.md) and updates related documentation only. It changes no application code, dependencies, database, credentials or deployment.
 
 ## 13. Fixed visual assets and where to use them
 
-The fixed material pack has now been generated and saved under **`public/textures/gallery/`**. These are real runtime material files, not cropped website mockups. Use these existing files during implementation rather than replacing them with new approximate gradients or fetching reference-image crops. The app has not been wired to them in this asset pass.
+The fixed material pack has now been generated and saved under **`public/textures/gallery/`**. These are real runtime material files, not cropped website mockups. Use these existing files during implementation rather than replacing them with new approximate gradients or fetching reference-image crops. The original asset pass did not wire them in; the current image Gallery does. Preserve its existing asset usage when adding music.
 
 Public URLs begin with `/textures/gallery/` — **never `/public/textures/gallery/`**. The [asset manifest](../../public/textures/gallery/manifest.json) records dimensions, byte sizes, hashes and colour/data semantics. Full prompts and processing are in [asset-prompts.md](asset-prompts.md).
 
@@ -234,7 +224,7 @@ Public URLs begin with `/textures/gallery/` — **never `/public/textures/galler
 
 ### Elements that do not need another static picture
 
-Arrows, close, play/pause and volume icons remain SVG/HTML. Text remains HTML. Circular label shape, spindle hole, record thickness, orbital geometry, grain intensity, lighting and shadows remain code/geometry. Audio waveform and time must come from actual audio data. This keeps the interface scalable and does not replace live behavior with decorative pictures.
+Arrows, close, play/pause and volume icons remain SVG/HTML. Text remains HTML. Circular label shape, spindle hole, record thickness, orbital geometry, grain intensity, lighting and shadows remain code/geometry. Audio waveform must come from rendered PCM and elapsed time from the playback clock. This keeps the interface scalable and does not replace live behavior with decorative pictures.
 
 Most importantly, **the contents of every sleeve and record label still come from that burned Release note**. No generic cover art was generated into this fixed pack. Generated note images continue through the existing state-gated Gallery image route; do not copy private/publication-gated outputs into these ungated static material files.
 
@@ -254,4 +244,4 @@ This is a Gallery-only background asset. Keep native text, real generated covers
 
 The 1584×993 sRGB JPEG is 237,246 bytes; it was converted at JPEG quality 88 without resizing. Its source and exact generation prompt are in [asset-prompts.md](asset-prompts.md#6-gallery-stage-mist-v2jpg--2026-10-19). The public manifest records its dimensions, hash and active-background role.
 
-This pass supplies the background and [Claude repair prompt](claude-revision-prompt-2026-10-19.md), including the six audited defects, regression requirements and browser checks. It does not change application source or demonstrate the new plate rendered in the live app. Music and real-provider verification remain separate unfinished stages, explicitly identified in the prompt.
+This pass supplies the background and [Claude repair prompt](claude-revision-prompt-2026-10-19.md), including the six audited defects, regression requirements and browser checks. It does not change application source or demonstrate the new plate rendered in the live app. Music implementation and real-provider verification remain unfinished. The 2026-10-19 music design now selects the complete Web Audio flow; the earlier repair pass does not implement it.

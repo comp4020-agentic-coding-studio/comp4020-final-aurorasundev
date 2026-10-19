@@ -63,7 +63,12 @@ after a published-state check.
   original paper is still gone. With processing paused the Gallery says new
   records are not being made, and a burn reads nothing and queues nothing.
 - **Sound is not built.** The record view keeps a disabled player slot with
-  honest copy; no music provider is configured or called.
+  honest copy. The owner selected existing AI musical directions → stored
+  deterministic score → browser Web Audio on 2026-10-19; see
+  [ADR 006](006-browser-synthesised-record-music.md) and the
+  [music design](../../design/gallery-records-2026-10-18/music-design.md).
+  This future extension adds no external music provider, audio file/job or
+  extra AI request, and does not change the existing fire or image policy.
 
 ## Release boundary
 

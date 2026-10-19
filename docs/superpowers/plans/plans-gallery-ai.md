@@ -1,5 +1,7 @@
 # Throwaway Gallery and AI Keepsakes Implementation Plan
 
+> **Current authority — amendment 2026-10-19:** This is the historical image-Gallery handoff, not a checklist to rerun on the completed branch. Its pre-burn preparation/neutral-fallback details were superseded by the implemented ignition extraction in [ADR 005](../../adr/005-release-keepsakes.md). The selected music extension is [AI-directed parameters → stored score → Web Audio](../../../design/gallery-records-2026-10-18/music-design.md), designed but not implemented. It preserves the existing brief/fire/image flow and adds no external music provider, audio files or extra AI request. Read the current source and music design before further work.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended by that workflow) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. For this handoff, use **one continuous native Claude session** with executing-plans; do not spawn parallel agents merely to fill time. If those skills are unavailable in Claude, follow this checklist directly.
 
 **Goal:** Build an anonymous public Gallery: choosing the existing Release mode automatically makes a successfully burned paper produce a safety-checked AI keepsake; Keep never does.

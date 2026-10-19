@@ -9,8 +9,12 @@ assets, type or palette.
 
 Unchanged rules (CLAUDE.md, ADR 005): an unordered exhibition, with no feed,
 dates, counts, ranking, likes or comments, and no link back to a paper. Text
-lives only in HTML. No sound. No room code. A reduced-motion or no-WebGL
-viewer gets the existing grid.
+lives only in HTML. This visual draft adds no sound and no room code.
+The separately selected [Web Audio music design](../gallery-records-2026-10-18/music-design.md)
+is independent of belt/entry motion: future sound starts only from explicit
+Play in a record, never from the entry, wheel or transition. Music remains
+unimplemented; this note does not approve the draft layout. A reduced-motion
+or no-WebGL viewer gets the existing grid with equivalent future player controls.
 
 ## 1. Two states, one progress value
 

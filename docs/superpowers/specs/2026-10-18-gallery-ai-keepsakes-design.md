@@ -1,5 +1,7 @@
 # Throwaway: public Gallery and AI keepsakes
 
+> **Current authority — amendment 2026-10-19:** This is the historical image-Gallery handoff, not a checklist to rerun on the completed branch. Its pre-burn preparation/neutral-fallback details were superseded by the implemented ignition extraction in [ADR 005](../../adr/005-release-keepsakes.md). The selected music extension is [AI-directed parameters → stored score → Web Audio](../../../design/gallery-records-2026-10-18/music-design.md), designed but not implemented. It preserves the existing brief/fire/image flow and adds no external music provider, audio files or extra AI request. Read the current source and music design before further work.
+
 Date: 2026-10-18. Status: design for the requested Claude implementation handoff; application code is not changed by this document.
 
 ## 1. Agreed intent and current baseline

@@ -1,5 +1,7 @@
 # Reference image prompts and provenance
 
+**Music amendment, 2026-10-19:** [music-design.md](music-design.md) selects AI-directed parameters and browser Web Audio synthesis. G02 remains the visual player reference. The original generation prompts below are preserved as provenance; they do not prescribe an external music service or prove working playback.
+
 Owner selection: **A (G01–G03), 2026-10-18.** The prompts below record the retained reference screens; fixed material prompts are in asset-prompts.md.
 
 Date: 2026-10-18. Method: built-in Image Gen tool, not the CLI or the project's API key. `transparent_background:false` for every concept. Each deliverable is a separate generated screen; none is a crop of another screen or an implemented app screenshot.

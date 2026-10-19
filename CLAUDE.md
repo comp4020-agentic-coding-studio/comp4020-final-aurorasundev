@@ -38,8 +38,15 @@ readable centre. Keep phone controls and captions clear of the paper.
   no link back. An image request with an unknown outcome is never resent
   automatically. It is an unordered record exhibition (design
   `design/gallery-records-2026-10-18/`, G01–G03; no feed, ranking, likes or
-  comments), loads no room code, and has no sound until a real music
-  service is configured. `ARTIFACTS_ENABLED` stays off
+  comments), and loads no room code. Sound is **not implemented**. Its selected
+  design is `design/gallery-records-2026-10-18/music-design.md` (ADR 006):
+  reuse the existing AI musical directions, compose/store one versioned
+  score and fixed seed at image publication, then perform it with native
+  Web Audio only after Play. No second model request, external music
+  service/key, MP3, audio job or autoplay. A future `GALLERY_MUSIC_ENABLED`
+  flag is independent from image generation; do not treat this design as
+  permission to enable it. Preserve the current fire/extraction protocol.
+  `ARTIFACTS_ENABLED` stays off
   until the owner decides; the fixture provider is refused on Fly.
 - Real-time is SSE (`GET /api/events`) + HTTP. The database is the source of
   truth; events carry a shared `revision` and are merged by version; every
