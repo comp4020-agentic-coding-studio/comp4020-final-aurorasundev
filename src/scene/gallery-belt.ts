@@ -6,11 +6,11 @@ import { beltCards, beltPoint, cardFrame, cardPlacement, CAMERA_HALF, dissolveAt
 import { createBeltGlobe } from "./belt-globe.ts";
 import { mergeOrbitItems, nextFocusIndex, type OrbitItem } from "./orbit-items.ts";
 import { advanceSpin, dampPhase, spinning, wheelItems, wheelSnap, SPIN_GAIN, SPIN_IDLE, SPIN_RESPONSE, WHEEL_QUIET_MS } from "./gallery-motion.ts";
-import { closeTimeline, local, newChoreo, openTimeline, slideStages, stepTimeline, type SpinClock } from "./record-timeline.ts";
+import { cardRitual, closeTimeline, newChoreo, newSwap, openTimeline, pruneSwap, retarget, shiftSwap, slideStages, stepTimeline, type SpinClock } from "./record-timeline.ts";
 import { createSleeveKit, type SleeveMesh } from "./sleeve-kit.ts";
 import { applyVinylSheen } from "./vinyl-sheen.ts";
 import { createCardParticles } from "./card-particles.ts";
-import { driftSign, EXIT_PARTICLES, fastTurn, GATHER_SECONDS, hideStart, HIDE_SECONDS, IMAGE_FADE_SECONDS, imageShown, meshAlpha, particleAlpha, planParticles, zoneMode, type Candidate, type Mode, type Render } from "./particles-plan.ts";
+import { driftSign, fastTurn, GATHER_SECONDS, hideStart, HIDE_SECONDS, IMAGE_FADE_SECONDS, imageShown, meshAlpha, particleAlpha, planExit, planParticles, zoneMode, type Candidate, type ExitSlot, type Mode, type Render } from "./particles-plan.ts";
 
 // The Gallery's record exhibition as a belt round a globe (design 2026-10-19
 // §4): an orthographic view of a flattened sphere drawn in graphite thread
@@ -37,8 +37,19 @@ import { driftSign, EXIT_PARTICLES, fastTurn, GATHER_SECONDS, hideStart, HIDE_SE
 // (particles-plan.ts decides; card-particles.ts draws). A card shows its
 // image only in front of the zone's peak, so a record that changed at the
 // back first appears by gathering in the arriving zone. An operator hide
-// leaves a ghost that breaks up in place. Step ④ drives the same path for
-// the open's exit through `card.request` (see the Card type).
+// leaves a ghost that breaks up in place.
+//
+// Opening a record (step ④, design §5) uses the same particle path: the other
+// front-half cards break into grain one after another, nearest the focus
+// first, drifting back along the band (particles-plan.ts planExit picks who
+// gets a slot; the rest, and the far half's silhouettes, fade); the sleeve
+// comes forward to the HTML art frame and the record slides out of it. A
+// close gathers them back. An arrow inside an open record moves the hero
+// frame to the next place (record-timeline.ts retarget): the outgoing sleeve
+// breaks up in place in the frame while the incoming one gathers there, and
+// the belt behind turns with everything else still dispersed. Every value is
+// a function of the shared choreography, so any timeline can replace any
+// other from where it stands.
 //
 // It imports nothing from the room: no paper scene, furnace, fire or physics.
 
@@ -137,21 +148,27 @@ type Card = {
   id: string | null;
   theta: number;
   pose: Pose | null;
-  // 0 whole .. 1 gone: the dissolve zones, the open's exit and an operator
-  // hide all land here. Step ③ draws it as particles; for now it is alpha.
+  // 0 whole .. 1 gone: max of the dissolve zone, the open's ritual and a
+  // caller's request; drawn as particles within the budget, else alpha
   dissolve: number;
   // the pointer's hover lift, 0..1, eased by its own small tween
   lift: { v: number };
   // each material's own colour, so the depth tone can dim it
   base: THREE.Color[];
-  // where the dissolve came from this frame: the zone, and the open's exit
+  // where the dissolve came from this frame: the zone, and the open's ritual
+  // (record-timeline.ts cardRitual: the exit, or the hero frame's swap)
   zone: number;
-  aside: number;
-  // A caller's own dissolve (step ④: the open's exit and the close's
-  // gather): tween `v` 0..1 with gsap and set `mode` ("leave"/"gather" drift
-  // along the band toward the back, "inplace" breaks up where it stands).
-  // While `v` > 0 the card dissolves by max(zone, v) and takes a particle
-  // slot ahead of zone cards. Null when unused.
+  ritual: number;
+  ritualMode: Mode;
+  // whether the ritual's dissolve may take a particle slot (planExit)
+  ritualParticles: boolean;
+  // it sits (partly) in the hero frame: its image shows wherever its place is
+  framed: boolean;
+  ritualWeight: number;
+  // A caller's own dissolve (the re-gather in a hidden record's place): tween
+  // `v` 0..1 with gsap and set `mode`. While `v` > 0 the card dissolves by
+  // max(zone, ritual, v) and takes a particle slot ahead of zone cards. Null
+  // when unused.
   request: { v: number; mode: Mode } | null;
   // the particle bookkeeping
   render: Render;
@@ -341,7 +358,11 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       lift: { v: 0 },
       base,
       zone: 0,
-      aside: 0,
+      ritual: 0,
+      ritualMode: "leave",
+      ritualParticles: false,
+      framed: false,
+      ritualWeight: 0,
       request: null,
       render: "mesh",
       mode: "leave",
@@ -362,11 +383,11 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
   let fast = false;
   const inParticles = new Set<string>();
   const cardKey = (card: Card) => `c${card.m}`;
-  // The reusable per-card dissolve (step ④: the open's exit and the close's
-  // gather). Tweens the card's own dissolve to `to` (1 dispersed, 0 solid)
-  // with the given drift mode; the frame loop draws it as particles within
-  // the budget (alpha under reduced motion or past the budget). Returns the
-  // tween so a timeline can nest it; the request clears itself at 0.
+  // A per-card dissolve outside the ritual (a newcomer gathering in a hidden
+  // record's place). Tweens the card's own dissolve to `to` (1 dispersed, 0
+  // solid) with the given drift mode; the frame loop draws it as particles
+  // within the budget (alpha under reduced motion or past the budget).
+  // Returns the tween; the request clears itself at 0.
   function dissolveCard(card: Card, to: number, mode: Mode, vars: gsap.TweenVars = {}): gsap.core.Tween {
     const req = card.request ?? (card.request = { v: 0, mode });
     req.mode = mode;
@@ -444,6 +465,15 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
   const intro = { entry: 0 };
   let inputOn = !opts.held;
   const c = newChoreo();
+  // the hero frame: the belt place whose sleeve comes forward on an open, and
+  // the sleeves swapping in it on a step (record-timeline.ts)
+  const swap = newSwap();
+  let heroM = 0;
+  // the open's exit order and particle slots, per ring size and device
+  let exits: Map<number, ExitSlot> = new Map();
+  let exitsFor = "";
+  // the timeline playing is a close: the ritual's cards gather back
+  let closing = false;
   const spinClock: SpinClock = { angle: 0, boost: 0 };
   let tl: gsap.core.Timeline | null = null;
   let arriveDue = false;
@@ -535,14 +565,25 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     }
     const lost = prevIndex >= 0 && !keep.has(prev[prevIndex].id);
     if (lost && c.hero > 0) {
+      // the open record was hidden: its ghost breaks up in the hero frame,
+      // and whichever record shifts into its place gathers in on the belt
+      // with the close the page now asks for (no sleeve is left half-swapped)
       stopTimeline(false);
       c.hero = 0;
+      swap.outgoing.length = 0;
+      swap.incoming.v = reduced() ? 0 : 1;
     }
     wheelStart = null;
+    const fromPlace = Math.round(target);
     if (!next.length) {
       phase = target = 0;
+      heroM = 0;
+      swap.outgoing.length = 0;
     } else {
       const idx = nextFocusIndex(prev, prevIndex, next);
+      // every belt place moves by the same whole step, the hero frame's too
+      heroM += idx - fromPlace;
+      shiftSwap(swap, idx - fromPlace);
       if (dragging) {
         dragStart += idx - Math.round(target);
         target = idx + fraction;
@@ -583,16 +624,29 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     arriveDue = false;
     tl?.kill();
     tl = null;
+    closing = false;
+  }
+  // the hero frame moves to belt place `m` (record-timeline.ts retarget); the
+  // incoming sleeve gathers from wherever its own exit has it now
+  function moveHero(m: number): number {
+    return retarget(swap, c, heroM, m, cardRitual(m, heroM, c, swap, exits, closing).dissolve);
   }
   function arriveWhenSettled() {
     arriveDue = true;
     dirty = Math.max(dirty, 1);
   }
-  function play(next: gsap.core.Timeline) {
+  // Play one ritual timeline. Only the current one may finish anything: a
+  // killed or replaced timeline never calls back, so a stale arrival or hand
+  // back cannot reach the page.
+  function play(next: gsap.core.Timeline, isClose = false) {
     tl = next;
+    closing = isClose;
     next.eventCallback("onUpdate", () => (dirty = Math.max(dirty, 1)));
     next.eventCallback("onComplete", () => {
-      if (tl === next) tl = null;
+      if (tl === next) {
+        tl = null;
+        closing = false;
+      }
       dirty = 4;
     });
   }
@@ -746,25 +800,26 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     };
   }
 
-  // the card at belt place m, given the choreography: the others fade aside
-  // one after another, the chosen one comes forward to the HTML art frame,
-  // a hovered one lifts, and the page's entrance gathers them from the front
-  function cardPose(card: Card, s: number): Pose {
+  // the card at belt place m, given the choreography: the others break up
+  // one after another (record-timeline.ts cardRitual), the hero frame's
+  // sleeve comes forward to the HTML art frame (and, on a step, swaps there
+  // in place), a hovered one lifts, and the page's entrance gathers them
+  // from the front
+  function cardPose(card: Card, s: number, m: number): Pose {
     let p = beltPose(card.theta);
-    const focusWeight = clamp(1 - Math.abs(s), 0, 1);
-    const aside = local(c.exit, Math.abs(s), c.order) * (1 - focusWeight);
+    const rit = cardRitual(m, heroM, c, swap, exits, closing);
     card.zone = dissolveAt(card.theta, L.phone);
-    card.aside = aside;
-    card.dissolve = Math.max(card.zone, aside, card.request?.v ?? 0);
-    if (aside > 0) {
-      // a small step outward along the belt as it goes
-      p.x = L.cx + (p.x - L.cx) * (1 + 0.12 * aside);
-      p.size *= 1 - 0.12 * aside;
+    if (rit.heroW > 0) {
+      // in the frame, the belt's zone no longer applies
+      p = blend(p, L.hero, rit.heroW);
+      card.zone *= 1 - rit.heroW;
     }
-    if (c.hero > 0 && focusWeight > 0) {
-      p = blend(p, L.hero, c.hero * focusWeight);
-      card.dissolve *= 1 - c.hero * focusWeight;
-    }
+    card.ritual = rit.dissolve;
+    card.ritualMode = rit.mode;
+    card.ritualParticles = rit.particles;
+    card.framed = rit.heroW > 0;
+    card.ritualWeight = rit.weight;
+    card.dissolve = Math.max(card.zone, rit.dissolve, card.request?.v ?? 0);
     const lift = card.lift.v;
     if (lift > 0) {
       p.y += 0.05 * p.size * lift;
@@ -859,6 +914,16 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     globe.setDraw(smooth(0, 0.5, entry));
     globe.setOpacity(1 - 0.7 * c.hero);
 
+    // the open's exit order for this ring (recomputed only when it changes)
+    const ef = `${R}:${L.phone}`;
+    if (ef !== exitsFor) {
+      exits = planExit(R, L.phone);
+      exitsFor = ef;
+    }
+    // with nothing of an open showing, the hero frame follows the focus
+    pruneSwap(swap);
+    if (!open && c.hero <= 0.001 && c.exit <= 0.001 && c.tuck <= 0.001 && swap.incoming.v <= 0.001 && !swap.outgoing.length) heroM = Math.round(target);
+
     // the ring's cards
     const placed = n ? beltCards(phase, R, n) : [];
     // a fast turn draws the zones as the plain alpha fade (with hysteresis)
@@ -892,16 +957,19 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       card.m = bc.m;
       card.id = item.id;
       card.theta = bc.theta;
-      card.mode = card.request && card.request.v > 0 ? card.request.mode : zoneMode(bc.theta, card.prevTheta, card.mode);
+      // whichever source dissolves the card most sets how its grain moves
+      const reqV = card.request?.v ?? 0;
+      card.mode = card.ritual > 0 && card.ritual >= Math.max(card.zone, reqV) ? card.ritualMode : reqV > 0 ? card.request!.mode : zoneMode(bc.theta, card.prevTheta, card.mode);
       const s = bc.m - phase;
-      const p = cardPose(card, s);
+      const p = cardPose(card, s, bc.m);
       card.pose = p;
-      if (bc.m === Math.round(phase)) heroPose = p;
+      if (bc.m === heroM) heroPose = p;
       // every card on the ring keeps its image warm (ring ≤ 10 of the 14), but
       // shows it only in front of the zone's peak: a record that changed at
       // the back first shows its image while it gathers in the arriving zone
       const art = artFor({ id: item.id, url: item.image_url });
-      const tex = imageShown(bc.theta, L.phone) ? art : null;
+      const visibleArt = imageShown(bc.theta, L.phone) || card.framed;
+      const tex = visibleArt ? art : null;
       if (tex !== card.image.tex) {
         // an image that decoded late, while the card is plainly on screen,
         // fades in over the blank stock it gathered into; otherwise
@@ -910,21 +978,24 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
         card.image.mix = tex && card.image.waiting && solid > 0.05 ? 0 : 1;
         card.image.tex = tex;
       }
-      card.image.waiting = !art && imageShown(bc.theta, L.phone);
+      card.image.waiting = !art && visibleArt;
       if (card.image.mix < 1) {
         card.image.mix = Math.min(1, card.image.mix + dt / IMAGE_FADE_SECONDS);
         dirty = Math.max(dirty, 1);
       }
       card.prevTheta = bc.theta;
       card.prevM = bc.m;
-      // the open's exit stays the alpha fade until step ④ moves it to
-      // particles; the zones and a caller's request are particle candidates
+      // The ritual's exit takes a particle slot only where planExit gave it
+      // one (the nearest front-half cards); the rest fade. The zones, the
+      // hero frame's swap and a caller's request are particle candidates.
       const req = card.request?.v ?? 0;
-      const byExit = !EXIT_PARTICLES && card.aside > Math.max(card.zone, req);
-      if (p.fade > 0.01 && card.dissolve > 0.001 && !byExit) {
-        cands.push({ key: cardKey(card), dissolve: card.dissolve, kind: req >= card.zone && req > 0 ? "request" : "zone", weight: frontnessOf(card.theta) });
+      const byRitual = card.ritual > 0.001 && card.ritual >= Math.max(card.zone, req);
+      const fades = byRitual && !card.ritualParticles;
+      if (p.fade > 0.01 && card.dissolve > 0.001 && !fades) {
+        const asked = byRitual || (req > 0 && req >= card.zone);
+        cands.push({ key: cardKey(card), dissolve: card.dissolve, kind: asked ? "request" : "zone", weight: byRitual ? card.ritualWeight : frontnessOf(card.theta) });
       }
-      card.render = byExit ? "alpha" : "mesh";
+      card.render = fades ? "alpha" : "mesh";
     }
     for (const card of cards) {
       if (used.has(card.slot)) continue;
@@ -975,7 +1046,9 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       if (g.visible || card.render === "particles") order.push(card);
     }
     // the record
-    const dp = discPoseFor(heroPose);
+    // (a run of arrows can carry the hero place off the ring for a moment:
+    // the record stays with the frame)
+    const dp = discPoseFor(heroPose ?? (c.hero > 0 ? L.hero : null));
     disc.position.set(dp.x, dp.y, dp.z);
     disc.quaternion.copy(dp.q);
     disc.scale.setScalar(dp.size);
@@ -1112,19 +1185,24 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
         snap();
         // the globe holds the open record's rest pose (lerped in by `hero`)
         heldGlobe = ring() ? globeAngle(Math.round(target), ring()) : 0;
-        const next = openTimeline(c, spinClock, { phone: L.phone });
+        // the focused place takes the hero frame (reopened mid-close on a
+        // different place, the returning sleeve swaps out in the frame)
+        heroM = moveHero(Math.round(target));
+        const next = openTimeline(c, spinClock, { phone: L.phone }, swap);
         const reveal = cb.reveal?.() ?? null;
         if (reveal) {
           next.add(reveal, "land");
           revealTl = reveal;
         }
-        next.call(arriveWhenSettled, undefined, ">");
+        next.call(() => tl === next && arriveWhenSettled(), undefined, next.duration());
         play(next);
       } else {
         if (inputOn) observer.enable();
-        const next = closeTimeline(c);
-        next.call(() => cb.onHandBack(), undefined, 0.35);
-        play(next);
+        // the hand back is the close's last beat: every card has gathered
+        const next = closeTimeline(c, swap, () => {
+          if (tl === next) cb.onHandBack();
+        });
+        play(next, true);
       }
       dirty = 4;
     },
@@ -1137,11 +1215,14 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       if (!count()) return;
       snap(Math.round(target) + dir);
       if (!open) return;
-      // inside an open record: the belt carries the next sleeve forward
-      // behind it and the record turns once to rest upright
+      // inside an open record: the belt turns behind it by one card with the
+      // others still dispersed, the outgoing sleeve breaks up in place in
+      // the hero frame while the incoming one gathers there, and the record
+      // turns once to rest upright
       stopTimeline(true);
-      const next = stepTimeline(c, spinClock, { phone: L.phone });
-      next.call(arriveWhenSettled, undefined, ">");
+      heroM = moveHero(Math.round(target));
+      const next = stepTimeline(c, spinClock, { phone: L.phone }, swap);
+      next.call(() => tl === next && arriveWhenSettled(), undefined, next.duration());
       play(next);
     },
     setInput(enabled) {
@@ -1174,6 +1255,10 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       introTween?.kill();
       gsap.killTweensOf(intro);
       gsap.killTweensOf(spinClock);
+      gsap.killTweensOf(c);
+      gsap.killTweensOf(swap.incoming);
+      gsap.killTweensOf(swap.outgoing);
+      swap.outgoing.length = 0;
       for (const card of cards) {
         gsap.killTweensOf(card.lift);
         if (card.request) gsap.killTweensOf(card.request);
