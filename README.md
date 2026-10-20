@@ -60,6 +60,18 @@ Our report notes expire after 30 days. Drafts are not sent before submission.
 See the [moderation decision](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/004-configured-safety-review.md)
 for the limits and operator workflow.
 
+## Who is who
+
+There are no accounts. Each browser is its own anonymous visitor, set by a
+cookie the first time you arrive; another browser profile or a private
+window is someone else. The server decides what each visitor may do: only
+the person who kept a paper can let it go, and only someone who has
+witnessed a released paper can let that one go. The server log names each
+visitor by a short alias, never by their words. See the
+[permissions decision](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/005-people-and-permissions.md)
+and the
+[logging runbook](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/logging-runbook.md).
+
 ## References
 
 - [Paper Crumple demo](https://github.com/item-develop/paper-crumple-demo) —

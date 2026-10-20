@@ -62,8 +62,12 @@ readable centre. Keep phone controls and captions clear of the paper.
   (`erasableSyntaxOnly`: no enums, no parameter properties). SQL is always
   parameterised. Schema changes are versioned migrations that preserve
   existing papers and identities.
-- Logs carry time, internal identity, action, paper id, outcome and revision.
-  Never content, drafts, cookies, return keys or credentials.
+- Logs carry time, action, the person (`who=visitor-…` alias plus internal
+  identity, via `person()` in `server/log.ts`), paper id, outcome and
+  revision. Never content, drafts, cookies, return keys or credentials. Any
+  new per-person action logs through `person()` so crit-10 narration keeps
+  working; who may do what is ADR 005, reading the log is
+  `docs/logging-runbook.md`.
 - `src/` React 19 + Vite. `src/scene/` wraps the paper-crumple-demo (MIT,
   see `THIRD_PARTY_NOTICES.md`) as an init/dispose module. Per-frame state stays
   in the scene, never in React state.
