@@ -1,11 +1,15 @@
 import * as THREE from "three";
 
-// The Gallery's entry mist (design 2026-10-19 §2): one full-screen fragment
-// shader of domain-warped fbm, drifting slowly as soft off-white and
-// grey-blue tufts over a pale ground. A 128² ping-pong flow field takes the
-// pointer's velocity (not its position) as splats and keeps 0.94 of itself
-// per 60 Hz frame, and the mist samples through it, so a passing hand parts
-// and curls the mist and it closes again over about two seconds.
+// The Gallery's entry mist (design 2026-10-19 §2, owner revision
+// 2026-10-20): one full-screen fragment shader of domain-warped fbm, drifting
+// slowly as dense off-white and grey-blue cloud. It is drawn as a transparent
+// veil ABOVE the HTML title (premultiplied alpha; the pale ground is a CSS
+// layer below the title), so the title sits half-hidden in the cloud and
+// surfaces as it drifts. Its density breathes on a slow cycle, so the title
+// reads within a couple of seconds without any pointer. A 128² ping-pong flow
+// field takes the pointer's velocity (not its position) as wide splats and
+// keeps 0.975 of itself per 60 Hz frame; the mist thins and curls where the
+// flow is, so a passing hand parts it and it closes again over 2–3 s.
 //
 // Its own module with init/dispose; per-frame state stays here, never in
 // React. No text is ever drawn here. DPR is capped at 1 (mist is soft); it
@@ -13,7 +17,8 @@ import * as THREE from "three";
 // one still frame with no flow. It imports nothing from the room.
 
 export type Mist = {
-  // tuft strength: 1 on the entry, ~0.42 behind the exhibition (≈0.25 alpha)
+  // veil strength: 1 on the entry, 0 once the exhibition is reached (the
+  // stage plate shows clear), MIST_STILL for reduced motion
   level: { value: number };
   // the page moved the level (e.g. from a GSAP tween): draw it
   touch: () => void;
@@ -23,10 +28,20 @@ export type Mist = {
 };
 
 export const MIST_ENTRY = 1;
-export const MIST_BEHIND = 0.42;
+export const MIST_BEHIND = 0;
+// reduced motion: a lighter, still veil; the title stays clearly visible
+export const MIST_STILL = 0.32;
 const FLOW = 128;
 const clamp1 = (v: number) => Math.max(-1, Math.min(1, v));
-const KEEP = 0.94;
+// per 60 Hz frame: 0.975^150 ≈ 0.02, so a parting closes over about 2.5 s
+export const MIST_KEEP = 0.975;
+const KEEP = MIST_KEEP;
+// the pointer's splat: a gaussian of this variance (in height²; about 0.11 of
+// the height across), so a hand parts a broad lane rather than a thread
+export const MIST_RADIUS = 0.012;
+// the breath: one slow cycle of density, starting thin so the title surfaces
+// first (seconds)
+export const MIST_BREATH = 7;
 
 const vert = /* glsl */ `
 varying vec2 vUv;
@@ -78,6 +93,7 @@ uniform float uTime;
 uniform float uLevel;
 uniform float uAspect;
 uniform float uBias;
+uniform float uBreath;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
 float noise(vec2 p) {
   vec2 i = floor(p);
@@ -105,22 +121,32 @@ void main() {
   vec2 q = vec2(fbm(p + vec2(0.0, t * 0.021)), fbm(p + vec2(5.2, 1.3) - vec2(t * 0.017, 0.0)));
   vec2 r = vec2(fbm(p + 3.2 * q + vec2(1.7, 9.2) + t * 0.026), fbm(p + 3.2 * q + vec2(8.3, 2.8) - t * 0.019));
   float f = fbm(p + 2.6 * r + flow * 0.8);
-  // pale ground: a cool grey-blue air above, lighter towards the floor
-  vec3 ground = mix(vec3(0.835, 0.855, 0.851), vec3(0.733, 0.776, 0.776), smoothstep(0.0, 1.0, vUv.y));
-  // tufts: translucent, about 0.35–0.6 alpha at full level
-  float tuft = smoothstep(0.42, 0.78, f);
-  float alpha = tuft * mix(0.35, 0.6, smoothstep(0.5, 0.9, f)) * uLevel;
-  // where the hand passed the mist thins as it parts, then closes again
-  alpha *= 1.0 - 0.55 * smoothstep(0.05, 0.6, length(flow));
+  // the breath (0 thin .. 1 dense) lowers the threshold the cloud starts at,
+  // so as it thickens the tufts spread and join over the title
+  float b = uBreath;
+  float tuft = smoothstep(mix(0.5, 0.3, b), mix(0.8, 0.66, b), f);
+  float alpha = tuft * mix(0.55, 0.93, smoothstep(0.45, 0.85, f)) * mix(0.72, 1.0, b);
+  // densest across the title's band, thinner toward the header and the
+  // Scroll hint so those stay readable
+  float band = 1.0 - smoothstep(0.2, 0.46, abs(vUv.y - 0.53));
+  alpha *= mix(0.42, 1.0, band);
+  alpha *= uLevel;
+  // where the hand passed the mist parts almost clear, then closes again
+  alpha *= 1.0 - 0.92 * smoothstep(0.02, 0.32, length(flow));
+  alpha = clamp(alpha, 0.0, 1.0);
   vec3 offWhite = vec3(0.957, 0.953, 0.937);
-  vec3 greyBlue = vec3(0.63, 0.69, 0.71);
-  vec3 tint = mix(offWhite, greyBlue, smoothstep(0.35, 0.75, r.x) * 0.7);
-  vec3 col = mix(ground, tint, alpha);
-  // a whisper of grain so the gradient never bands
-  col += (hash(gl_FragCoord.xy + fract(t)) - 0.5) / 255.0;
-  gl_FragColor = vec4(col, 1.0);
+  vec3 greyBlue = vec3(0.70, 0.75, 0.76);
+  vec3 tint = mix(offWhite, greyBlue, smoothstep(0.35, 0.75, r.x) * 0.6);
+  // a whisper of grain so the veil never bands
+  tint += (hash(gl_FragCoord.xy + fract(t)) - 0.5) / 255.0;
+  // premultiplied: the canvas composites over the title and the CSS ground
+  gl_FragColor = vec4(tint * alpha, alpha);
 }
 `;
+
+// The density's breath at t seconds: 0 at the start (the title surfaces
+// first), up to 1 and back over MIST_BREATH, on a soft cosine.
+export const breath = (t: number) => 0.5 - 0.5 * Math.cos((2 * Math.PI * t) / MIST_BREATH);
 
 export function canDrawMist(): boolean {
   try {
@@ -132,7 +158,7 @@ export function canDrawMist(): boolean {
 }
 
 export function createMist(host: HTMLElement, opts: { still: boolean; onLost?: () => void }): Mist {
-  const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, depth: false, stencil: false, powerPreference: "low-power" });
+  const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, premultipliedAlpha: true, depth: false, stencil: false, powerPreference: "low-power" });
   renderer.setPixelRatio(1);
   renderer.autoClear = false;
   const canvas = renderer.domElement;
@@ -172,7 +198,7 @@ export function createMist(host: HTMLElement, opts: { still: boolean; onLost?: (
       uPoint: { value: new THREE.Vector2(0.5, 0.5) },
       uFrom: { value: new THREE.Vector2(0.5, 0.5) },
       uForce: { value: new THREE.Vector2() },
-      uRadius: { value: 0.0035 },
+      uRadius: { value: MIST_RADIUS },
       uAspect: { value: 1 },
       uKeep: { value: KEEP },
       uFloor: { value: floor },
@@ -190,6 +216,7 @@ export function createMist(host: HTMLElement, opts: { still: boolean; onLost?: (
       uLevel: { value: MIST_ENTRY },
       uAspect: { value: 1 },
       uBias: { value: bias },
+      uBreath: { value: 0 },
     },
   });
   const flowScene = new THREE.Scene();
@@ -264,6 +291,8 @@ export function createMist(host: HTMLElement, opts: { still: boolean; onLost?: (
   let dirty = true;
   let behind = false;
   let time = Math.random() * 40;
+  // the breath's own clock, from the page's first frame
+  let breathT = 0;
   let lastFrame = performance.now();
 
   // drifting and taking the pointer only while the entry shows; behind the
@@ -277,6 +306,7 @@ export function createMist(host: HTMLElement, opts: { still: boolean; onLost?: (
     lastFrame = now;
     if (live()) {
       time += dt;
+      breathT += dt;
       flowMat.uniforms.uPrev.value = read.texture;
       flowMat.uniforms.uKeep.value = Math.pow(KEEP, dt * 60);
       flowMat.uniforms.uForce.value.copy(force);
@@ -292,6 +322,7 @@ export function createMist(host: HTMLElement, opts: { still: boolean; onLost?: (
     mistMat.uniforms.uFlow.value = read.texture;
     mistMat.uniforms.uTime.value = time;
     mistMat.uniforms.uLevel.value = level.value;
+    mistMat.uniforms.uBreath.value = opts.still ? 0 : breath(breathT);
     renderer.render(mistScene, cam);
     dirty = false;
     if (live()) raf = requestAnimationFrame(step);

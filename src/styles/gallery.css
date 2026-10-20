@@ -1054,11 +1054,31 @@
   touch-action: pinch-zoom;
 }
 
+/* The entry mist is a transparent veil ABOVE the title (owner, 2026-10-20):
+   the title sits half-hidden in the cloud over the stage plate, and surfaces
+   as the mist drifts, breathes or parts under the pointer. The veil takes no
+   pointer, so the wheel, keys, links and the Scroll button reach what is
+   under it. The header rides above it and stays legible. Once the exhibition
+   is reached the veil has cleared to nothing and is hidden outright, so it
+   can never wash the plate. */
 .gallery-mist {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: 4;
   pointer-events: none;
+}
+
+.has-entry > .records-header {
+  z-index: 5;
+}
+
+.has-entry[data-stage="exhibition"] .gallery-mist {
+  visibility: hidden;
+}
+
+/* reduced motion (no entry): a light, still veil behind the content */
+.is-plain .gallery-mist {
+  z-index: -1;
 }
 
 .gallery-mist canvas {

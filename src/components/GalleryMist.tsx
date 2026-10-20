@@ -1,10 +1,11 @@
 import { useEffect, useRef, type RefObject } from "react";
-import { createMist, MIST_BEHIND, MIST_ENTRY, type Mist } from "../scene/mist.ts";
+import { createMist, MIST_BEHIND, MIST_ENTRY, MIST_STILL, type Mist } from "../scene/mist.ts";
 
 // The HTML host for the entry mist: mounts the isolated shader module once
 // and publishes it through `mist` for whoever drives its level (the entry's
-// transition). The canvas is decorative; a failure or a lost context leaves
-// the mist photograph behind it.
+// transition). The canvas is a decorative veil over the title (it takes no
+// pointer); a failure or a lost context leaves the stage plate and the plain
+// title.
 
 type Props = {
   mist: RefObject<Mist | null>;
@@ -29,7 +30,7 @@ export function GalleryMist({ mist, still, behind, onLost }: Props) {
       lost.current();
       return;
     }
-    made.level.value = behind ? MIST_BEHIND : MIST_ENTRY;
+    made.level.value = still ? MIST_STILL : behind ? MIST_BEHIND : MIST_ENTRY;
     made.setBackground(behind);
     made.touch();
     mist.current = made;

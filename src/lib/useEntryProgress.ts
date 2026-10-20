@@ -1,7 +1,7 @@
 import { gsap } from "gsap";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
-import { MIST_BEHIND, type Mist } from "../scene/mist.ts";
-import { entryReveal, entryTransition, splitTitle, type EntrySplit } from "./entry-motion.ts";
+import { MIST_BEHIND, MIST_ENTRY, type Mist } from "../scene/mist.ts";
+import { entryReveal, entryTransition } from "./entry-motion.ts";
 import { isAdvanceKey, progress, returnGesture, swipeDirection, wheelDirection, type Gate, type ProgressEvent, type ReturnArm, type Stage } from "./gallery-progress.ts";
 
 // The Gallery's entry and its virtual progress p (design 2026-10-19 §1–§3),
@@ -47,7 +47,6 @@ export function useEntryProgress(o: Options) {
   const stageRef = useRef(stage);
   const opts = useRef(o);
   opts.current = o;
-  const split = useRef<EntrySplit | null>(null);
   const reveal = useRef<gsap.core.Timeline | null>(null);
   const tl = useRef<gsap.core.Timeline | null>(null);
 
@@ -65,13 +64,13 @@ export function useEntryProgress(o: Options) {
     const title = refs.title.current;
     const corner = refs.corner.current;
     const exhibition = refs.exhibition.current;
-    if (!title || !corner || !exhibition || !split.current) return null;
+    if (!title || !corner || !exhibition) return null;
     const extras = [refs.lede.current, refs.enter.current].filter((e): e is HTMLElement => !!e);
     const m = opts.current.mist.current;
     const next = entryTransition(
-      { title, chars: split.current.chars, extras, corner, exhibition },
+      { title, extras, corner, exhibition },
       {
-        mist: m ? { level: m.level, to: MIST_BEHIND, touch: m.touch } : null,
+        mist: m ? { level: m.level, from: MIST_ENTRY, to: MIST_BEHIND, touch: m.touch } : null,
         scene: (v) => opts.current.sceneEntry(v),
         // the first beat is over; an exhibition still loading holds it here
         // (at most 1.4 s) rather than arriving half-built
@@ -121,23 +120,20 @@ export function useEntryProgress(o: Options) {
     tl.current.reverse();
   }, [dispatch]);
 
-  // the split title and its reveal: on every visit, before the first paint
+  // the entry's quiet reveal (the lede and hint; the title is whole text the
+  // mist reveals): on every visit, before the first paint
   useLayoutEffect(() => {
     if (!o.enabled) return;
     const { title, lede, enter, exhibition } = o.refs;
     if (!title.current || !exhibition.current) return;
-    const s = splitTitle(title.current);
-    split.current = s;
     gsap.set(exhibition.current, { autoAlpha: 0 });
-    reveal.current = entryReveal(s, [lede.current, enter.current].filter((e): e is HTMLElement => !!e));
+    reveal.current = entryReveal([lede.current, enter.current].filter((e): e is HTMLElement => !!e));
     const els = [title.current, lede.current, enter.current, exhibition.current].filter((e): e is HTMLElement => !!e);
     return () => {
       reveal.current?.kill();
       reveal.current = null;
       tl.current?.kill();
       tl.current = null;
-      s.revert();
-      split.current = null;
       gsap.set(els, { clearProps: "all" });
     };
   }, [o.enabled, o.refs]);
@@ -147,7 +143,12 @@ export function useEntryProgress(o: Options) {
     if (o.enabled || stageRef.current === "exhibition") return;
     stageRef.current = "exhibition";
     setStage("exhibition");
-    opts.current.mist.current?.setBackground(true);
+    const m = opts.current.mist.current;
+    if (m) {
+      // the veil clears, so it never covers the exhibition
+      m.level.value = MIST_BEHIND;
+      m.setBackground(true);
+    }
   }, [o.enabled]);
 
   // gestures: wheel, swipe and keys, read before the scene sees them

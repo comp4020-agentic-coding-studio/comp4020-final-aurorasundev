@@ -163,7 +163,8 @@ vi.mock("../src/scene/gallery-belt.ts", () => ({
 // the mist module draws with WebGL, which jsdom lacks: a recorder stands in
 vi.mock("../src/scene/mist.ts", () => ({
   MIST_ENTRY: 1,
-  MIST_BEHIND: 0.42,
+  MIST_BEHIND: 0,
+  MIST_STILL: 0.32,
   createMist: () => ({ level: { value: 1 }, touch: () => {}, setBackground: () => {}, dispose: () => {} }),
 }));
 
@@ -271,9 +272,11 @@ describe("the entry page", () => {
     await mount();
     expect(stage()).toBe("entry");
     const h1 = host.querySelector("h1")!;
-    // split into masked letters for the reveal, labelled with its whole text
-    expect(h1.getAttribute("aria-label") ?? h1.textContent).toBe("The Throwaway Gallery");
-    expect(h1.querySelectorAll("[aria-hidden='true']").length).toBeGreaterThan(0);
+    // whole, real text (owner 2026-10-20: no per-letter split or scramble;
+    // the mist above it does the revealing)
+    expect(h1.textContent).toBe("The Throwaway Gallery");
+    expect(h1.children).toHaveLength(0);
+    expect(h1.getAttribute("aria-hidden")).toBeNull();
     expect(host.querySelectorAll("h1")).toHaveLength(1);
     expect(host.textContent).toContain("Images shaped by released notes.");
     expect(host.querySelector(".records-title, .records-intro")).toBeNull();
