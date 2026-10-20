@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GalleryGridFallback } from "./components/GalleryGridFallback.tsx";
 import { GalleryOrbit, type OrbitHandle } from "./components/GalleryOrbit.tsx";
 import { GalleryMist } from "./components/GalleryMist.tsx";
+import { GalleryWordmark } from "./components/GalleryWordmark.tsx";
 import { RecordView } from "./components/RecordView.tsx";
 import { createGate, takesInput } from "./lib/gallery-progress.ts";
 import { recordReveal } from "./lib/record-reveal.ts";
@@ -61,10 +62,11 @@ export function GalleryApp() {
   const titleEl = useRef<HTMLHeadingElement>(null);
   const ledeEl = useRef<HTMLParagraphElement>(null);
   const enterEl = useRef<HTMLButtonElement>(null);
-  const cornerEl = useRef<HTMLAnchorElement>(null);
+  const cornerEl = useRef<HTMLSpanElement>(null);
+  const cornerOldEl = useRef<HTMLSpanElement>(null);
   const mainEl = useRef<HTMLElement>(null);
-  const entryRefs = useMemo<EntryRefs>(() => ({ root: page, title: titleEl, lede: ledeEl, enter: enterEl, corner: cornerEl, exhibition: mainEl }), []);
-  const { stage, advance } = useEntryProgress({
+  const entryRefs = useMemo<EntryRefs>(() => ({ root: page, title: titleEl, lede: ledeEl, enter: enterEl, corner: cornerEl, cornerOld: cornerOldEl, exhibition: mainEl }), []);
+  const { stage, advance, home } = useEntryProgress({
     enabled: entry && orbit,
     recordOpen: isOpen,
     refs: entryRefs,
@@ -100,6 +102,15 @@ export function GalleryApp() {
     opener.current = null;
     requestAnimationFrame(() => back?.focus({ preventScroll: true }));
   }, [g, showOrbit]);
+
+  // The corner wordmark returns to the Gallery's own entry (owner,
+  // 2026-10-20), never to the room: an open record closes first, then the
+  // title flies back from the corner to the centre.
+  const goHome = useCallback((): boolean => {
+    if (!(entry && orbit)) return false;
+    if (g.selected) close();
+    return home();
+  }, [entry, orbit, g.selected, close, home]);
 
   // a record closed from outside (hidden live) hands back the same way
   const wasOpen = useRef(false);
@@ -219,9 +230,7 @@ export function GalleryApp() {
       </div>
 
       <header className="records-header">
-        <a ref={cornerEl} className="wordmark" href="/">
-          Throwaway
-        </a>
+        <GalleryWordmark onHome={goHome} nameRef={cornerEl} oldRef={cornerOldEl} />
         <nav className="records-links" aria-label="Site">
           <a className="header-link" href="/">
             <span className="wide-only">Back to the space</span>
@@ -341,6 +350,7 @@ export function GalleryApp() {
           canStep={many}
           onStep={step}
           onReport={(reason) => void g.sendReport(g.selected!.id, reason)}
+          onHome={goHome}
           onClose={close}
         />
       )}

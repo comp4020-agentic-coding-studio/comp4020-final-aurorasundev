@@ -22,7 +22,10 @@ export type EntryRefs = {
   title: RefObject<HTMLElement | null>;
   lede: RefObject<HTMLElement | null>;
   enter: RefObject<HTMLElement | null>;
+  // the corner wordmark: the Gallery's name the title lands on, and the old
+  // "Throwaway" it replaces
   corner: RefObject<HTMLElement | null>;
+  cornerOld: RefObject<HTMLElement | null>;
   exhibition: RefObject<HTMLElement | null>;
 };
 
@@ -62,7 +65,8 @@ export function useEntryProgress(o: Options) {
   const build = useCallback((): gsap.core.Timeline | null => {
     const { refs, gate } = opts.current;
     const title = refs.title.current;
-    const corner = refs.corner.current;
+    const name = refs.corner.current;
+    const corner = name ? { name, old: refs.cornerOld.current } : null;
     const exhibition = refs.exhibition.current;
     if (!title || !corner || !exhibition) return null;
     const extras = [refs.lede.current, refs.enter.current].filter((e): e is HTMLElement => !!e);
@@ -95,7 +99,8 @@ export function useEntryProgress(o: Options) {
       if (tl.current !== next) return;
       const was = document.activeElement;
       dispatch({ type: "settled", at: 0 });
-      if (!was || was === document.body || refs.exhibition.current?.contains(was)) refs.enter.current?.focus({ preventScroll: true });
+      // (the corner wordmark that asked for the return hands focus on too)
+      if (!was || was === document.body || refs.exhibition.current?.contains(was) || (was as HTMLElement).closest?.(".gallery-wordmark")) refs.enter.current?.focus({ preventScroll: true });
     });
     return next;
   }, [dispatch]);
@@ -112,9 +117,10 @@ export function useEntryProgress(o: Options) {
     tl.current.play();
   }, [build, dispatch]);
 
-  const back = useCallback(() => {
+  // `force`: the corner wordmark, which closes an open record itself first
+  const back = useCallback((force = false) => {
     const s = stageRef.current;
-    if (opts.current.recordOpen || (s !== "exhibition" && s !== "advancing") || !tl.current) return;
+    if ((opts.current.recordOpen && !force) || (s !== "exhibition" && s !== "advancing") || !tl.current) return;
     opts.current.mist.current?.setBackground(false);
     dispatch({ type: "back", recordOpen: false });
     tl.current.reverse();
@@ -124,11 +130,11 @@ export function useEntryProgress(o: Options) {
   // mist reveals): on every visit, before the first paint
   useLayoutEffect(() => {
     if (!o.enabled) return;
-    const { title, lede, enter, exhibition } = o.refs;
+    const { title, lede, enter, exhibition, corner, cornerOld } = o.refs;
     if (!title.current || !exhibition.current) return;
     gsap.set(exhibition.current, { autoAlpha: 0 });
     reveal.current = entryReveal([lede.current, enter.current].filter((e): e is HTMLElement => !!e));
-    const els = [title.current, lede.current, enter.current, exhibition.current].filter((e): e is HTMLElement => !!e);
+    const els = [title.current, lede.current, enter.current, exhibition.current, corner.current, cornerOld.current].filter((e): e is HTMLElement => !!e);
     return () => {
       reveal.current?.kill();
       reveal.current = null;
@@ -262,5 +268,13 @@ export function useEntryProgress(o: Options) {
     };
   }, [o.enabled, advance, back, build]);
 
-  return { stage, advance, back };
+  // the corner wordmark: back to the entry from anywhere past it. Returns
+  // whether it was handled in place (false: no entry on this page)
+  const home = useCallback((): boolean => {
+    if (!opts.current.enabled) return false;
+    back(true);
+    return true;
+  }, [back]);
+
+  return { stage, advance, back, home };
 }

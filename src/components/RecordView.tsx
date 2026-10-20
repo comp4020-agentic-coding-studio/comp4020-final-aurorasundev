@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ArtifactReportReason, PublicArtifact } from "../lib/gallery-api.ts";
 import type { ReportState } from "../lib/useGallery.ts";
+import { GalleryWordmark } from "./GalleryWordmark.tsx";
 
 // One record, opened (G02): the complete square image in its sleeve beside
 // the record, the generic title and a way to report it, in a native modal
@@ -28,9 +29,11 @@ type Props = {
   onStep: (dir: 1 | -1) => void;
   onReport: (reason: ArtifactReportReason) => void;
   onClose: () => void;
+  // the header copy's wordmark: back to the Gallery's entry (closing first)
+  onHome?: () => boolean;
 };
 
-export function RecordView({ artifact, report, frozenReason, arriving, canStep, onStep, onReport, onClose }: Props) {
+export function RecordView({ artifact, report, frozenReason, arriving, canStep, onStep, onReport, onClose, onHome }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [view, setView] = useState<"look" | "report">(report.kind === "unsettled" ? "report" : "look");
   const [reason, setReason] = useState<ArtifactReportReason | null>(frozenReason);
@@ -73,9 +76,7 @@ export function RecordView({ artifact, report, frozenReason, arriving, canStep, 
     >
       <div className="record-frame">
         <div className="records-header record-header-copy">
-          <a className="wordmark" href="/">
-            Throwaway
-          </a>
+          <GalleryWordmark settled onHome={onHome ?? (() => false)} />
           <nav className="records-links" aria-label="Site">
             <a className="header-link" href="/">
               <span className="wide-only">Back to the space</span>

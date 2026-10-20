@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import type { GalleryPage, PublicArtifact } from "../src/lib/gallery-api.ts";
 import { createGate, GATE_CAP_MS, isAdvanceKey, progress, returnGesture, swipeDirection, takesInput, wheelDirection, type Stage } from "../src/lib/gallery-progress.ts";
 import type { OrbitCallbacks, OrbitOptions } from "../src/scene/gallery-belt.ts";
+import { flight } from "../src/lib/entry-motion.ts";
 
 // The Gallery's entry (design 2026-10-19 §1–§3) without WebGL: the virtual
 // progress p and its rules (advance, return, skip, never replaying on close,
@@ -56,6 +57,22 @@ describe("progress p", () => {
     expect(swipeDirection(-6, 120)).toBe(-1);
     expect(swipeDirection(120, -30)).toBe(0);
     expect(swipeDirection(0, -10)).toBe(0);
+  });
+});
+
+describe("the title's flight into the corner", () => {
+  it("lands the title's first line exactly on the corner's text, scaled about the title's top left", () => {
+    // a centred heading box, its first line's text inset in it, and the corner
+    const box = { left: 100, top: 400 };
+    const line = { left: 260, top: 410 };
+    const to = { left: 48, top: 40 };
+    const scale = 40 / 112;
+    const f = flight(box, line, to, scale);
+    // where the first line's top left ends up after translate + scale (origin 0 0)
+    const land = { left: box.left + f.x + (line.left - box.left) * scale, top: box.top + f.y + (line.top - box.top) * scale };
+    expect(land.left).toBeCloseTo(to.left, 9);
+    expect(land.top).toBeCloseTo(to.top, 9);
+    expect(f.scale).toBe(scale);
   });
 });
 
@@ -280,9 +297,14 @@ describe("the entry page", () => {
     expect(host.querySelectorAll("h1")).toHaveLength(1);
     expect(host.textContent).toContain("Images shaped by released notes.");
     expect(host.querySelector(".records-title, .records-intro")).toBeNull();
-    // the header keeps its wordmark and links
-    expect(host.querySelector(".records-header .wordmark")!.textContent).toBe("Throwaway");
-    expect([...host.querySelectorAll(".records-header a")].map((a) => a.getAttribute("href"))).toEqual(["/", "/", "/readme/"]);
+    // the header keeps its wordmark and links; the wordmark is named for the
+    // Gallery and leads to the Gallery's entry, never the room (owner,
+    // 2026-10-20); "Back to the space" is the way to "/"
+    const mark = host.querySelector(".records-header .wordmark")!;
+    expect(mark.getAttribute("aria-label")).toBe("The Throwaway Gallery");
+    expect(mark.querySelector(".wm-old")!.textContent).toBe("Throwaway");
+    expect(mark.querySelector(".wm-name")!.textContent).toBe("The Throwaway Gallery");
+    expect([...host.querySelectorAll(".records-header a")].map((a) => a.getAttribute("href"))).toEqual(["/gallery/", "/", "/readme/"]);
     // the Enter hint is a real, focusable button
     const enter = host.querySelector<HTMLButtonElement>(".entry-enter")!;
     expect(enter.tagName).toBe("BUTTON");
@@ -390,5 +412,44 @@ describe("the entry page", () => {
     expect(host.querySelectorAll(".records-tile")).toHaveLength(3);
     await key("Escape");
     expect(stage()).toBe("exhibition");
+  });
+
+  it("the corner wordmark returns to the entry from the exhibition and from an open record, never navigating to the room", async () => {
+    await mount();
+    await act(async () => control.scene.cb!.onReady?.());
+    await key("ArrowDown");
+    await play(2.4);
+    expect(stage()).toBe("exhibition");
+    const mark = () => host.querySelector<HTMLAnchorElement>(".records-header .wordmark")!;
+    // the click is handled in place: the browser's navigation is cancelled
+    const click = () => {
+      const e = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+      mark().dispatchEvent(e);
+      return e;
+    };
+    let e!: MouseEvent;
+    await act(async () => void (e = click()));
+    expect(e.defaultPrevented).toBe(true);
+    expect(mark().getAttribute("href")).not.toBe("/");
+    expect(stage()).toBe("returning");
+    await play(2.4);
+    expect(stage()).toBe("entry");
+    // the entry replays normally afterwards
+    await key("ArrowDown");
+    expect(stage()).toBe("advancing");
+    await play(2.4);
+    expect(stage()).toBe("exhibition");
+    // from an open record: the dialog's own header copy closes it, then returns
+    await act(async () => host.querySelector<HTMLButtonElement>(".orbit-open")!.click());
+    const copy = host.querySelector<HTMLAnchorElement>("dialog .wordmark")!;
+    expect(copy.getAttribute("aria-label")).toBe("The Throwaway Gallery");
+    expect(copy.textContent).toBe("The Throwaway Gallery");
+    // Space works as on a button (Enter is the link's own click)
+    await key(" ", copy);
+    expect(host.querySelector("dialog")).toBeNull();
+    expect(control.scene.opens).toEqual([true, false]);
+    expect(stage()).toBe("returning");
+    await play(2.4);
+    expect(stage()).toBe("entry");
   });
 });

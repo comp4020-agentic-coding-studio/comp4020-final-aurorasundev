@@ -232,3 +232,25 @@ These replace the earlier text where they differ.
   by the close (never a hard cut); the phone's scrolling dialog and the
   no-WebGL dialog use the same surface. No wash over the arriving WebGL
   record (acdc603).
+
+## 7b. Owner revision two (2026-10-20, second real-screen review)
+
+- **The entry title becomes the wordmark.** On the way in, "The Throwaway
+  Gallery" flies to the corner and replaces "Throwaway": its first line is
+  measured against the corner's own text (same Gloock face, font sizes as
+  the scale, top left as the origin) and lands exactly on it while the old
+  "Throwaway" fades out underneath; the corner's text then comes up over the
+  identical landed title, which hides, so one element remains and nothing
+  blinks. A title wrapped onto two lines (a phone) cannot land as one line,
+  so it crossfades with the corner over the flight's last 0.3 s. The corner
+  reads "The Throwaway Gallery" through the exhibition and any opened record
+  (the dialog's header copy too); 19 px on a phone so it fits beside "Space"
+  and "About". The return plays it backwards. The room page keeps
+  "Throwaway".
+- **The Gallery wordmark returns to the Gallery's entry, not the room.**
+  Clicking it (or Enter, or Space) closes an open record first, then plays
+  the return: the title flies from the corner back to the centre over the
+  mist, and the entry can be entered again as usual. It is a real link to
+  `/gallery/` handled in place (so without JavaScript it still lands on the
+  Gallery's entry), named "The Throwaway Gallery". "Back to the space" is the
+  way to `/`.

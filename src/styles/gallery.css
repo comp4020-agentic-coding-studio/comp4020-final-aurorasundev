@@ -1196,15 +1196,47 @@
   pointer-events: none !important;
 }
 
-/* the title travels into the corner: the wordmark steps aside while it
-   lands, and is back once the exhibition settles */
-.has-entry .records-header .wordmark {
-  transition: opacity 240ms ease;
+/* The corner wordmark (owner, 2026-10-20): the entry title flies into it
+   and replaces "Throwaway" with "The Throwaway Gallery". Both texts share
+   one grid cell; the entry transition (entry-motion.ts) drives their
+   opacity inline. Before it has run, the entry shows the old text; a page
+   with no entry (reduced motion, no WebGL) shows the Gallery's name. */
+.gallery-wordmark {
+  display: inline-grid;
+  white-space: nowrap;
 }
 
-.has-entry[data-stage="advancing"] .records-header .wordmark,
-.has-entry[data-stage="returning"] .records-header .wordmark {
+.gallery-wordmark > span {
+  grid-area: 1 / 1;
+}
+
+/* the same tracking and kerning as the entry title, so it lands exactly */
+.gallery-wordmark .wm-name {
+  font-kerning: none;
+  letter-spacing: -0.01em;
+}
+
+.has-entry .records-header .wm-name {
   opacity: 0;
+}
+
+.is-plain .records-header .wm-old {
+  opacity: 0;
+}
+
+/* a phone: the Gallery's name at a smaller size, so it fits beside "Space"
+   and "About" on a 360-390px screen */
+@media (max-width: 600px) {
+  .records-header .gallery-wordmark {
+    font-size: 19px;
+  }
+}
+
+/* the narrowest phones: the links close up a little beside it */
+@media (max-width: 380px) {
+  .records-links {
+    gap: 16px;
+  }
 }
 
 /* --- plain (reduced motion, no WebGL): a compact title above the grid ------ */
