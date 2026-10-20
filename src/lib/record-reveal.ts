@@ -13,11 +13,14 @@ import { SplitText } from "gsap/SplitText";
 
 gsap.registerPlugin(SplitText);
 
-export const TITLE_STAGGER = 0.02;
+export const TITLE_STAGGER = 0.025;
+// each element's own fade (owner, 2026-10-20: calmer)
+export const REVEAL_ITEM = 0.55;
+export const TITLE_LETTER = 0.5;
 // where the copy below the title, and then the controls, begin
-export const BODY_AT = 0.22;
-export const BODY_STAGGER = 0.06;
-export const CHROME_AT = 0.42;
+export const BODY_AT = 0.3;
+export const BODY_STAGGER = 0.08;
+export const CHROME_AT = 0.55;
 // a long title spreads its letters over at most TITLE_SPAN, so the open's
 // hand-over never waits on the title's length
 export const TITLE_SPAN = 0.5;
@@ -33,17 +36,17 @@ export function recordReveal(dialog: HTMLElement): gsap.core.Timeline | null {
 
   // fromTo renders its start at once, so nothing shows before its beat. The
   // controls only fade: one of them is centred with a CSS transform.
-  const tl = gsap.timeline({ defaults: { duration: 0.42, ease: "power2.out" } });
+  const tl = gsap.timeline({ defaults: { duration: REVEAL_ITEM, ease: "power2.out" } });
   // from here on the dialog's own CSS no longer holds the text back
   tl.call(() => dialog.setAttribute("data-revealed", ""), undefined, 0);
   tl.fromTo(body, { autoAlpha: 0, y: 8 }, { autoAlpha: 1, y: 0, stagger: BODY_STAGGER, clearProps: "transform" }, BODY_AT);
   tl.fromTo(chrome, { autoAlpha: 0 }, { autoAlpha: 1, stagger: 0.06 }, CHROME_AT);
   if (title) {
     if (still) {
-      tl.fromTo(title, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.3 }, 0);
+      tl.fromTo(title, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.4 }, 0);
     } else {
       const split = SplitText.create(title, { type: "words,chars", aria: "auto" });
-      tl.fromTo(split.chars, { autoAlpha: 0, yPercent: 40 }, { autoAlpha: 1, yPercent: 0, duration: 0.36, ease: "power3.out", stagger: titleStagger(split.chars.length) }, 0);
+      tl.fromTo(split.chars, { autoAlpha: 0, yPercent: 40 }, { autoAlpha: 1, yPercent: 0, duration: TITLE_LETTER, ease: "power3.out", stagger: titleStagger(split.chars.length) }, 0);
       // whoever ends the reveal (completion, or the scene cutting it short)
       // gets React's own text node back
       tl.eventCallback("onComplete", () => split.revert());

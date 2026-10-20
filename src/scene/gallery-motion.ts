@@ -81,3 +81,26 @@ export function advanceSpin(s: Spin, dt: number, o: SpinOptions): Spin {
 export function spinning(s: Spin, idle: number): boolean {
   return idle !== 0 || Math.abs(s.boost) > 1e-3;
 }
+
+// --- the record's slow 3D tumble (owner, 2026-10-20) ----------------------
+// In the spirit of goodgrowth.com's CD, which idles with rotation.x = 0.42 t,
+// rotation.y = 0.14 t and rotation.z = 0.35 sin(0.35 t): our record turns in
+// space as well as on its spindle, but oscillates rather than rolling over,
+// so its label reads most of the time. Layered over the fixed tilt, the
+// groove spin and the scroll-coupled boost; the sheen follows the face.
+// Rates are radians of phase per second (periods about 15, 20 and 18 s).
+export const TUMBLE_X = 0.36;
+export const TUMBLE_Y = 0.42;
+export const TUMBLE_Z = 0.1;
+export const TUMBLE_RATE_X = 0.42;
+export const TUMBLE_RATE_Y = 0.31;
+export const TUMBLE_RATE_Z = 0.35;
+export type Tumble = { x: number; y: number; z: number };
+// the tumble's Euler angles at t seconds, scaled by `weight` (0 still, 1 full)
+export function tumbleAt(t: number, weight = 1): Tumble {
+  return {
+    x: weight * TUMBLE_X * Math.sin(TUMBLE_RATE_X * t),
+    y: weight * TUMBLE_Y * Math.sin(TUMBLE_RATE_Y * t + 1.3),
+    z: weight * TUMBLE_Z * Math.sin(TUMBLE_RATE_Z * t + 0.6),
+  };
+}

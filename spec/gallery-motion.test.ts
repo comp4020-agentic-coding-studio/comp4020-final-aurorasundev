@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceSpin, dampPhase, spinning, wheelItems, wheelSnap, WHEEL_PX_PER_ITEM } from "../src/scene/gallery-motion.ts";
+import { advanceSpin, dampPhase, spinning, tumbleAt, TUMBLE_X, TUMBLE_Y, wheelItems, wheelSnap, WHEEL_PX_PER_ITEM } from "../src/scene/gallery-motion.ts";
 import { closeTimeline, EXIT_SPAN, landing, local, newChoreo, openTimeline, stepTimeline } from "../src/scene/record-timeline.ts";
 
 // The Gallery's motion rules without WebGL: one frame-rate-independent
@@ -134,7 +134,8 @@ describe("open and close choreography", () => {
     const c = newChoreo();
     const spin = { angle: 0, boost: 0 };
     const open = openTimeline(c, spin, { phone: false });
-    open.progress(0.4);
+    // part-way through the neighbours' exit
+    open.time(EXIT_SPAN * 0.6);
     const at = { ...c };
     open.kill();
     const close = closeTimeline(c);
@@ -156,7 +157,10 @@ describe("open and close choreography", () => {
     const step = stepTimeline(c, spin, { phone: false });
     step.progress(1);
     expect(c).toMatchObject({ exit: 1, hero: 1, tuck: 1, slide: 1, idle: 0 });
-    expect(spin.angle % (Math.PI * 2)).toBeCloseTo(0, 6);
+    // upright: a whole number of turns (compared by turns, so a float
+    // remainder just under a whole turn counts as upright)
+    const turns = spin.angle / (Math.PI * 2);
+    expect(Math.abs(turns - Math.round(turns))).toBeLessThan(1e-6);
     step.kill();
   });
 
@@ -164,5 +168,40 @@ describe("open and close choreography", () => {
     const TAU = Math.PI * 2;
     expect(landing(-0.5, 1)).toBeCloseTo(-2 * TAU, 9);
     expect(landing(-TAU, 1)).toBeCloseTo(-2 * TAU, 9);
+  });
+});
+
+describe("the record's 3D tumble", () => {
+  it("turns in space on more than its spindle, gently and continuously, and is still at weight 0", () => {
+    let maxX = 0;
+    let maxY = 0;
+    let prev = tumbleAt(0);
+    for (let t = 0; t < 120; t += 1 / 60) {
+      const a = tumbleAt(t);
+      maxX = Math.max(maxX, Math.abs(a.x));
+      maxY = Math.max(maxY, Math.abs(a.y));
+      // continuous: never a jump between frames
+      expect(Math.abs(a.x - prev.x) + Math.abs(a.y - prev.y) + Math.abs(a.z - prev.z)).toBeLessThan(0.02);
+      prev = a;
+    }
+    // visibly tilts on x and y (±0.35–0.6 rad), never rolls over
+    expect(maxX).toBeGreaterThan(0.34);
+    expect(maxY).toBeGreaterThan(0.34);
+    expect(Math.max(TUMBLE_X, TUMBLE_Y)).toBeLessThanOrEqual(0.6);
+    expect(tumbleAt(37.2, 0)).toEqual({ x: 0, y: 0, z: 0 });
+  });
+
+  it("is blended out over the open's tuck and back in on the close", () => {
+    const c = newChoreo();
+    expect(c.tumble).toBe(1);
+    const open = openTimeline(c, { angle: 0, boost: 0 }, { phone: false });
+    open.time(0.5);
+    expect(c.tumble).toBeGreaterThan(0);
+    expect(c.tumble).toBeLessThan(1);
+    open.progress(1).kill();
+    expect(c.tumble).toBe(0);
+    const close = closeTimeline(c);
+    close.progress(1).kill();
+    expect(c.tumble).toBe(1);
   });
 });

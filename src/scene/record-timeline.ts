@@ -10,9 +10,18 @@ import type { ExitSlot, Kind, Mode } from "./particles-plan.ts";
 //               first (see local()); 1→0 they gather back
 //   hero   0→1  the chosen sleeve comes forward to the HTML art frame (and the
 //               globe dims and holds still by the same value)
-//   tuck   0→1  the record goes into the chosen sleeve
+//   tuck   0→1  the record goes into the chosen sleeve (on a desktop it
+//               rests there part-way out, so it can be seen turning)
 //   slide  0→1  the record slides out of the sleeve to the HTML disc frame
 //   idle   1→0  the record's idle turning (held still while a record is open)
+//   tumble 1→0  the record's slow 3D tumble at rest, blended out over the
+//               tuck so it meets the sleeve square, and back in on close
+//   backdrop 0→1  the opened record's mineral surface behind the scene
+//
+// Owner, 2026-10-20: the open is slow and calm, one continuous gesture whose
+// beats can each be followed: the neighbours dissolve, the sleeve comes
+// forward, the record tucks into it, turns one full revolution there in
+// plain sight, slides slowly out to its place, settles, and the text comes.
 //
 // A step inside an open record swaps who is in the hero frame (Swap): the
 // outgoing sleeve breaks up in place there and the incoming one gathers in
@@ -26,47 +35,70 @@ import type { ExitSlot, Kind, Mode } from "./particles-plan.ts";
 // Every builder tweens from wherever the values are now, so any timeline can
 // replace any other mid-flight without a jump.
 
-export type Choreo = { exit: number; hero: number; tuck: number; slide: number; idle: number; order: 1 | -1 };
+export type Choreo = { exit: number; hero: number; tuck: number; slide: number; idle: number; tumble: number; backdrop: number; order: 1 | -1 };
 export type SpinClock = { angle: number; boost: number };
 // The hero frame's swap: `incoming.v` is the dissolve of the sleeve now in the
 // frame (1 dispersed .. 0 whole); `outgoing` are sleeves leaving it, each
 // breaking up toward 1, keyed by their belt place m.
 export type Swap = { incoming: { v: number }; outgoing: { m: number; v: number }[] };
 
-export const newChoreo = (): Choreo => ({ exit: 0, hero: 0, tuck: 0, slide: 0, idle: 1, order: 1 });
+export const newChoreo = (): Choreo => ({ exit: 0, hero: 0, tuck: 0, slide: 0, idle: 1, tumble: 1, backdrop: 0, order: 1 });
 export const newSwap = (): Swap => ({ incoming: { v: 0 }, outgoing: [] });
 
-// --- the main durations, seconds (the owner judges them on real hardware) ---
+// --- the main durations, seconds (owner, 2026-10-20: slow and calm; judged
+// on real hardware) ---
 // each card's own dissolve, and the stagger between one card and the next,
 // nearest the focus first
-export const EXIT_ITEM = 0.6;
-export const EXIT_STAGGER = 0.06;
+export const EXIT_ITEM = 1.0;
+export const EXIT_STAGGER = 0.1;
 // beyond this rank (the far half's faint silhouettes) cards are out of sight
 export const MAX_RANK = 5;
 export const EXIT_SPAN = EXIT_ITEM + EXIT_STAGGER * MAX_RANK;
+// the record's idle turning eases out from the first beat
+export const IDLE_OUT_SECONDS = 0.9;
 // the sleeve's walk forward to the art frame, after the first neighbours begin
-export const HERO_AT = 0.16;
-export const HERO_SECONDS = 0.7;
-export const TUCK_SECONDS = 0.45;
-// the record sliding out of the sleeve (desktop; a phone keeps it tucked)
-export const SLIDE_AT = 0.55;
-export const SLIDE_SECONDS = 0.6;
+export const HERO_AT = 0.25;
+export const HERO_SECONDS = 1.15;
+// the record goes into the sleeve as it walks (the tumble blends out with it)
+export const TUCK_SECONDS = 1.3;
+// desktop: the record, part-way out of the sleeve, turns one full revolution
+// there, slowly enough to follow
+export const TURN_AT = HERO_AT + HERO_SECONDS - 0.05;
+export const TURN_SECONDS = 1.3;
+// then slides out of the sleeve to its resting place on a soft ease (a phone
+// keeps it tucked)
+export const SLIDE_AT = TURN_AT + TURN_SECONDS;
+export const SLIDE_SECONDS = 1.5;
+export const SLIDE_EASE = "sine.inOut";
+// as it comes in to land it spins up gently and settles upright (half to
+// one and a half turns on), so the still HTML record can take over without a
+// jump
+export const SPIN_AT = SLIDE_AT + SLIDE_SECONDS * 0.6;
+export const SPIN_SECONDS = 1.3;
+export const SPIN_TURNS = 0.5;
 // where the HTML reveal (title letters, then caption, report link, arrows)
-// begins, and the record's spin-up to its upright landing
-export const LAND_AT = 0.75;
-export const LAND_AT_PHONE = 0.65;
-export const SPIN_SECONDS = 0.7;
-// close: the disc goes back, the sleeve returns, then the cards gather
-export const CLOSE_SLIDE_SECONDS = 0.5;
-export const CLOSE_HERO_AT = 0.15;
-export const CLOSE_HERO_SECONDS = 0.6;
-export const CLOSE_GATHER_AT = 0.4;
+// begins: as the record settles
+export const LAND_AT = SLIDE_AT + SLIDE_SECONDS * 0.6;
+export const LAND_AT_PHONE = HERO_AT + HERO_SECONDS - 0.1;
+// the mineral surface comes up behind the sleeve as it walks forward
+export const BACKDROP_AT = HERO_AT;
+export const BACKDROP_SECONDS = HERO_SECONDS + 0.4;
+// close (about 60–70 % of the open): the disc goes back, the sleeve returns,
+// then the cards gather and the tumble returns
+export const CLOSE_SLIDE_SECONDS = 1.0;
+export const CLOSE_HERO_AT = 0.5;
+export const CLOSE_HERO_SECONDS = 1.0;
+export const CLOSE_TUCK_SECONDS = 0.9;
+export const CLOSE_GATHER_AT = 1.6;
+export const CLOSE_IDLE_SECONDS = 1.0;
+export const CLOSE_TUMBLE_SECONDS = 1.5;
 // a step inside an open record: the outgoing sleeve breaks up in place, the
 // incoming gathers a little after, and the record turns once
-export const STEP_OUT_SECONDS = 0.55;
-export const STEP_IN_AT = 0.38;
-export const STEP_IN_SECONDS = 0.65;
-export const STEP_SPIN_SECONDS = 0.9;
+export const STEP_SECONDS = 0.7;
+export const STEP_OUT_SECONDS = 0.8;
+export const STEP_IN_AT = 0.5;
+export const STEP_IN_SECONDS = 0.85;
+export const STEP_SPIN_SECONDS = 1.3;
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const inOut = gsap.parseEase("power2.inOut");
@@ -181,18 +213,24 @@ export function openTimeline(c: Choreo, spin: SpinClock, o: Opts, swap: Swap = n
   if (c.exit <= 0.001) c.order = 1;
   tl.addLabel("aside", 0)
     .to(c, { exit: 1, duration: EXIT_SPAN * (1 - c.exit), ease: "none" }, "aside")
-    .to(c, { idle: 0, duration: 0.45, ease: "power1.out" }, "aside")
+    .to(c, { idle: 0, duration: IDLE_OUT_SECONDS, ease: "power1.out" }, "aside")
     .to(c, { hero: 1, duration: HERO_SECONDS, ease: "power3.inOut" }, HERO_AT)
-    .to(c, { tuck: 1, duration: TUCK_SECONDS }, "aside");
+    .to(c, { tuck: 1, duration: TUCK_SECONDS }, "aside")
+    // the tumble leaves over the tuck, from wherever it is, so the record
+    // meets the sleeve square
+    .to(c, { tumble: 0, duration: TUCK_SECONDS, ease: "power2.inOut" }, "aside")
+    .to(c, { backdrop: 1, duration: BACKDROP_SECONDS, ease: "power1.inOut" }, BACKDROP_AT);
   settleSwap(tl, swap, 0, HERO_AT, HERO_SECONDS);
   if (o.phone) {
     // the phone's opened record is the sleeve alone: the disc stays tucked
     tl.addLabel("land", LAND_AT_PHONE);
   } else {
-    // the record clears the sleeve, then spins up and settles upright, so the
-    // still HTML record takes over without a jump
-    tl.to(c, { slide: 1, duration: SLIDE_SECONDS }, SLIDE_AT).addLabel("land", LAND_AT);
-    tl.to(spin, { angle: () => landing(spin.angle, 1), boost: 0, duration: SPIN_SECONDS, ease: "power3.out" }, "land");
+    // part-way out of the sleeve the record turns once, in plain sight;
+    // then it slides slowly out, lands, spins up gently and settles upright
+    tl.addLabel("turn", TURN_AT);
+    tl.to(spin, { angle: () => spin.angle - Math.PI * 2, boost: 0, duration: TURN_SECONDS, ease: "sine.inOut" }, "turn");
+    tl.to(c, { slide: 1, duration: SLIDE_SECONDS, ease: SLIDE_EASE }, SLIDE_AT).addLabel("land", LAND_AT);
+    tl.to(spin, { angle: () => landing(spin.angle, SPIN_TURNS), boost: 0, duration: SPIN_SECONDS, ease: "sine.inOut" }, SPIN_AT);
   }
   return tl;
 }
@@ -206,12 +244,17 @@ export function closeTimeline(c: Choreo, swap: Swap = newSwap(), onHandBack?: ()
   // after a finished open the nearest cards come back first
   if (c.exit >= 0.999) c.order = -1;
   const slideFor = CLOSE_SLIDE_SECONDS * c.slide;
-  tl.to(c, { slide: 0, duration: slideFor + 0.001 }, 0)
+  const tuckAt = 0.9 * slideFor + 0.05;
+  tl.to(c, { slide: 0, duration: slideFor + 0.001, ease: SLIDE_EASE }, 0)
     .to(c, { hero: 0, duration: CLOSE_HERO_SECONDS, ease: "power3.inOut" }, CLOSE_HERO_AT * Math.min(1, c.slide + 0.3))
-    .to(c, { tuck: 0, duration: 0.5 }, 0.9 * slideFor + 0.05)
-    .to(c, { exit: 0, duration: EXIT_SPAN * c.exit, ease: "none" }, CLOSE_GATHER_AT * Math.min(1, c.hero + 0.2))
-    .to(c, { idle: 1, duration: 0.6, ease: "power1.in" }, 0.5);
-  settleSwap(tl, swap, 0, 0, 0.5);
+    .to(c, { tuck: 0, duration: CLOSE_TUCK_SECONDS }, tuckAt)
+    .to(c, { backdrop: 0, duration: CLOSE_HERO_SECONDS + 0.3, ease: "power1.inOut" }, CLOSE_HERO_AT * Math.min(1, c.slide + 0.3))
+    // (with no slide to undo, a phone's, the gather begins sooner)
+    .to(c, { exit: 0, duration: EXIT_SPAN * c.exit, ease: "none" }, CLOSE_GATHER_AT * Math.min(1, c.hero + 0.2) * (0.5 + 0.5 * c.slide))
+    .to(c, { idle: 1, duration: CLOSE_IDLE_SECONDS, ease: "power1.in" }, tuckAt)
+    // the tumble comes back as the record leaves the sleeve
+    .to(c, { tumble: 1, duration: CLOSE_TUMBLE_SECONDS, ease: "power2.inOut" }, tuckAt);
+  settleSwap(tl, swap, 0, 0, 0.8);
   // at the very end (">" would be the end of the last tween added, not the
   // last to finish)
   if (onHandBack) tl.call(onHandBack, undefined, tl.duration());
@@ -222,11 +265,11 @@ export function closeTimeline(c: Choreo, swap: Swap = newSwap(), onHandBack?: ()
 // under way, swap the sleeves in the hero frame, and turn the record once to
 // its next upright while the belt carries the next card round behind.
 export function stepTimeline(c: Choreo, spin: SpinClock, o: Opts, swap: Swap = newSwap()): gsap.core.Timeline {
-  const tl = gsap.timeline({ defaults: { ease: "power2.inOut", duration: 0.45 } });
+  const tl = gsap.timeline({ defaults: { ease: "power2.inOut", duration: STEP_SECONDS } });
   // a finished exit has no stagger left to keep; a partial one keeps its order
   if (c.exit >= 0.999 || c.exit <= 0.001) c.order = 1;
   tl.to(c, { exit: 1, duration: EXIT_SPAN * (1 - c.exit) + 0.001, ease: "none" }, 0);
-  tl.to(c, { hero: 1, tuck: 1, idle: 0 }, 0);
+  tl.to(c, { hero: 1, tuck: 1, idle: 0, tumble: 0, backdrop: 1 }, 0);
   settleSwap(tl, swap, 0, STEP_IN_AT, STEP_IN_SECONDS);
   if (!o.phone) {
     tl.to(c, { slide: 1 }, 0);

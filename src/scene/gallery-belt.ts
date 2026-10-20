@@ -5,7 +5,7 @@ import { Observer } from "gsap/Observer";
 import { beltCards, beltPoint, cardFrame, cardPlacement, CAMERA_HALF, dissolveAt, FACE_EDGE, FACE_WINDOW, fitBelt, globeAngle, GLOBE_OPEN, halfOf, LABEL_OF_DISC, ringSize, RING_DESKTOP, swipeTarget, type Fit } from "./belt-layout.ts";
 import { createBeltGlobe } from "./belt-globe.ts";
 import { mergeOrbitItems, nextFocusIndex, type OrbitItem } from "./orbit-items.ts";
-import { advanceSpin, dampPhase, spinning, wheelItems, wheelSnap, SPIN_GAIN, SPIN_IDLE, SPIN_RESPONSE, WHEEL_QUIET_MS } from "./gallery-motion.ts";
+import { advanceSpin, dampPhase, spinning, tumbleAt, wheelItems, wheelSnap, SPIN_GAIN, SPIN_IDLE, SPIN_RESPONSE, WHEEL_QUIET_MS } from "./gallery-motion.ts";
 import { cardRitual, closeTimeline, newChoreo, newSwap, openTimeline, pruneSwap, retarget, shiftSwap, slideStages, stepTimeline, type SpinClock } from "./record-timeline.ts";
 import { createSleeveKit, type SleeveMesh } from "./sleeve-kit.ts";
 import { applyVinylSheen } from "./vinyl-sheen.ts";
@@ -94,7 +94,10 @@ export type GalleryOrbit = {
 // The page lays out three HTML boxes the scene follows: the browsing band,
 // and where the opened record's square art and disc sit (G02), so the WebGL
 // objects arrive exactly where the HTML record takes over.
-export type OrbitFrame = { band: HTMLElement; art: HTMLElement; disc: HTMLElement };
+// `backdrop` (optional) is the opened record's mineral surface, an HTML layer
+// behind the scene's canvas and above the stage plate: the open's timeline
+// fades it in (record-timeline.ts `backdrop`) and the close fades it out.
+export type OrbitFrame = { band: HTMLElement; art: HTMLElement; disc: HTMLElement; backdrop?: HTMLElement | null };
 
 const TEX = "/textures/gallery/";
 const MAX_TEXTURES = 14;
@@ -102,6 +105,10 @@ const MAX_TEXTURES = 14;
 const HERO_Z = 8;
 // the record face's albedo scale (linear), against its texture's own charcoal
 const VINYL_ALBEDO = 0.11;
+// Tucked into the sleeve on a desktop, the record rests this far (of the
+// sleeve's width) out toward where it will slide, so it shows half out of
+// the sleeve, its label's edge peeking, while it turns once there
+const TUCK_OUT = 0.44;
 
 const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -492,6 +499,11 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
   };
   still?.addEventListener?.("change", onStill);
   const reduced = () => !!still?.matches;
+  // the record's tumble clock (held under reduced motion)
+  let tumbleT = 0;
+  const tumbleQ = new THREE.Quaternion();
+  const tumbleE = new THREE.Euler();
+  let backdropShown = -1;
 
   // the band's direction toward the back at θ, in world space
   const tangentAt = (theta: number, out: THREE.Vector3) => {
@@ -849,7 +861,10 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
   function discPoseFor(hp: Pose | null): Pose {
     let dp: Pose = { x: L.disc.x, y: L.disc.y, z: 0, size: L.disc.r, q: L.disc.q.clone(), fade: 1, tone: 1 };
     if (hp && c.tuck > 0) {
-      const tucked: Pose = { x: hp.x, y: hp.y, z: hp.z - 0.05, size: hp.size * 0.46, q: hp.q.clone(), fade: 1, tone: 1 };
+      // half out of the sleeve on the side it will slide toward (a phone's
+      // stays wholly inside, and fades)
+      const out = L.phone ? 0 : Math.sign(L.discDetail.x - L.hero.x || -1) * TUCK_OUT * hp.size;
+      const tucked: Pose = { x: hp.x + out, y: hp.y, z: hp.z - 0.05, size: hp.size * 0.46, q: hp.q.clone(), fade: 1, tone: 1 };
       dp = blend(dp, tucked, c.tuck);
       if (c.slide > 0) {
         const { out, settle: rest } = slideStages(c.slide);
@@ -858,7 +873,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
         // so it never passes through the paper
         const front = D.z >= L.hero.z;
         const halfW = (L.w * L.k) / 2;
-        const clearX = front ? Math.max(Math.min(D.x, L.hero.x - L.hero.size / 2 - D.size * 0.98), -halfW + D.size * 0.8) : D.x;
+        const clearX = front ? Math.max(Math.min(D.x, tucked.x, L.hero.x - L.hero.size / 2 - D.size * 0.98), -halfW + D.size * 0.8) : D.x;
         const mid: Pose = { x: clearX, y: lerp(hp.y, D.y, 0.5), z: tucked.z, size: D.size, q: IDENTITY.clone(), fade: 1, tone: 1 };
         dp = blend(blend(dp, mid, out), D, rest);
         dp.z = lerp(tucked.z, D.z, smooth(0, 0.15, rest));
@@ -1062,7 +1077,23 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     const dp = discPoseFor(heroPose ?? (c.hero > 0 ? L.hero : null));
     disc.position.set(dp.x, dp.y, dp.z);
     disc.quaternion.copy(dp.q);
+    // the slow 3D tumble over the rest pose, blended out over the tuck (and
+    // in again on close) and grown in with the entrance; none under reduced
+    // motion
+    const tumbleW = reduced() ? 0 : c.tumble * smooth(0.3, 1, entry);
+    if (!reduced()) tumbleT += dt;
+    if (tumbleW > 0.0005) {
+      const tb = tumbleAt(tumbleT, tumbleW);
+      disc.quaternion.multiply(tumbleQ.setFromEuler(tumbleE.set(tb.x, tb.y, tb.z)));
+    }
     disc.scale.setScalar(dp.size);
+    // the opened record's mineral surface, by the open's own value
+    const bd = frames.backdrop;
+    if (bd && Math.abs(c.backdrop - backdropShown) > 0.002) {
+      backdropShown = c.backdrop;
+      bd.style.opacity = c.backdrop < 0.002 ? "0" : String(Math.min(1, c.backdrop));
+      bd.style.visibility = c.backdrop < 0.002 ? "hidden" : "visible";
+    }
     const idle = idleRate * c.idle;
     if (!gsap.isTweening(spinClock)) {
       const phaseVelocity = dt > 0 ? (phase - prev) / dt : 0;
@@ -1116,7 +1147,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     if (!discRanked) rankDisc();
 
     // render on demand: only while something moves, or the record turns
-    const turning = disc.visible && spinning(spinClock, idle);
+    const turning = disc.visible && (spinning(spinClock, idle) || tumbleW > 0.0005);
     if (moving || turning || driftRate !== 0 || dirty > 0 || tl !== null || gsap.isTweening(intro)) {
       renderer.render(scene, camera);
       if (dirty > 0) dirty--;

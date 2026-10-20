@@ -5,7 +5,14 @@ import {
   cardRitual,
   closeTimeline,
   EXIT_STAGGER,
+  HERO_AT,
+  HERO_SECONDS,
   local,
+  SLIDE_AT,
+  SLIDE_SECONDS,
+  TURN_AT,
+  TURN_SECONDS,
+  TUCK_SECONDS,
   newChoreo,
   newSwap,
   openTimeline,
@@ -15,7 +22,7 @@ import {
   type Choreo,
   type Swap,
 } from "../src/scene/record-timeline.ts";
-import { titleStagger, TITLE_SPAN } from "../src/lib/record-reveal.ts";
+import { BODY_AT, BODY_STAGGER, CHROME_AT, REVEAL_ITEM, TITLE_LETTER, titleStagger, TITLE_SPAN } from "../src/lib/record-reveal.ts";
 
 // Opening a record on the belt (design 2026-10-19 §5), without WebGL: the
 // scene turns these pure values into poses and particle draws every frame
@@ -86,8 +93,8 @@ describe("the open's exit order", () => {
     expect(Math.max(...given)).toBeLessThan(Math.min(...faded));
   });
 
-  it("the neighbours begin one after another, about 0.06 s apart, nearest first", () => {
-    expect(EXIT_STAGGER).toBeCloseTo(0.06, 2);
+  it("the neighbours begin one after another, about 0.1 s apart, nearest first", () => {
+    expect(EXIT_STAGGER).toBeCloseTo(0.1, 2);
     const c = newChoreo();
     const tl = openTimeline(c, { angle: 0, boost: 0 }, { phone: false });
     const exits = planExit(10, false);
@@ -101,8 +108,8 @@ describe("the open's exit order", () => {
     for (let i = 1; i < order.length; i++) expect(order[i]).toBeGreaterThanOrEqual(order[i - 1]);
     const t1 = starts.get(1)!;
     const t2 = starts.get(-1)!;
-    expect(t2 - t1).toBeGreaterThan(0.04);
-    expect(t2 - t1).toBeLessThan(0.09);
+    expect(t2 - t1).toBeGreaterThan(0.07);
+    expect(t2 - t1).toBeLessThan(0.14);
   });
 
   it("an open requests particle exits for the visible neighbours, nearest first, within the budget", () => {
@@ -135,16 +142,67 @@ describe("the open's exit order", () => {
     }
   });
 
-  it("the desktop open hands over within about 1.8 s, with the title's letters bounded", () => {
+  it("the desktop open is slow and calm: about 4–5 s to the hand-over, each beat perceptible (owner, 2026-10-20)", () => {
     const c = newChoreo();
-    const tl = openTimeline(c, { angle: 0, boost: 0 }, { phone: false });
+    const spin = { angle: 0, boost: 0 };
+    const tl = openTimeline(c, spin, { phone: false });
     // the HTML reveal is nested at "land": title letters, copy, then controls
-    const reveal = 0.42 + 0.42 + 0.06 * 2;
-    expect(tl.labels.land + Math.max(reveal, TITLE_SPAN + 0.36)).toBeLessThanOrEqual(1.8);
-    expect(tl.duration()).toBeLessThanOrEqual(1.8);
+    const reveal = Math.max(CHROME_AT + REVEAL_ITEM + 0.06 * 2, BODY_AT + BODY_STAGGER * 4 + REVEAL_ITEM, TITLE_SPAN + TITLE_LETTER);
+    const handover = Math.max(tl.duration(), tl.labels.land + reveal);
+    expect(handover).toBeGreaterThanOrEqual(3.5);
+    expect(handover).toBeLessThanOrEqual(5.5);
+    // the record turns one full revolution behind the sleeve, slowly enough
+    // to follow, after it has tucked in and before it slides out
+    expect(TURN_SECONDS).toBeGreaterThanOrEqual(1.2);
+    expect(TURN_SECONDS).toBeLessThanOrEqual(1.6);
+    expect(tl.labels.turn).toBeCloseTo(TURN_AT, 9);
+    expect(TURN_AT).toBeGreaterThanOrEqual(TUCK_SECONDS - 0.05);
+    expect(TURN_AT).toBeGreaterThanOrEqual(HERO_AT + HERO_SECONDS - 0.1);
+    expect(SLIDE_AT).toBeGreaterThanOrEqual(TURN_AT + TURN_SECONDS - 1e-9);
+    tl.time(TURN_AT);
+    const before = spin.angle;
+    expect(c.slide).toBe(0);
+    tl.time(TURN_AT + TURN_SECONDS);
+    expect(before - spin.angle).toBeCloseTo(Math.PI * 2, 6);
+    expect(c.slide).toBe(0);
+    // the slide out is much slower than before (0.6 s)
+    expect(SLIDE_SECONDS).toBeGreaterThanOrEqual(1.4);
+    expect(SLIDE_SECONDS).toBeLessThanOrEqual(1.8);
+    // the tumble has gone by the time the record turns in the sleeve
+    expect(c.tumble).toBe(0);
     expect(titleStagger(80) * 79).toBeLessThanOrEqual(TITLE_SPAN + 1e-9);
-    expect(titleStagger(5)).toBe(0.02);
+    expect(titleStagger(5)).toBe(0.025);
     tl.kill();
+  });
+
+  it("the close is calmer too, about 60–70 % of the open; a step stays moderate", () => {
+    const c = newChoreo();
+    const spin = { angle: 0, boost: 0 };
+    const open = openTimeline(c, spin, { phone: false });
+    const openSeconds = open.duration();
+    open.progress(1).kill();
+    const close = closeTimeline(c);
+    expect(close.duration() / openSeconds).toBeGreaterThanOrEqual(0.55);
+    expect(close.duration() / openSeconds).toBeLessThanOrEqual(0.75);
+    close.progress(1).kill();
+    expect(c).toMatchObject({ tumble: 1, backdrop: 0 });
+    openTimeline(c, spin, { phone: false }).progress(1).kill();
+    const step = stepTimeline(c, spin, { phone: false });
+    expect(step.duration()).toBeGreaterThanOrEqual(1.1);
+    expect(step.duration()).toBeLessThanOrEqual(1.6);
+    step.kill();
+  });
+
+  it("the phone's open is calmer as well, its record staying tucked", () => {
+    const c = newChoreo();
+    const tl = openTimeline(c, { angle: 0, boost: 0 }, { phone: true });
+    expect(tl.duration()).toBeGreaterThanOrEqual(1.5);
+    tl.progress(1);
+    expect(c).toMatchObject({ tuck: 1, slide: 0, backdrop: 1, tumble: 0 });
+    const close = closeTimeline(c);
+    expect(close.duration()).toBeLessThanOrEqual(tl.duration() * 1.3);
+    tl.kill();
+    close.kill();
   });
 });
 
