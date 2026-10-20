@@ -40,15 +40,17 @@ readable centre. Keep phone controls and captions clear of the paper.
   counts, likes or comments), and loads no room code. The browse layout
   is `design/gallery-belt-2026-10-19/design.md`, which supersedes G01's
   orbit; G02/G03 (opened record, report) keep their content. An entry
-  screen with the centred title (Gloock, self-hosted) over an interactive
-  mist shader leads by one gesture into the exhibition: a deep-charcoal
-  vinyl idle-spinning at the centre, a counter-rotating graphite globe
-  behind it and a belt of 10 cards (6 on phone) on Goodgrowth's
+  screen with the centred title (Gloock, self-hosted) half-hidden under a
+  dense, breathing, pointer-parted mist veil leads by one gesture into the
+  exhibition on the stage plate: a deep-charcoal vinyl idle-spinning and
+  slowly tumbling at the centre, a counter-rotating graphite globe behind
+  it and a belt of 10 cards (6 on phone) in front of it on Goodgrowth's
   latitude-curved band, under an orthographic camera. Cards break into
   and gather from particles only in the dissolve zones at the globe's
   sides, where replaced records arrive; operator hides dissolve in place.
-  Opening a record is one timeline (neighbours dissolve, sleeve forward,
-  disc slides out, title letter by letter); the HTML takes over only on
+  Opening a record is one slow timeline of about 5 s (neighbours dissolve,
+  sleeve forward over a fading-in mineral ground, disc turns once in the
+  sleeve, slides out, title letter by letter); the HTML takes over only on
   its completion. Pure rules live in `src/scene/belt-layout.ts`,
   `particles-plan.ts`, `record-timeline.ts` and `gallery-motion.ts`, with
   specs; reduced motion or no WebGL gets the grid. Sound is **not

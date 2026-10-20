@@ -41,12 +41,10 @@ wheel stays free to turn the belt once `p = 1`.
   "Images shaped by released notes." beneath it in small text, and a quiet
   "Scroll" hint at the bottom. The header keeps the Throwaway wordmark,
   "Back to the space" and "About".
-- **Title reveal:** SplitText characters slide up out of a mask, with
-  stagger 0.02, 0.6 s and power3.out, then a short ScrambleText settle on
-  the last word. Screen readers get the whole title (aria-label). Reduced
-  motion shows the title still.
+- **Title reveal:** superseded 2026-10-20 (§7): no letter effects; the
+  mist above the title does the revealing.
 - **Mist (replaces the mist photograph):** a full-screen fragment shader
-  drawn behind the HTML title.
+  (2026-10-20: drawn as a transparent veil *above* the HTML title; see §7).
   - Domain-warped fbm (4 octaves) drifting slowly, rendered as soft tufts in
     translucent off-white and grey-blue over a pale ground, at about 0.35–0.6
     alpha so the ground breathes through.
@@ -60,9 +58,8 @@ wheel stays free to turn the belt once `p = 1`.
 
 ## 3. Transition (p: 0 → 1, about 1.6 s)
 
-1. The title's characters lift and fade with a 0.015 stagger, and the
-   centre title scales into the corner wordmark position. The mist thins to
-   about 0.25 alpha but stays as the exhibition's atmosphere.
+1. The title fades as it scales into the corner wordmark position. The
+   mist clears fully (2026-10-20, §7), so the stage plate shows.
 2. The globe's meridians draw in from the poles (line dash offset).
 3. The vinyl rises from the centre, tilts to its rest angle and starts its
    idle spin.
@@ -91,8 +88,9 @@ steepen. Scene units are tied to the viewport height.
    on a time-based clock (frame-rate independent). Belt motion adds spin
    that decays back to idle. The label shows the front card's image. The
    view-dependent groove sheen and matte black come from step 4.
-4. **Front half of the belt:** passes in front of the vinyl's lower edge; the
-   front card is the largest.
+4. **Front half of the belt:** passes in front of the vinyl (2026-10-20:
+   across its middle, the front card over its centre); the front card is the
+   largest.
 
 **Belt geometry:**
 
@@ -150,9 +148,12 @@ globe's left and right silhouettes are dissolve zones.
 The step-2 timeline, retargeted to the belt:
 
 1. The other front-half cards dissolve, staggered outward from the focus.
-2. The globe dims to about 0.3 and stops counter-rotating.
+2. The globe dims and stops counter-rotating; the mineral surface fades in
+   behind the sleeve (2026-10-20).
 3. The focused sleeve comes forward to the HTML art frame.
-4. The vinyl slides out of the sleeve to the disc frame and spins up.
+4. The vinyl tucks into the sleeve, turns one full revolution there in
+   plain sight (2026-10-20), then slides slowly out to the disc frame and
+   spins up gently.
 5. The title is revealed character by character, then the caption, report
    link and arrows.
 6. On timeline complete, the HTML record takes over.
@@ -187,3 +188,47 @@ without leaving.
   rounds the whole travelled distance, inertia tail included, with no cap
   (pinned by `spec/gallery-motion.test.ts`). Desktop drag throws keep their
   ±3 cap, and a phone swipe stays one step.
+
+## 7a. Owner revision after a real-screen review (2026-10-20)
+
+These replace the earlier text where they differ.
+
+- **Entry title:** no SplitText slide-up and no ScrambleText settle. The
+  title is one real heading with its own text from the first paint.
+- **Entry mist:** dense, and drawn as a transparent premultiplied veil
+  *above* the title (the canvas takes no pointer; the header sits above it),
+  so the title sits half-hidden in the cloud and surfaces as it drifts. Its
+  density breathes on a 7 s cosine that starts thin, so the title reads
+  within a couple of seconds without a pointer. The pointer parts a broad
+  lane (splat variance 0.012 of the height², the mist thins up to 92 %)
+  that closes over about 2.5 s (flow kept at 0.975 per 60 Hz frame).
+  Reduced motion: a lighter still veil (level 0.32) behind the plain title.
+- **Exhibition background:** the stage plate `gallery-stage-mist-v2.jpg`
+  shows clear behind the globe, record and belt. The mist clears to 0 on
+  the way in and is hidden at the exhibition. (It had been an opaque canvas
+  over the plate at every stage.)
+- **Belt height:** BAND_DROP 0: the band's centre line runs through the
+  record's middle; the S-curve latitude is unchanged.
+- **Cards:** 1.5× (CARD 1.65 globe units; phone 0.44 of the width, clamped
+  from 1.5× = 0.48, which made the six-card arc's neighbours touch on a
+  390 px screen). The cards are **in front of** the record: the front card
+  covers its centre and the record shows round it.
+- **Record tumble:** at rest the record turns slowly in space as well as on
+  its spindle, in the spirit of goodgrowth.com's CD: x 0.36·sin(0.42 t),
+  y 0.42·sin(0.31 t + 1.3), z 0.1·sin(0.35 t + 0.6) over the rest tilt, the
+  groove spin and the scroll boost. It oscillates and never rolls over, so
+  the label reads most of the time. Blended out over the open's tuck, back
+  in on close; none under reduced motion.
+- **Opening is slow and calm** (desktop, about 4.85 s to the hand-over):
+  neighbours dissolve (1.0 s each, 0.1 s apart); the sleeve comes forward
+  (1.15 s from 0.25 s) as the record tucks in (1.3 s); the record, half out
+  of the sleeve, turns one full revolution there (1.3 s from 1.35 s); it
+  slides out over 1.5 s (sine.inOut), spins up gently to upright (1.3 s
+  from 3.55 s); the text reveal starts at 3.45 s. Close about 3.1 s (64 %),
+  a step inside an open record 1.3 s, the phone's open 1.8 s with the disc
+  staying tucked.
+- **Opened record ground:** `mineral-surface.jpg`, behind the sleeve and
+  record and above the stage plate, faded in by the open timeline and out
+  by the close (never a hard cut); the phone's scrolling dialog and the
+  no-WebGL dialog use the same surface. No wash over the arriving WebGL
+  record (acdc603).
