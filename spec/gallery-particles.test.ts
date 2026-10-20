@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { beltCards, dissolveAt, tileStep, ZONE_DESKTOP, ZONE_PHONE } from "../src/scene/belt-layout.ts";
+import { beltCards, dissolveAt, fitBelt, ringSize, tileStep, ZONE_DESKTOP, ZONE_PHONE } from "../src/scene/belt-layout.ts";
 import {
   BUDGET_DESKTOP,
   BUDGET_PHONE,
@@ -20,6 +20,10 @@ import {
   planParticles,
   POOL,
   RELEASE_FROM,
+  RIM_BAND,
+  RIM_PEAK,
+  rimPulse,
+  rimU,
   zoneMode,
   type Candidate,
 } from "../src/scene/particles-plan.ts";
@@ -226,5 +230,75 @@ describe("reduced motion", () => {
     expect(particles(m)).toHaveLength(0);
     expect(m.get("a")).toBe("alpha");
     expect(m.get("h")).toBe("alpha");
+  });
+});
+
+describe("the record's rim (revision two)", () => {
+  // the band the scene fits into, as gallery.css lays it out (header and
+  // foot taken off), close enough for the composition's proportions
+  const fits = {
+    "1920x1080": fitBelt({ w: 1920, h: 1080, bandTop: 104, bandH: 1080 - 104 - 150 }),
+    "1366x768": fitBelt({ w: 1366, h: 768, bandTop: 104, bandH: 768 - 104 - 150 }),
+    "390x844": fitBelt({ w: 390, h: 844, bandTop: 88, bandH: 844 - 88 - 190 }),
+    "844x390": fitBelt({ w: 844, h: 390, bandTop: 50, bandH: 390 - 50 - 70 }),
+  };
+
+  it("a card crossing the record's edge pulses to about 0.6-0.8 and back, never disappearing", () => {
+    expect(RIM_PEAK).toBeGreaterThanOrEqual(0.6);
+    expect(RIM_PEAK).toBeLessThanOrEqual(0.8);
+    expect(rimPulse(1, 0.3, true)).toBeCloseTo(RIM_PEAK, 9);
+    expect(rimPulse(1 + RIM_BAND, 0.3, true)).toBe(0);
+    expect(rimPulse(1 - RIM_BAND, 0.3, true)).toBe(0);
+    for (let u = 0; u <= 3; u += 0.01) expect(rimPulse(u, 0.3, true)).toBeLessThanOrEqual(RIM_PEAK + 1e-9);
+  });
+
+  for (const [name, fit] of Object.entries(fits)) {
+    it(`${name}: turning one step, each card that crosses the rim rises and falls once, entering and again leaving; at rest no card is mid-pulse`, () => {
+      const ring = ringSize(fit.phone, 18);
+      const step = tileStep(ring);
+      // at every rest pose every card is clear of the band
+      for (const bc of beltCards(0, ring, 18)) expect(rimPulse(rimU(bc.theta, fit), bc.theta, true), `rest θ=${bc.theta.toFixed(2)}`).toBe(0);
+      // a step: the front card leaves the record (one pulse), the next comes in (one pulse)
+      const pulses = (theta0: number) => {
+        let rises = 0;
+        let up = false;
+        let peak = 0;
+        let prev = 0;
+        for (let t = 0; t <= 1.0001; t += 0.002) {
+          const theta = theta0 - t * step;
+          const v = rimPulse(rimU(theta, fit), theta, true);
+          if (v > prev + 1e-9 && !up) {
+            up = true;
+            rises++;
+          }
+          if (v < prev - 1e-9) up = false;
+          peak = Math.max(peak, v);
+          prev = v;
+        }
+        return { rises, peak, end: prev };
+      };
+      const leaving = pulses(0);
+      expect(leaving.rises).toBe(1);
+      expect(leaving.peak).toBeGreaterThan(RIM_PEAK * 0.95);
+      expect(leaving.end).toBe(0);
+      const entering = pulses(step);
+      expect(entering.rises).toBe(1);
+      expect(entering.end).toBe(0);
+    });
+  }
+
+  it("is a zone candidate: it respects the budget and the fast-turn fallback", () => {
+    // four cards mid-pulse plus a zone card at the sides on a phone: only three in grain
+    const cands = ["a", "b", "c", "d"].map((k) => zone(k, RIM_PEAK));
+    expect(particles(planParticles(cands, { ...base, phone: true }))).toHaveLength(3);
+    // a fast turn sends a new pulse to the alpha fade
+    expect(planParticles([zone("a", 0.4)], { ...base, fast: true }).get("a")).toBe("alpha");
+  });
+
+  it("never pulses under reduced motion, while a record is open, or on the far half", () => {
+    expect(rimPulse(1, 0.3, false)).toBe(0);
+    expect(rimPulse(1, Math.PI - 0.3, true)).toBe(0);
+    // and reduced motion plans alpha anyway
+    expect(planParticles([zone("a", 0.5)], { ...base, reduced: true }).get("a")).toBe("alpha");
   });
 });

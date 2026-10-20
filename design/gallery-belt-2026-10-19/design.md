@@ -265,3 +265,18 @@ These replace the earlier text where they differ.
   hand-over about 5.4 s); the close plays the same path back (slide 1.3 s,
   close about 3.1 s). The compact layout's record rests behind the sleeve
   and simply stays there; the phone keeps the record tucked.
+- **Cards pass through a veil at the record's rim.** Interpretation of "when
+  cards scroll in front of the vinyl, they dissolve into particles and
+  gather again; when a card leaves the vinyl, it again dissolves and
+  gathers": as the belt turns, a front-half card whose centre crosses the
+  record's silhouette edge (entering the record's area, and again leaving
+  it) breaks briefly into grain in place and re-forms over the crossing.
+  The pulse is measured in the record's on-screen horizontal radii from its
+  centre (u; the rim is u = 1): it rises to 0.62 at the rim and falls to 0 at
+  u = 1 ± 0.32, so the card stays legible and never disappears. Resting
+  neighbours sit at u ≈ 1.61 (desktop) and 1.43 (phone) at every size, the
+  front card at 0, so no card rests mid-pulse. It is a zone candidate in the
+  shared particle path: the 4 / 3 budget (nearest the front first), the
+  fast-turn alpha fallback with its hysteresis, and none under reduced
+  motion, while any part of an open shows, or before the entrance has
+  finished. The side dissolve zones are unchanged.

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { gsap } from "gsap";
 import { Observer } from "gsap/Observer";
-import { beltCards, beltPoint, cardFrame, cardPlacement, CAMERA_HALF, dissolveAt, FACE_EDGE, FACE_WINDOW, fitBelt, globeAngle, GLOBE_OPEN, halfOf, LABEL_OF_DISC, ringSize, RING_DESKTOP, swipeTarget, type Fit } from "./belt-layout.ts";
+import { beltCards, beltPoint, cardFrame, cardPlacement, CAMERA_HALF, DISC_YAW, dissolveAt, FACE_EDGE, FACE_WINDOW, fitBelt, globeAngle, GLOBE_OPEN, halfOf, LABEL_OF_DISC, ringSize, RING_DESKTOP, swipeTarget, type Fit } from "./belt-layout.ts";
 import { createBeltGlobe } from "./belt-globe.ts";
 import { mergeOrbitItems, nextFocusIndex, type OrbitItem } from "./orbit-items.ts";
 import { advanceSpin, dampPhase, spinning, tumbleAt, wheelItems, wheelSnap, SPIN_GAIN, SPIN_IDLE, SPIN_RESPONSE, WHEEL_QUIET_MS } from "./gallery-motion.ts";
@@ -10,7 +10,7 @@ import { cardRitual, closeTimeline, newChoreo, newSwap, openTimeline, pruneSwap,
 import { createSleeveKit, FRAME_PLATE, SLEEVE_FRONT, type SleeveMesh } from "./sleeve-kit.ts";
 import { applyVinylSheen } from "./vinyl-sheen.ts";
 import { createCardParticles } from "./card-particles.ts";
-import { driftSign, fastTurn, GATHER_SECONDS, hideStart, HIDE_SECONDS, IMAGE_FADE_SECONDS, imageShown, meshAlpha, particleAlpha, planExit, planParticles, zoneMode, type Candidate, type ExitSlot, type Mode, type Render } from "./particles-plan.ts";
+import { driftSign, fastTurn, GATHER_SECONDS, hideStart, HIDE_SECONDS, IMAGE_FADE_SECONDS, imageShown, meshAlpha, particleAlpha, planExit, planParticles, rimPulse, rimU, zoneMode, type Candidate, type ExitSlot, type Mode, type Render } from "./particles-plan.ts";
 
 // The Gallery's record exhibition as a belt round a globe (design 2026-10-19
 // §4): an orthographic view of a flattened sphere drawn in graphite thread
@@ -165,6 +165,9 @@ type Card = {
   // where the dissolve came from this frame: the zone, and the open's ritual
   // (record-timeline.ts cardRitual: the exit, or the hero frame's swap)
   zone: number;
+  // the part of `zone` from crossing the record's rim (in place, not along
+  // the band)
+  rim: number;
   ritual: number;
   ritualMode: Mode;
   // whether the ritual's dissolve may take a particle slot (planExit)
@@ -365,6 +368,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       lift: { v: 0 },
       base,
       zone: 0,
+      rim: 0,
       ritual: 0,
       ritualMode: "leave",
       ritualParticles: false,
@@ -444,7 +448,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       ...fit,
       w,
       h,
-      disc: { ...fit.disc, q: new THREE.Quaternion().setFromEuler(new THREE.Euler(-fit.disc.tilt, fit.phone ? 0 : -0.16, 0)) },
+      disc: { ...fit.disc, q: new THREE.Quaternion().setFromEuler(new THREE.Euler(-fit.disc.tilt, fit.phone ? 0 : -DISC_YAW, 0)) },
       hero: art ? still(art.x, art.y, HERO_Z, art.size) : still(0, fit.cy, HERO_Z, fit.card * fit.S * 1.4),
       // compact: the record tucks behind the sleeve, as the HTML one does
       discDetail: rec ? still(rec.x, rec.y, HERO_Z + (fit.compact ? -0.05 : 0.05), rec.size / 2) : still(-w * k * 0.28, fit.cy, HERO_Z + 0.05, h * k * 0.29),
@@ -832,6 +836,11 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     let p = beltPose(card.theta);
     const rit = cardRitual(m, heroM, c, swap, exits, closing);
     card.zone = dissolveAt(card.theta, L.phone);
+    // crossing the record's rim: a brief in-place pulse, only while browsing
+    // at rest from any open (revision two; particles-plan.ts rimPulse)
+    const browsing = !open && c.hero <= 0.001 && c.exit <= 0.001 && c.tuck <= 0.001 && intro.entry >= 0.999 && !reduced();
+    card.rim = rimPulse(rimU(card.theta, L), card.theta, browsing);
+    card.zone = Math.max(card.zone, card.rim);
     if (rit.heroW > 0) {
       // in the frame, the belt's zone no longer applies
       p = blend(p, L.hero, rit.heroW);
@@ -990,7 +999,14 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       card.theta = bc.theta;
       // whichever source dissolves the card most sets how its grain moves
       const reqV = card.request?.v ?? 0;
-      card.mode = card.ritual > 0 && card.ritual >= Math.max(card.zone, reqV) ? card.ritualMode : reqV > 0 ? card.request!.mode : zoneMode(bc.theta, card.prevTheta, card.mode);
+      card.mode =
+        card.ritual > 0 && card.ritual >= Math.max(card.zone, reqV)
+          ? card.ritualMode
+          : reqV > 0
+            ? card.request!.mode
+            : card.rim > 0 && card.rim >= card.zone
+              ? "inplace"
+              : zoneMode(bc.theta, card.prevTheta, card.mode === "inplace" ? "leave" : card.mode);
       const s = bc.m - phase;
       const p = cardPose(card, s, bc.m);
       card.pose = p;

@@ -10,7 +10,7 @@
 // open's exit and the close's gather (planExit, record-timeline.ts) hand in
 // their own value with a mode. Nothing here knows about Three.js.
 
-import { halfOf, tileStep, wrapAngle, ZONE_DESKTOP, ZONE_PHONE } from "./belt-layout.ts";
+import { beltPoint, DISC_YAW, halfOf, tileStep, wrapAngle, ZONE_DESKTOP, ZONE_PHONE, type Fit } from "./belt-layout.ts";
 
 // --- counts and budget --------------------------------------------------------
 // each card in particle form is a grid of GRID² points sampling its image
@@ -179,6 +179,42 @@ export function planExit(ring: number, phone: boolean): Map<number, ExitSlot> {
     out.set(k, { rank, particles });
   });
   return out;
+}
+
+// --- the record's rim (owner, 2026-10-20, revision two) ---------------------
+// As the belt turns, a front-half card crossing the record's silhouette edge,
+// on its way in front of the record and again on its way out, breaks briefly
+// into grain and re-forms, as if it passed through a veil at the record's
+// rim. It never disappears: the dissolve rises to RIM_PEAK and back to 0 over
+// the crossing, drawn in place (mode "inplace") through the same particle
+// path and budget as the zones (kind "zone", so a fast turn takes the alpha
+// fade, hides and requests come first, and the nearest the front win a slot).
+//
+// Measured in the record's horizontal radii from its centre (`u`): the band's
+// centre line runs through the record's middle, so a card's centre crosses
+// the silhouette at u = 1. The pulse spans u in 1 ± RIM_BAND. In these units
+// the composition is the same at every desktop size (the record and the belt
+// scale together), and on a phone the same at every width; the resting
+// neighbours sit at u ≈ 1.59 (desktop, 36°) and 1.45 (phone, 60°), outside
+// the band, and the front card at 0, so no card rests mid-pulse.
+export const RIM_PEAK = 0.62;
+export const RIM_BAND = 0.32;
+// a card's centre from the record's centre, in the record's on-screen
+// horizontal radii (the record turned DISC_YAW on a desktop is a little
+// narrower; its slow tumble is ignored)
+export function rimU(theta: number, fit: Pick<Fit, "phone" | "cx" | "S" | "disc">): number {
+  const x = fit.cx + beltPoint(theta).x * fit.S;
+  const half = fit.disc.r * (fit.phone ? 1 : Math.cos(DISC_YAW));
+  return Math.abs(x - fit.disc.x) / Math.max(half, 1e-6);
+}
+// the pulse at u (0 outside the band, RIM_PEAK on the rim, a smooth bump),
+// for front-half cards only, and never while a record is open or under
+// reduced motion (`active` false)
+export function rimPulse(u: number, theta: number, active: boolean): number {
+  if (!active || halfOf(theta) !== "front") return 0;
+  const d = Math.abs(u - 1) / RIM_BAND;
+  if (d >= 1) return 0;
+  return RIM_PEAK * 0.5 * (1 + Math.cos(Math.PI * d));
 }
 
 // --- hides ------------------------------------------------------------------

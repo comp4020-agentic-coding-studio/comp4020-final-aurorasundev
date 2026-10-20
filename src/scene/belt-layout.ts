@@ -260,6 +260,8 @@ export const DISC_OF_GLOBE = 0.7;
 export const GLOBE_OPEN = 0.12;
 // its tilt back: enough to sit in depth, little enough that the label reads
 export const DISC_TILT = 0.3;
+// and its slight turn to the left on a desktop (none on a phone), radians
+export const DISC_YAW = 0.16;
 export const DISC_TILT_COMPACT = 0.26;
 // the front card's edge in globe units. Owner, 2026-10-20: 1.5× the earlier
 // 1.1, about 54 % of the record's diameter; the front card covers the
