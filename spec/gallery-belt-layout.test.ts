@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   BACK_ALPHA,
+  BAND_DROP,
   BELT_AY,
+  CARD,
+  CARD_BEFORE,
+  PHONE_CARD_W,
+  PHONE_CARD_W_BEFORE,
   backFade,
   beltCards,
   cardPlacement,
@@ -61,8 +66,9 @@ describe("the belt's latitude curve", () => {
     expect(right.x).toBeGreaterThan(0);
     expect(left.y).toBeGreaterThan(beltPoint(0).y);
     expect(right.y).toBeLessThan(beltPoint(0).y);
-    // the whole band rides a little below the equator
-    expect(beltPoint(0).y).toBeLessThan(0);
+    // the band's front rides on the equator, through the record's middle
+    expect(BAND_DROP).toBeCloseTo(0, 6);
+    expect(Math.abs(beltPoint(0).y)).toBeLessThan(1e-9);
     expect(beltPoint(Math.PI).y).toBeCloseTo(beltPoint(0).y, 12);
   });
 
@@ -255,7 +261,7 @@ describe("a phone swipe", () => {
 });
 
 describe("fitting the viewport", () => {
-  it("phone: the band spans the width, the front card about a third of it, the record large and in the stage", () => {
+  it("phone: the band spans the width, the front card about 0.44 of it, the record large and in the stage", () => {
     const v = { w: 390, h: 844, bandTop: 88, bandH: 560 };
     const f = fitBelt(v);
     expect(f.phone).toBe(true);
@@ -263,18 +269,17 @@ describe("fitting the viewport", () => {
     // the belt's silhouette reaches the screen's edges
     expect(Math.abs(beltPoint(Math.PI / 2).x * f.S - W / 2)).toBeLessThan(W * 0.01);
     const cardW = (f.card * f.S) / W;
-    expect(cardW).toBeGreaterThanOrEqual(0.3);
-    expect(cardW).toBeLessThanOrEqual(0.34);
-    // the record is the subject: wider than the front card
-    expect(2 * f.disc.r).toBeGreaterThan(1.5 * f.card * f.S);
+    expect(cardW).toBeGreaterThanOrEqual(0.42);
+    expect(cardW).toBeLessThanOrEqual(0.48);
+    // the record still shows round the front card that covers its centre
+    expect(2 * f.disc.r).toBeGreaterThan(1.1 * f.card * f.S);
     // the record and the front card stay inside the stage (above the title)
     const css = (y: number) => v.h / 2 - y / f.k;
     expect(css(f.disc.y + f.disc.r * Math.cos(f.disc.tilt))).toBeGreaterThanOrEqual(v.bandTop - 1);
     const frontY = f.cy + beltPoint(0).y * f.S;
     expect(css(frontY - (f.card / 2) * f.S)).toBeLessThanOrEqual(v.bandTop + v.bandH + 1);
-    // the front card passes across the record's lower half, below its centre
-    expect(frontY).toBeLessThan(f.disc.y);
-    expect(frontY + (f.card / 2) * f.S).toBeGreaterThan(f.disc.y - f.disc.r * Math.cos(f.disc.tilt));
+    // the front card sits over the record's centre
+    expect(Math.abs(frontY - f.disc.y)).toBeLessThan(f.disc.r * 0.05);
   });
 
   it("phone: the composition sits a little above the stage's centre, inside it", () => {
@@ -356,36 +361,61 @@ describe("the composition's hierarchy: the record first, a thin band", () => {
     }
   });
 
-  it("the front card is smaller than the record, and the band's centre line sits below the record's centre", () => {
+  it("cards are about 1.5× their earlier size (owner, 2026-10-20)", () => {
+    expect(CARD / CARD_BEFORE).toBeCloseTo(1.5, 2);
+    // the phone's is clamped a little short of 1.5× so its arc still fits
+    expect(PHONE_CARD_W / PHONE_CARD_W_BEFORE).toBeGreaterThanOrEqual(1.3);
+    expect(PHONE_CARD_W / PHONE_CARD_W_BEFORE).toBeLessThanOrEqual(1.5);
+    for (const v of DESKTOPS) expect(fitBelt(v).card).toBe(CARD);
+  });
+
+  it("the band's centre line runs through the record's centre, and the front card covers it but not the whole record", () => {
     for (const v of [...DESKTOPS, ...PHONES]) {
       const f = fitBelt(v);
-      const front = f.card * f.S;
-      expect(front).toBeLessThan(0.75 * 2 * f.disc.r);
       const bandY = f.cy + beltPoint(0).y * f.S;
-      expect(bandY).toBeLessThan(f.disc.y);
-      // ...but within the record, so the front card crosses its lower half
-      expect(bandY).toBeGreaterThan(f.disc.y - f.disc.r);
+      expect(Math.abs(bandY - f.disc.y)).toBeLessThan(0.05 * f.disc.r);
+      const front = f.card * f.S;
+      // the record shows round the front card
+      expect(front).toBeLessThan(0.9 * 2 * f.disc.r);
+      // and the card covers the label's centre
+      expect(front / 2).toBeGreaterThan(LABEL_OF_DISC * f.disc.r * 0.5);
     }
   });
 
-  it("at rest no front card but the focused one touches the label", () => {
+  it("front-half cards render in front of the record (their depth is toward the camera from every point of the tilted disc)", () => {
     for (const v of [...DESKTOPS, ...PHONES]) {
       const f = fitBelt(v);
       const ring = ringSize(f.phone, 48);
-      const labelR = LABEL_OF_DISC * f.disc.r;
-      const labelRy = labelR * Math.cos(f.disc.tilt);
+      // the tilted disc's nearest point to the camera
+      const discNear = f.disc.r * Math.sin(f.disc.tilt + 0.16);
       for (const c of beltCards(0, ring, 48)) {
-        if (c.theta === 0 || halfOf(c.theta) !== "front") continue;
+        if (halfOf(c.theta) !== "front" || dissolveAt(c.theta, f.phone) > 0.5) continue;
         const at = cardPlacement(c.theta, f.phone);
-        const half = (f.card * f.S * at.scale) / 2;
         const x = f.cx + at.p.x * f.S;
-        const y = f.cy + at.p.y * f.S;
-        // the nearest point of the card's (axis-aligned, generous) box to the
-        // label's centre lies outside the label's ellipse
-        const nx = Math.max(Math.abs(x - f.disc.x) - half, 0);
-        const ny = Math.max(Math.abs(y - f.disc.y) - half, 0);
-        expect((nx / labelR) ** 2 + (ny / labelRy) ** 2).toBeGreaterThan(1);
+        const half = (f.card * f.S * at.scale) / 2;
+        // a card that overlaps the record on screen is nearer than it
+        if (Math.abs(x - f.disc.x) - half < f.disc.r) expect(at.p.z * f.S).toBeGreaterThan(discNear);
       }
+    }
+  });
+
+  it("at rest neighbouring front cards never overlap each other on screen", () => {
+    for (const v of [...DESKTOPS, ...PHONES]) {
+      const f = fitBelt(v);
+      const ring = ringSize(f.phone, 48);
+      // projected half-width of a card at θ: it turns to face out along the
+      // flattened sphere, so its width foreshortens by its normal's angle
+      const spans = beltCards(0, ring, 48)
+        .filter((c) => halfOf(c.theta) === "front" && dissolveAt(c.theta, f.phone) < 0.5)
+        .map((c) => {
+          const at = cardPlacement(c.theta, f.phone);
+          const fr = cardFrame(c.theta);
+          const half = ((f.card * f.S * at.scale) / 2) * Math.abs(fr.right.x);
+          const x = f.cx + at.p.x * f.S;
+          return [x - half, x + half] as const;
+        })
+        .sort((a, b) => a[0] - b[0]);
+      for (let i = 1; i < spans.length; i++) expect(spans[i][0]).toBeGreaterThan(spans[i - 1][1]);
     }
   });
 });

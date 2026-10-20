@@ -67,12 +67,12 @@ export const globeAngle = (phase: number, ring: number) => phase * tileStep(ring
 // --- the belt's curve --------------------------------------------------------
 // A latitude shift, not a tilt: a gentle S from upper left to lower right,
 // nearly flat at the front, at most LAT_MAX (0.2 rad, about 11.5°) at the sides.
-// The whole band is also lowered by BAND_DROP (globe units, a plain shift, so
-// the S stays symmetric and the band keeps its width): the record sits on the
-// globe's centre, and the band's centre line passes below it, so the front
-// card crosses the record's lower half with its top edge near the label's
-// lower edge and the label image reads. Raising BAND_DROP lowers the band.
-export const BAND_DROP = 1.08;
+// The whole band can be lowered by BAND_DROP (globe units, a plain shift, so
+// the S stays symmetric and the band keeps its width). Owner, 2026-10-20: the
+// band's centre line runs through the record's middle (0), and the cards pass
+// in FRONT of the record, the front card over its centre. Raising BAND_DROP
+// lowers the band.
+export const BAND_DROP = 0;
 export const LAT_AMP = 0.2;
 export const lat = (theta: number) => {
   const s = Math.sin(theta);
@@ -261,19 +261,25 @@ export const GLOBE_OPEN = 0.12;
 // its tilt back: enough to sit in depth, little enough that the label reads
 export const DISC_TILT = 0.3;
 export const DISC_TILT_COMPACT = 0.26;
-// the front card's edge in globe units: a little over a third of the record's
-// diameter (about 55 % of its earlier on-screen size), so ten cards at 36°
-// leave wide gaps and read as a band, and the neighbours stay off the record
-export const CARD = 1.1;
+// the front card's edge in globe units. Owner, 2026-10-20: 1.5× the earlier
+// 1.1, about 54 % of the record's diameter; the front card covers the
+// record's centre and the record shows round it. Ten cards at 36° still leave
+// a gap between the front card and its neighbours (belt-layout spec).
+export const CARD_BEFORE = 1.1;
+export const CARD = 1.65;
 // the globe's share of the stage's height, leaving a margin above and below
 export const GLOBE_FILL = 0.8;
 export const GLOBE_FILL_COMPACT = 0.9;
 // Phone: the globe's silhouette on the screen's edges; the record's radius
 // PHONE_DISC_W of the screen's width (larger against the globe than on a
 // desktop, since the phone's globe is much wider than tall); the front card
-// PHONE_CARD_W of the width (the owner's 30–34 %)
+// PHONE_CARD_W of the width. Owner, 2026-10-20: about 1.5× the earlier 0.32,
+// clamped to 0.44 (1.375×): at 0.48 the six-card front arc's neighbours (at
+// 60°) touched the front card on a 390 px screen and a short phone's stage
+// overflowed upward
+export const PHONE_CARD_W_BEFORE = 0.32;
 export const PHONE_DISC_W = 0.3;
-export const PHONE_CARD_W = 0.32;
+export const PHONE_CARD_W = 0.44;
 export const PHONE_TILT = 0.32;
 // the stage's share the phone composition may use
 const PHONE_FILL = 0.94;
@@ -293,23 +299,22 @@ export function fitBelt(i: FitInput): Fit {
   const bandHeight = Math.max(bandTop - bandBottom, 0.5);
   const bandMid = (bandTop + bandBottom) / 2;
   if (phone) {
-    // The phone's globe is far wider than tall, so the record cannot sit on
-    // its centre without the front card covering the label. The record is
-    // placed first and the band hangs from it: the front card's top meets the
-    // label's lower edge, so the card crosses the record's lower half and the
-    // label reads whole; the globe follows the band. The whole is centred in
-    // the stage and shrinks together if the stage is too short.
+    // The phone's globe is far wider than tall. The band's centre line runs
+    // through the record's middle (as on a desktop), the front card over its
+    // centre, so the globe is centred on the record; the whole is placed a
+    // little above the stage's centre and shrinks together if the stage is
+    // too short.
     const tilt = PHONE_TILT;
     const S0 = W / 2 / BELT_AX;
     const card = (PHONE_CARD_W * W) / S0;
     const parts = (f: number) => {
       const S = S0 * f;
       const r = PHONE_DISC_W * W * f;
-      // relative to the record's centre
-      const band = -LABEL_OF_DISC * r * Math.cos(tilt) - (card / 2) * S;
+      // relative to the record's centre: the band (front card's centre) on it
+      const band = 0;
       const globeC = band - beltPoint(0).y * S;
-      const top = Math.max(r * Math.cos(tilt), globeC + BELT_AY * S);
-      const bottom = Math.min(band - (card / 2) * S, globeC - BELT_AY * S);
+      const top = Math.max(r * Math.cos(tilt), globeC + BELT_AY * S, band + (card / 2) * S);
+      const bottom = Math.min(-r * Math.cos(tilt), band - (card / 2) * S, globeC - BELT_AY * S);
       return { S, r, globeC, top, bottom };
     };
     const one = parts(1);
