@@ -1,9 +1,13 @@
 import express from "express";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { extname, resolve } from "node:path";
+import { dirname, extname, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
+import { broadcastGallery, closeGalleryStreams } from "./artifacts/events.ts";
+import { artifactProviderFromEnv } from "./artifacts/provider.ts";
+import { galleryRouter } from "./artifacts/router.ts";
+import { createArtifactWorker } from "./artifacts/worker.ts";
 import { openDb, serverSecret } from "./db.ts";
-import { closeAllStreams, eventsRouter } from "./events.ts";
+import { broadcast, closeAllStreams, eventsRouter } from "./events.ts";
 import { identityRouter } from "./identity.ts";
 import { log, person, setAliasKey } from "./log.ts";
 import { check, providerFromEnv } from "./moderation.ts";
@@ -25,6 +29,19 @@ setAliasKey(serverSecret(db, "read_receipt"));
 const provider = providerFromEnv();
 // The test double answers instantly, so its retries needn't wait minutes.
 const worker = createReviewWorker(db, provider, provider?.name === "fixture" ? { retryDelaysMs: [50, 100, 200] } : {});
+// Release records: paused unless ARTIFACTS_ENABLED=1 and a provider is
+// configured. Paused, a Release burn still burns normally but makes no
+// record (its note is not kept to process later); operator hides still
+// apply. The fixture provider is refused on Fly, as moderation's is.
+const artifactDir = process.env.ARTIFACT_DIR ?? resolve(dirname(dbPath), "artifacts");
+const artifactProvider = artifactProviderFromEnv();
+const artifactWorker = createArtifactWorker(db, artifactProvider, {
+  artifactDir,
+  enabled: process.env.ARTIFACTS_ENABLED === "1",
+  onChange: broadcastGallery,
+  // the burn's fire may end: the paper's id only, never its record
+  onSettled: (paperId) => broadcast("paper:extraction_settled", { id: paperId }),
+});
 const readmeHtml = renderReadmePage(resolve(root, "README.md"));
 const dist = resolve(root, "dist");
 
@@ -41,12 +58,30 @@ app.post("/api/session", (req, res) => {
 app.get("/api/safety", (_req, res) => {
   res.set("Cache-Control", "no-store").json({ provider: provider?.name ?? null, reports: true });
 });
-app.use("/api", papersRouter(db, (payload) => check(provider, payload)));
+app.use(
+  "/api",
+  papersRouter(db, (payload) => check(provider, payload), artifactWorker.enabled ? (ignition) => void artifactWorker.extract(ignition) : null),
+);
+app.use("/api", galleryRouter(db, artifactDir, () => artifactWorker.enabled, () => void artifactWorker.wake()));
 app.use("/api", reportsRouter(db, () => void worker.wake()));
 app.use("/api", eventsRouter(db));
 app.use("/api", identityRouter(db));
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "Not found." });
+});
+
+// The Gallery is a page of the same client build, opened without the room:
+// the space's preloads of the crumple model are dropped from its HTML, and
+// only the Gallery preloads its display face (the room never loads it).
+const GALLERY_FONT_PRELOAD = '<link rel="preload" as="font" type="font/woff2" href="/fonts/gloock-latin-400.woff2" crossorigin />';
+const galleryHtml = existsSync(resolve(dist, "index.html"))
+  ? readFileSync(resolve(dist, "index.html"), "utf8")
+      .replace(/^\s*<link rel="preload"[^>]*\/vat\/[^>]*>\n/gm, "")
+      .replace("</head>", `    ${GALLERY_FONT_PRELOAD}\n  </head>`)
+  : null;
+app.get(/^\/gallery\/?$/, (_req, res, next) => {
+  if (!galleryHtml) return next();
+  res.set("Cache-Control", "no-cache").type("html").send(galleryHtml);
 });
 
 app.get("/readme/", (_req, res) => {
@@ -109,13 +144,16 @@ const server = app.listen(port, "0.0.0.0", () => {
   console.log(`throwaway listening on 0.0.0.0:${port}, db ${dbPath}`);
   // picks up reviews and operator decisions left from before a restart
   void worker.wake();
+  void artifactWorker.wake();
+  if (!artifactWorker.enabled) console.log("keepsake generation is paused: Release burns queue, nothing is sent to the image provider");
 });
 
 // Open event streams would otherwise hold server.close() open forever.
 const shutdown = (): void => {
   closeAllStreams();
+  closeGalleryStreams();
   server.close(() => {
-    void worker.stop().finally(() => {
+    void Promise.all([worker.stop(), artifactWorker.stop()]).finally(() => {
       db.close();
       process.exit(0);
     });

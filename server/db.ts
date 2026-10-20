@@ -179,6 +179,88 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   // 8: a paper may carry a drawing (a PNG data URL) beside or instead of its
   // words. Like the words it is immutable, and cleared when the paper ends.
   (db) => db.exec("ALTER TABLE papers ADD COLUMN drawing TEXT"),
+
+  // 9: Release records. A job exists only for a fresh Release burn and
+  // carries a constrained creative brief derived from that note at ignition,
+  // never the note's words or drawing; `public_id` is an independent random
+  // id, so a published object names no paper. `extract_until` is when the
+  // ignition extraction is given up on, which also bounds the burn's fire.
+  // The Gallery has its own revision. Budgets are reserved per UTC day
+  // before any provider request. Reports and operator actions are private.
+  (db) =>
+    db.exec(`
+      CREATE TABLE artifact_jobs (
+        id TEXT PRIMARY KEY,
+        paper_id TEXT NOT NULL UNIQUE REFERENCES papers(id),
+        public_id TEXT NOT NULL UNIQUE,
+        state TEXT NOT NULL CHECK (state IN ('EXTRACTING', 'IMAGE_QUEUED', 'GENERATING', 'REVIEW_QUEUED',
+          'REVIEWING', 'PUBLISHED', 'SOURCE_UNAVAILABLE', 'FAILED', 'BLOCKED', 'CANCELLED', 'GENERATION_UNKNOWN')),
+        brief TEXT,
+        brief_version INTEGER,
+        image_attempts INTEGER NOT NULL DEFAULT 0,
+        review_attempts INTEGER NOT NULL DEFAULT 0,
+        lease_token TEXT,
+        lease_until INTEGER,
+        extract_until INTEGER,
+        not_before INTEGER NOT NULL,
+        next_attempt_at INTEGER NOT NULL,
+        file_key TEXT,
+        error_code TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX artifact_jobs_due ON artifact_jobs (state, next_attempt_at);
+      CREATE TABLE artifacts (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL UNIQUE REFERENCES artifact_jobs(id),
+        status TEXT NOT NULL CHECK (status IN ('PUBLISHED', 'HIDDEN')),
+        version INTEGER NOT NULL DEFAULT 1,
+        file_key TEXT NOT NULL,
+        width INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        alt TEXT NOT NULL,
+        hide_reason TEXT,
+        published_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX artifacts_status ON artifacts (status, id);
+      CREATE TABLE gallery_state (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        revision INTEGER NOT NULL
+      );
+      INSERT INTO gallery_state (id, revision) VALUES (1, 0);
+      CREATE TABLE artifact_budgets (
+        day TEXT PRIMARY KEY,
+        briefs INTEGER NOT NULL DEFAULT 0,
+        images INTEGER NOT NULL DEFAULT 0,
+        inspections INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TABLE artifact_reports (
+        id TEXT PRIMARY KEY,
+        artifact_id TEXT NOT NULL REFERENCES artifacts(id),
+        reporter_identity_id TEXT NOT NULL REFERENCES identities(id),
+        reason TEXT NOT NULL CHECK (reason IN ('threats_abuse', 'private_information', 'sexual_graphic',
+          'harmful_instructions', 'spam_scam', 'something_else')),
+        op_key TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('queued', 'dismissed', 'resolved')),
+        created_at INTEGER NOT NULL,
+        resolved_at INTEGER,
+        UNIQUE (reporter_identity_id, artifact_id),
+        UNIQUE (reporter_identity_id, op_key)
+      );
+      CREATE INDEX artifact_reports_reporter_time ON artifact_reports (reporter_identity_id, created_at);
+      CREATE TABLE artifact_admin_jobs (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL CHECK (kind IN ('hide', 'dismiss', 'retry')),
+        target_id TEXT NOT NULL,
+        reason TEXT,
+        state TEXT NOT NULL CHECK (state IN ('pending', 'done', 'skipped')),
+        outcome TEXT,
+        created_at INTEGER NOT NULL,
+        done_at INTEGER
+      );
+    `),
 ];
 
 export const serverSecret = (db: DB, name: string): Buffer =>

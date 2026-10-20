@@ -21,12 +21,49 @@ fibre relief. Writing and reading sheets have wrinkled edges and a quiet
 readable centre. Keep phone controls and captions clear of the paper.
 
 - Routes: `/` (space; writing, reading, confirming, reporting and return keys
-  are *states* of it) and `/readme/`. Never add `/write`, `/paper/:id`,
-  profiles or share links.
+  are *states* of it), `/gallery/` and `/readme/`. Never add `/write`,
+  `/paper/:id`, profiles or share links.
 - Never build: a latest feed, search, ranking, profiles, My Papers / personal
   history, comments, likes, follows, editing papers, bulk destruction, points,
   countdowns, online lists, cursors, reader counts or per-frame broadcasts.
-  Gallery / AI artifacts are out unless the user asks.
+- The Gallery (ADR 005, docs/artifacts-runbook.md) is the one requested
+  exception: a burned **Release** paper automatically leaves one inspected,
+  independent AI image; Keep never does. Release mode is the only
+  eligibility (no opt-in control). The burn transaction reads the note once,
+  in memory, just before clearing it; after the reply one bounded request
+  (15 s) turns it into a strict creative brief, and only the brief is stored.
+  Failure, timeout or restart leaves no record and no fallback. A released
+  paper's fire holds until extraction settles (at most 15 s, never under
+  4.8 s). Public objects use an allowlisted shape and an independent id, with
+  no link back. An image request with an unknown outcome is never resent
+  automatically. It is an unordered record exhibition (no feed, ranking,
+  counts, likes or comments), and loads no room code. The browse layout
+  is `design/gallery-belt-2026-10-19/design.md`, which supersedes G01's
+  orbit; G02/G03 (opened record, report) keep their content. An entry
+  screen with the centred title (Gloock, self-hosted) half-hidden under a
+  dense, breathing, pointer-parted mist veil leads by one gesture into the
+  exhibition on the stage plate: a deep-charcoal vinyl idle-spinning and
+  slowly tumbling at the centre, a counter-rotating graphite globe behind
+  it and a belt of 10 cards (6 on phone) in front of it on Goodgrowth's
+  latitude-curved band, under an orthographic camera. Cards break into
+  and gather from particles only in the dissolve zones at the globe's
+  sides, where replaced records arrive; operator hides dissolve in place.
+  Opening a record is one slow timeline of about 5 s (neighbours dissolve,
+  sleeve forward over a fading-in mineral ground, disc turns once in the
+  sleeve, slides out, title letter by letter); the HTML takes over only on
+  its completion. Pure rules live in `src/scene/belt-layout.ts`,
+  `particles-plan.ts`, `record-timeline.ts` and `gallery-motion.ts`, with
+  specs; reduced motion or no WebGL gets the grid. Sound is **not
+  implemented**. Its selected
+  design is `design/gallery-records-2026-10-18/music-design.md` (ADR 006):
+  reuse the existing AI musical directions, compose/store one versioned
+  score and fixed seed at image publication, then perform it with native
+  Web Audio only after Play. No second model request, external music
+  service/key, MP3, audio job or autoplay. A future `GALLERY_MUSIC_ENABLED`
+  flag is independent from image generation; do not treat this design as
+  permission to enable it. Preserve the current fire/extraction protocol.
+  `ARTIFACTS_ENABLED` stays off
+  until the owner decides; the fixture provider is refused on Fly.
 - Real-time is SSE (`GET /api/events`) + HTTP. The database is the source of
   truth; events carry a shared `revision` and are merged by version; every
   reconnect reconciles from a snapshot, never by replaying history.
@@ -74,6 +111,10 @@ readable centre. Keep phone controls and captions clear of the paper.
 - SQLite lives at `$DATABASE_PATH` (`/data/throwaway.sqlite` on Fly's volume).
 
 ## Images
+
+These rules are for static assets checked into the repo. The Gallery's
+runtime image generation is separate: it calls the OpenAI Images API from the
+server under docs/artifacts-runbook.md, and its outputs are never committed.
 
 When this project needs an image asset, generate it via the strproxy
 `images/generations` endpoint — see

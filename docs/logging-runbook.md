@@ -15,7 +15,7 @@ boot lines, then `throwaway listening on 0.0.0.0:8080`. Only the app's own
 lines follow the shape below; to see just those:
 
 ```sh
-mise exec -- flyctl logs -a comp4020-final-aurorasundev | grep --line-buffered -E ' (session|connect|disconnect|open|create|witness|burn|report|return_key|restore|quarantine|review|operator_decision) '
+mise exec -- flyctl logs -a comp4020-final-aurorasundev | grep --line-buffered -E ' (session|connect|disconnect|open|create|witness|burn|report|gallery_report|return_key|restore|quarantine|review|operator_decision) '
 ```
 
 ## Line shape
@@ -38,6 +38,7 @@ keys or credentials.
 | `witness` | `counted`, `author`, `repeat`, `forbidden`, `paper_gone` | they said "I saw it" (`author` = on their own paper, not counted) |
 | `burn` | `destroyed`, `retry`, `forbidden`, `forbidden_receipt`, `op_conflict`, `paper_gone` | they let a paper go, or were refused |
 | `report` | `queued`, `repeat`, `forbidden`, `rate_limited`, … | they reported a paper |
+| `gallery_report` | `created`, `existing`, `rate_limited`, `missing`, `conflict` | they reported a Gallery record (`artifact=` its public id; never a paper) |
 | `return_key` / `restore` | `issued`, `saved`, `restored`, `invalid`, `rate_limited` | they saved a key / used one in another browser |
 | `quarantine`, `review`, `operator_decision` | — | the safety worker or an operator acted (no `who`) |
 

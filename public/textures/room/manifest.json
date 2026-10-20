@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "created_on": "2026-10-19",
+  "generator": "Codex built-in Image Gen",
+  "page": "main paper room",
+  "assets": [
+    {
+      "id": "home-window-light-v1",
+      "url": "/textures/room/home-window-light-v1.jpg",
+      "width": 1672,
+      "height": 941,
+      "bytes": 328412,
+      "sha256": "eeb8b7dbfc992834c358572753834d6124417c829cdf5e454a8a1e909e8b27ff",
+      "color_space": "srgb",
+      "alpha": false,
+      "tileable": false,
+      "role": "Empty photographic wall/floor projection plate, with fine plaster/limestone texture and soft left-window illumination. No UI, papers, furnace or object shadows.",
+      "source_junction_from_top_px_estimate": 408,
+      "source_junction_v_from_top_estimate": 0.43358129649309246,
+      "existing_desktop_wall_fraction": 0.4348,
+      "existing_portrait_wall_fraction": 0.2503,
+      "contains_baked_window_lighting": true,
+      "contains_baked_object_shadows": false,
+      "usage": "Use on the existing Three.js wall/floor only, with aligned projection or separate surface sampling; retain geometry, real receivers/shadows, paper lighting, camera and physics. Not a wallpaper tile or an overlay in front of the canvas."
+    }
+  ]
+}

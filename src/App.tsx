@@ -67,6 +67,20 @@ export function App() {
   const [limit, setLimit] = useState(visibleLimit);
   const [exploring, setExploring] = useState(false);
   const field = useRef<PaperFieldHandle>(null);
+
+  // A Release paper's fire is held, still burning, while its record is read
+  // from the note at ignition; it dies down when the server says the reading
+  // has settled, or at `extraction_until` (at most 15 s) regardless. A settle
+  // can arrive before this page has started that fire, so it is remembered.
+  const settledBurns = useRef(new Map<string, number>());
+  const burnFor = useCallback((id: string, ending: { effect_seed?: string; burn_duration_ms?: number; extraction_until?: string }) => {
+    const seed = seedOf(ending.effect_seed, id);
+    const durationMs = ending.burn_duration_ms ?? BURN_DEFAULT_MS;
+    const until = ending.extraction_until ? Date.parse(ending.extraction_until) : NaN;
+    const hold = Number.isFinite(until) && until > Date.now() && !settledBurns.current.has(id);
+    if (hold) setTimeout(() => field.current?.releaseBurn(id), until - Date.now());
+    return { seed, durationMs, hold };
+  }, []);
   const returnFocus = useRef<HTMLElement | null>(null);
   const modeRef = useRef(mode);
   modeRef.current = mode;
@@ -143,7 +157,7 @@ export function App() {
         } else {
           setRitual({ outcome: "other", stage: "burning", error: null });
           if (m.fallback) finishFallback(r);
-          else field.current?.burnRitualRemotely({ seed: seedOf(ending.effect_seed, id), durationMs: ending.burn_duration_ms ?? BURN_DEFAULT_MS });
+          else field.current?.burnRitualRemotely(burnFor(id, ending));
         }
         return;
       }
@@ -151,7 +165,7 @@ export function App() {
       // someone else let it go: if this page shows it closed, it burns where
       // it lies (a reader keeps the final reading instead)
       if (why === "destroyed" && ending && readingId() !== id) {
-        field.current?.burnRemote(id, { seed: seedOf(ending.effect_seed, id), durationMs: ending.burn_duration_ms ?? BURN_DEFAULT_MS });
+        field.current?.burnRemote(id, burnFor(id, ending));
       }
     },
     onOwnDestroyed: (ending: Ending) => {
@@ -166,12 +180,18 @@ export function App() {
     onChanged: (id, version) => {
       if (modeRef.current.kind === "reading" && modeRef.current.id === id) setReadingVersion((v) => Math.max(v, version));
     },
+    onExtractionSettled: (id) => {
+      const now = Date.now();
+      for (const [k, at] of settledBurns.current) if (now - at > 20_000) settledBurns.current.delete(k);
+      settledBurns.current.set(id, now);
+      field.current?.releaseBurn(id);
+    },
   });
 
   // The server has confirmed it, by its reply or by the stream, whichever
   // came first: it leaves the shared space now, and burns here once.
   const confirmRitual = useCallback(
-    (ending: { id: string; op?: string; revision: number; total: number; effect_seed?: string; burn_duration_ms?: number }) => {
+    (ending: { id: string; op?: string; revision: number; total: number; effect_seed?: string; burn_duration_ms?: number; extraction_until?: string }) => {
       const r = ritualRef.current;
       if (!r || r.id !== ending.id || r.opKey !== ending.op) {
         const m = modeRef.current;
@@ -195,13 +215,10 @@ export function App() {
         // the drawn paper chars and falls to ash, then the quiet ending
         finishFallback(r);
       } else {
-        field.current?.igniteRitual({
-          seed: seedOf(ending.effect_seed, r.id),
-          durationMs: ending.burn_duration_ms ?? BURN_DEFAULT_MS,
-        });
+        field.current?.igniteRitual(burnFor(r.id, ending));
       }
     },
-    [dispatch, pendingOps, setRitual, finishFallback],
+    [dispatch, pendingOps, setRitual, finishFallback, burnFor],
   );
 
   // "Release it": the reading closes, the paper balls up over the furnace.
@@ -541,7 +558,7 @@ export function App() {
 
   return (
     <div className={`app${mode.kind === "writing" ? " is-writing" : ""}${mode.kind === "ritual" ? " is-ritual" : ""}`}>
-      <Header onReturnKey={openReturnKey} total={ready ? space.total : null} busy={mode.kind === "ritual"} />
+      <Header onReturnKey={openReturnKey} total={ready ? space.total : null} busy={mode.kind === "ritual"} canVisitGallery={mode.kind === "space"} />
       {ready && (
         <PaperField
           ref={field}

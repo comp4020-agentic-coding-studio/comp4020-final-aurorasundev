@@ -60,6 +60,20 @@ Our report notes expire after 30 days. Drafts are not sent before submission.
 See the [moderation decision](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/004-configured-safety-review.md)
 for the limits and operator workflow.
 
+OpenAI helps turn released papers into images for the Gallery, a record
+exhibition. When a Release paper burns, its words and drawing are deleted in
+the same moment and sent to OpenAI once, from memory, to choose a small set
+of image directions; only those directions are kept, never the note. Only
+generated images that pass safety checks appear. Generation can fail; then
+no record appears, and the original paper is still gone. Records have no
+link back to their paper. Keep papers never become records. Records can be
+reported; reports go to an operator and do not hide a record by themselves.
+
+A planned music extension will use the same AI directions to shape a short
+instrumental, performed in your browser only when you choose to listen.
+It will not read the original note again or start sound automatically.
+Music is not available in the current implementation.
+
 ## Who is who
 
 There are no accounts. Each browser is its own anonymous visitor, set by a

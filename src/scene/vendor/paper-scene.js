@@ -20,6 +20,7 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { createPaper, updatePaperFrame } from "./paper.js";
 import { loadVATData } from "./paper-vat.js";
+import { createRoomPlate } from "../room-plate.js";
 
 const BACKGROUND = "#c6cdcc";
 // Cool mineral plaster and a lighter stone floor frame the warm ivory paper.
@@ -101,27 +102,38 @@ export function createPaperScene(container, buttonLayer, options) {
   const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 100);
   let ritualView = false;
   let stageBounds = { minX: -2.4, maxX: 2.4, minZ: WALL_Z, maxZ: 1.7 };
+  // The window-lit wall/floor photograph, projected from the home pose.
+  const roomPlate = createRoomPlate();
+  const fitRoomPlate = (aspect) => roomPlate.fit(poseHomeCamera, aspect, FLOOR_VISUAL_Y, WALL_Z);
 
   // The demo framed a wide, distant 16:9 stage; the references are a much
   // closer "hero shot" where each paper fills a good fraction of the frame.
   // A portrait phone looks down more steeply and gets a narrower, deeper
   // stage so papers stay clear of the controls.
+  function poseHomeCamera(cam, aspect) {
+    cam.aspect = aspect;
+    if (aspect < 0.8) {
+      cam.fov = 46;
+      cam.position.set(0, 2.55, 1.85);
+      cam.lookAt(0, 0.15, 0.1);
+    } else {
+      cam.fov = 38;
+      cam.position.set(0, 1.6, 2.5);
+      cam.lookAt(0, 0.2, -0.15);
+    }
+  }
   function applyCamera() {
     const { w, h } = size();
-    camera.aspect = w / h;
+    poseHomeCamera(camera, w / h);
     if (camera.aspect < 0.8) {
-      camera.fov = 46;
-      camera.position.set(0, 2.55, 1.85);
-      camera.lookAt(0, 0.15, 0.1);
       const halfW = Math.min(0.92, 1.45 * camera.aspect);
       stageBounds = { minX: -halfW, maxX: halfW, minZ: -0.95, maxZ: 0.95 };
     } else {
-      camera.fov = 38;
-      camera.position.set(0, 1.6, 2.5);
-      camera.lookAt(0, 0.2, -0.15);
       const halfW = Math.min(1.5, 0.76 * camera.aspect);
       stageBounds = { minX: -halfW, maxX: halfW, minZ: -0.95, maxZ: 0.7 };
     }
+    // The room plate is fixed to this home pose, never the ritual lens.
+    fitRoomPlate(camera.aspect);
     // B01/B05 show the side of an iron cylinder, with a shallow elliptical
     // opening. Lower the lens for the ritual rather than distorting the iron.
     if (ritualView) {
@@ -245,11 +257,14 @@ export function createPaperScene(container, buttonLayer, options) {
   });
   // Deepen only the cast shadow on the ground, preserving the paper lighting.
   floorMat.onBeforeCompile = (shader) => {
+    // The room plate sets the lit colour first; the deepening below then
+    // runs on it unchanged, so the ground shadow keeps its former extra depth.
+    roomPlate.patchFloor(shader);
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <shadowmap_pars_fragment>", "#include <shadowmap_pars_fragment>\n#include <shadowmask_pars_fragment>")
       .replace("#include <opaque_fragment>", "outgoingLight *= mix(0.78, 1.0, getShadowMask());\n#include <opaque_fragment>");
   };
-  floorMat.customProgramCacheKey = () => "throwaway-ground-shadow-v1";
+  floorMat.customProgramCacheKey = () => "throwaway-ground-shadow-v1+room-plate-v1";
   const floor = new THREE.Mesh(floorGeometry, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, FLOOR_VISUAL_Y, 1);
@@ -269,10 +284,16 @@ export function createPaperScene(container, buttonLayer, options) {
     metalness: 0,
     envMapIntensity: 0.2,
   });
+  wallMat.onBeforeCompile = (shader) => roomPlate.patchWall(shader);
+  wallMat.customProgramCacheKey = () => "throwaway-wall-room-plate-v1";
   const wall = new THREE.Mesh(wallGeometry, wallMat);
   wall.position.set(0, FLOOR_VISUAL_Y + wallHeight / 2, WALL_Z);
   wall.receiveShadow = true;
   scene.add(wall);
+
+  // The room plate loads after first render; until then, or if it fails,
+  // the plain wall and floor above stay.
+  roomPlate.load(`${options.textureBase ?? "/textures/"}room/home-window-light-v1.jpg`, renderer);
 
   // Lights
   // plan.md's D01 target is soft broad light and restrained contact shadows
@@ -1493,7 +1514,7 @@ export function createPaperScene(container, buttonLayer, options) {
   // Confirmed by the server: it settles into the hearth and burns from the
   // bottom up (B02), then leaves its ash (B03). `remote` is the ending when
   // someone else let it go first: it burns where it hangs, over the furnace.
-  function ignite({ seed, durationMs, remote }) {
+  function ignite({ seed, durationMs, remote, hold = false }) {
     const r = ritual;
     if (!r || !r.paper) return;
     releaseRitualPointer();
@@ -1501,7 +1522,7 @@ export function createPaperScene(container, buttonLayer, options) {
     r.time = 0;
     if (!fire || !r.furnace) {
       if (fireLoad || !r.fireFailed) {
-        r.pendingIgnite = { seed, durationMs, remote };
+        r.pendingIgnite = { seed, durationMs, remote, hold: hold && !releasedEarly.has(ritualHoldKey) };
         return;
       }
       r.paper.mesh.visible = false;
@@ -1518,6 +1539,7 @@ export function createPaperScene(container, buttonLayer, options) {
       mode: remote ? "remote" : "furnace",
       seed,
       durationMs,
+      hold: hold && !releasedEarly.delete(ritualHoldKey),
       reducedMotion: r.reduced,
       surfaceY: f.hearthPoint.y,
       settleTo: remote ? undefined : f.hearthPoint,
@@ -1651,6 +1673,9 @@ export function createPaperScene(container, buttonLayer, options) {
   // it lies (B04) and its ash stays a few seconds, then fades. A ghost: no
   // button, no body, not part of the window any more.
   const ghosts = new Set();
+  // releases that arrived before their fire had started
+  const releasedEarly = new Set();
+  const ritualHoldKey = "\u0000ritual";
   const MAX_GHOST_BURNS = compact ? 2 : 3;
 
   function updateGhosts(dt) {
@@ -1661,7 +1686,7 @@ export function createPaperScene(container, buttonLayer, options) {
     }
   }
 
-  function igniteGhost(paper, seed, durationMs) {
+  function igniteGhost(paper, seed, durationMs, hold = false) {
     if (pointerState && pointerState.paper === paper) {
       pointerState.paper = null;
       pointerState.grabbing = false;
@@ -1690,6 +1715,8 @@ export function createPaperScene(container, buttonLayer, options) {
           mode: "remote",
           seed,
           durationMs,
+          // released before the fire module loaded: it doesn't wait at all
+          hold: hold && !releasedEarly.delete(paper.id),
           reducedMotion: reduceMotion(),
           surfaceY: FLOOR_VISUAL_Y,
           viewportHeight: size().h,
@@ -1882,6 +1909,8 @@ export function createPaperScene(container, buttonLayer, options) {
       const place = ritualPlacement();
       const r = {
         paper,
+        // kept after the paper itself is handed over to the fire
+        paperId: paper.id,
         phase: "crumpling",
         time: 0,
         reduced: reduceMotion(),
@@ -1941,17 +1970,37 @@ export function createPaperScene(container, buttonLayer, options) {
       r.phase = "returning";
     },
 
-    /** Confirmed gone: it settles into the hearth and burns. */
-    igniteRitual({ seed, durationMs }) {
+    /** Confirmed gone: it settles into the hearth and burns. @param {{ seed: number, durationMs: number, hold?: boolean }} burn */
+    igniteRitual({ seed, durationMs, hold = false }) {
       if (!ritual || !ritual.paper || !PRECOMMIT.includes(ritual.phase)) return;
       if (ritual.phase === "crumpling") this.placeRitual();
-      ignite({ seed, durationMs, remote: false });
+      ignite({ seed, durationMs, remote: false, hold });
     },
 
-    /** Someone else let it go before it was placed: it burns where it hangs. */
-    burnRitualRemotely({ seed, durationMs }) {
+    /** Someone else let it go before it was placed: it burns where it hangs. @param {{ seed: number, durationMs: number, hold?: boolean }} burn */
+    burnRitualRemotely({ seed, durationMs, hold = false }) {
       if (!ritual || !ritual.paper || !PRECOMMIT.includes(ritual.phase)) return;
-      ignite({ seed, durationMs, remote: true });
+      ignite({ seed, durationMs, remote: true, hold });
+    },
+
+    /**
+     * A held fire may die down: the record it waited on has been read (or
+     * its deadline passed). `id` is the paper's; the ritual's own fire is
+     * found the same way. Remembered if the fire hasn't started yet.
+     */
+    releaseBurn(id) {
+      const r = ritual;
+      if (r && r.paperId === id) {
+        if (r.effect) r.effect.release();
+        else releasedEarly.add(ritualHoldKey);
+        return;
+      }
+      for (const ghost of ghosts) {
+        if (ghost.paper.id !== id) continue;
+        if (ghost.effect) ghost.effect.release();
+        else releasedEarly.add(id);
+        return;
+      }
     },
 
     /** Taken out for safety (or found gone on reconnect): it simply goes. */
@@ -1999,11 +2048,12 @@ export function createPaperScene(container, buttonLayer, options) {
      * where it lies; false if there is nothing here to burn (it then just
      * leaves with the window, or the reader keeps it).
      */
-    burnRemote(id, { seed, durationMs }) {
+    /** @param {string} id @param {{ seed: number, durationMs: number, hold?: boolean }} burn */
+    burnRemote(id, { seed, durationMs, hold = false }) {
       const paper = papers.get(id);
       if (!paper || paper === activePaper || paper.ghost) return false;
       if (!["closed", "rolling", "grabbed"].includes(paper.state)) return false;
-      igniteGhost(paper, seed, durationMs);
+      igniteGhost(paper, seed, durationMs, hold);
       return true;
     },
 
@@ -2030,6 +2080,7 @@ export function createPaperScene(container, buttonLayer, options) {
       floorMat.dispose();
       wallGeometry.dispose();
       wallMat.dispose();
+      roomPlate.dispose();
       paperMaterial3d.dispose();
       paperBump.dispose();
       paperFolds.dispose();

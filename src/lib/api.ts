@@ -63,6 +63,8 @@ export type Burned = {
   op: string;
   destroyed_at: string;
   burn_duration_ms: number;
+  // set while this Release paper's record is still being read: its fire waits
+  extraction_until?: string;
   effect_seed: string;
 };
 

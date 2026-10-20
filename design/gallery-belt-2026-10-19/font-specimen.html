@@ -1,0 +1,127 @@
+<title>Throwaway Gallery Faces</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Italiana&family=Gloock&family=Instrument+Serif:ital@0;1&family=Libre+Caslon+Display&display=swap">
+<style>
+  /* Layout: one tall plate per candidate face, each set the way the Gallery would use it (entry title, corner wordmark, record title). */
+  :root {
+    --mist: #c9d0cf;
+    --mist-deep: #b4bdbc;
+    --graphite: #2a2e2e;
+    --ink-soft: #4d5554;
+    --rule: rgba(42, 46, 46, 0.18);
+    --chip: #e6e9e6;
+    --body: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color-scheme: light;
+  }
+  html, body { background: var(--mist); color: var(--graphite); }
+  body {
+    font-family: var(--body);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 32px 64px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 28px; }
+  header.intro { display: grid; gap: 8px; max-width: 62ch; }
+  header.intro h1 { font: 500 15px/1.4 var(--body); letter-spacing: 0.08em; text-transform: uppercase; margin: 0; color: var(--ink-soft); }
+  header.intro p { margin: 0; font-size: 16px; line-height: 1.55; }
+  .plate {
+    position: relative;
+    overflow: hidden;
+    border-radius: 6px;
+    background:
+      radial-gradient(120% 80% at 30% 20%, rgba(255,255,255,0.55), transparent 60%),
+      radial-gradient(90% 70% at 80% 90%, rgba(255,255,255,0.35), transparent 65%),
+      var(--mist-deep);
+    padding: clamp(20px, 4vw, 40px);
+    display: grid;
+    gap: 22px;
+  }
+  .plate-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .tag { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .letter {
+    font: 600 13px/1 var(--body); letter-spacing: 0.06em;
+    background: var(--graphite); color: var(--chip);
+    padding: 6px 9px; border-radius: 3px;
+  }
+  .name { font: 500 14px/1.3 var(--body); letter-spacing: 0.04em; }
+  .wordmark { font-size: 26px; line-height: 1; }
+  .entry {
+    margin: 0; text-align: center; text-wrap: balance;
+    font-size: clamp(44px, 8.4vw, 104px); line-height: 0.98; font-weight: 400;
+    padding-block: clamp(18px, 4vw, 44px) 6px;
+  }
+  .sub { text-align: center; margin: 0; font-size: 15px; color: var(--ink-soft); }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 24px; align-items: end; border-top: 1px solid var(--rule); padding-top: 20px; }
+  .record-title { margin: 0; font-size: clamp(30px, 4.4vw, 46px); line-height: 1.05; font-weight: 400; text-wrap: balance; }
+  .note { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink-soft); max-width: 52ch; }
+  .f-a { font-family: "Italiana", Didot, "Bodoni 72", Georgia, serif; }
+  .f-b { font-family: "Gloock", "Bodoni 72", Georgia, serif; }
+  .f-c { font-family: "Instrument Serif", Georgia, serif; }
+  .f-d { font-family: "Libre Caslon Display", "Big Caslon", Georgia, serif; }
+  .f-c .entry { letter-spacing: -0.01em; }
+  .f-a .entry { letter-spacing: 0.02em; }
+  @media (max-width: 640px) {
+    .row { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="intro">
+    <h1>Gallery display face candidates</h1>
+    <p>Four open-licence display serifs, each set on the Gallery's mist grey: the entry title, the corner wordmark and a real record title. Body text stays on the system font. Pick a letter.</p>
+  </header>
+
+  <section class="plate f-a" aria-label="Option A, Italiana">
+    <div class="plate-top">
+      <div class="tag"><span class="letter">A</span><span class="name">Italiana</span></div>
+      <span class="wordmark">Throwaway</span>
+    </div>
+    <h2 class="entry">The Throwaway Gallery</h2>
+    <p class="sub">Images shaped by released notes.</p>
+    <div class="row">
+      <p class="record-title">A thread drawn tight</p>
+      <p class="note">A thin, high-contrast didone with one weight, like the vinyl lettering on a museum wall. Very quiet and very airy. It thins out at small sizes, so the wordmark would need a bit more size.</p>
+    </div>
+  </section>
+
+  <section class="plate f-b" aria-label="Option B, Gloock">
+    <div class="plate-top">
+      <div class="tag"><span class="letter">B</span><span class="name">Gloock</span></div>
+      <span class="wordmark">Throwaway</span>
+    </div>
+    <h2 class="entry">The Throwaway Gallery</h2>
+    <p class="sub">Images shaped by released notes.</p>
+    <div class="row">
+      <p class="record-title">A thread drawn tight</p>
+      <p class="note">A heavy, high-contrast serif with soft, inky curves. Reads like a printed exhibition poster. It holds its own against the spinning vinyl and stays legible on phones.</p>
+    </div>
+  </section>
+
+  <section class="plate f-c" aria-label="Option C, Instrument Serif">
+    <div class="plate-top">
+      <div class="tag"><span class="letter">C</span><span class="name">Instrument Serif</span></div>
+      <span class="wordmark">Throwaway</span>
+    </div>
+    <h2 class="entry">The Throwaway <em>Gallery</em></h2>
+    <p class="sub">Images shaped by released notes.</p>
+    <div class="row">
+      <p class="record-title">A thread drawn tight</p>
+      <p class="note">A condensed editorial serif with a real italic, shown here on "Gallery". Elegant and compact, so long record titles fit on one line. It is widely used on design sites, so it is the least distinctive of the four.</p>
+    </div>
+  </section>
+
+  <section class="plate f-d" aria-label="Option D, Libre Caslon Display">
+    <div class="plate-top">
+      <div class="tag"><span class="letter">D</span><span class="name">Libre Caslon Display</span></div>
+      <span class="wordmark">Throwaway</span>
+    </div>
+    <h2 class="entry">The Throwaway Gallery</h2>
+    <p class="sub">Images shaped by released notes.</p>
+    <div class="row">
+      <p class="record-title">A thread drawn tight</p>
+      <p class="note">A display cut of Caslon, the classic book and catalogue face. Warm and literary, like a printed exhibition catalogue. Closest in spirit to the current serif, but with more refinement at large sizes.</p>
+    </div>
+  </section>
+</div>

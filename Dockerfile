@@ -24,4 +24,5 @@ COPY package.json README.md ./
 COPY server ./server
 # the private moderation CLI, run over `fly ssh console`
 COPY scripts/moderation.ts ./scripts/moderation.ts
+COPY scripts/artifacts.ts ./scripts/artifacts.ts
 CMD ["node", "server/index.ts"]
