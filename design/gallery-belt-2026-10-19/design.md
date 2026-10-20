@@ -254,3 +254,14 @@ These replace the earlier text where they differ.
   `/gallery/` handled in place (so without JavaScript it still lands on the
   Gallery's entry), named "The Throwaway Gallery". "Back to the space" is the
   way to `/`.
+- **The record ends in front of the sleeve, without a pop.** It tucks
+  behind the sleeve and turns there as before; then it slides out *behind*
+  the sleeve until its rim has cleared the sleeve's edge (55 % of the slide,
+  with a 4 % gap); only there, overlapping nothing, does it step in front
+  (draw order and depth together), and it comes back over the sleeve's edge
+  to rest exactly on the HTML disc frame (position, size, in front). If the
+  clear point would leave the screen the record may be up to 15 % smaller at
+  the turn, growing back as it comes forward. Slide 2.2 s (was 1.5 s;
+  hand-over about 5.4 s); the close plays the same path back (slide 1.3 s,
+  close about 3.1 s). The compact layout's record rests behind the sleeve
+  and simply stays there; the phone keeps the record tucked.

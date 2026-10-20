@@ -4,6 +4,9 @@ import { planExit, planParticles, BUDGET_DESKTOP, BUDGET_PHONE, type Candidate, 
 import {
   cardRitual,
   closeTimeline,
+  discSlide,
+  overlapsSleeve,
+  SLIDE_CLEAR,
   EXIT_STAGGER,
   HERO_AT,
   HERO_SECONDS,
@@ -142,15 +145,15 @@ describe("the open's exit order", () => {
     }
   });
 
-  it("the desktop open is slow and calm: about 4–5 s to the hand-over, each beat perceptible (owner, 2026-10-20)", () => {
+  it("the desktop open is slow and calm: about 5–6 s to the hand-over, each beat perceptible (owner, 2026-10-20)", () => {
     const c = newChoreo();
     const spin = { angle: 0, boost: 0 };
     const tl = openTimeline(c, spin, { phone: false });
     // the HTML reveal is nested at "land": title letters, copy, then controls
     const reveal = Math.max(CHROME_AT + REVEAL_ITEM + 0.06 * 2, BODY_AT + BODY_STAGGER * 4 + REVEAL_ITEM, TITLE_SPAN + TITLE_LETTER);
     const handover = Math.max(tl.duration(), tl.labels.land + reveal);
-    expect(handover).toBeGreaterThanOrEqual(3.5);
-    expect(handover).toBeLessThanOrEqual(5.5);
+    expect(handover).toBeGreaterThanOrEqual(4.5);
+    expect(handover).toBeLessThanOrEqual(6.0);
     // the record turns one full revolution behind the sleeve, slowly enough
     // to follow, after it has tucked in and before it slides out
     expect(TURN_SECONDS).toBeGreaterThanOrEqual(1.2);
@@ -165,9 +168,10 @@ describe("the open's exit order", () => {
     tl.time(TURN_AT + TURN_SECONDS);
     expect(before - spin.angle).toBeCloseTo(Math.PI * 2, 6);
     expect(c.slide).toBe(0);
-    // the slide out is much slower than before (0.6 s)
-    expect(SLIDE_SECONDS).toBeGreaterThanOrEqual(1.4);
-    expect(SLIDE_SECONDS).toBeLessThanOrEqual(1.8);
+    // the slide is slow (it was 0.6 s, then 1.5 s); revision two adds the
+    // out-and-back past the sleeve's edge, about 0.5–0.8 s more
+    expect(SLIDE_SECONDS).toBeGreaterThanOrEqual(2.0);
+    expect(SLIDE_SECONDS).toBeLessThanOrEqual(2.3);
     // the tumble has gone by the time the record turns in the sleeve
     expect(c.tumble).toBe(0);
     expect(titleStagger(80) * 79).toBeLessThanOrEqual(TITLE_SPAN + 1e-9);
@@ -202,6 +206,95 @@ describe("the open's exit order", () => {
     const close = closeTimeline(c);
     expect(close.duration()).toBeLessThanOrEqual(tl.duration() * 1.3);
     tl.kill();
+    close.kill();
+  });
+});
+
+describe("the record's slide out of the sleeve (revision two)", () => {
+  // the desktop's frames from gallery.css's formulas (world units: the
+  // camera's half-height is 3, so k = 6 / h): the art at 28.2vw, 18dvh + 15px,
+  // min(60dvh, 36vw) square; the disc centred at 22vw, min(58dvh, 36vw) wide.
+  // The HTML record overlaps the sleeve's left edge, in front.
+  const desk = (w: number, h: number) => {
+    const k = 6 / h;
+    const art = Math.min(0.6 * h, 0.36 * w);
+    const disc = Math.min(0.58 * h, 0.36 * w);
+    const ax = 0.282 * w + art / 2;
+    const ay = 0.18 * h + 15 + art / 2;
+    const dy = Math.max(0.48 * h - disc / 2, 164) + 15 + disc / 2;
+    return {
+      sleeve: { x: (ax - w / 2) * k, y: (h / 2 - ay) * k, half: (art * k * 1.076) / 2 },
+      rest: { x: (0.22 * w - w / 2) * k, y: (h / 2 - dy) * k, r: (disc / 2) * k },
+      size: art * k,
+      edge: -(w / 2) * k,
+    };
+  };
+  const layouts = { "1920x1080": desk(1920, 1080), "1366x768": desk(1366, 768) };
+  for (const [name, l] of Object.entries(layouts)) {
+    // gallery-belt.ts: half out of the sleeve toward the disc, 0.46 of its size
+    const tucked = { x: l.sleeve.x - 0.44 * l.size, y: l.sleeve.y, r: l.size * 0.46 };
+    const g = { tucked, rest: l.rest, sleeve: l.sleeve, restInFront: true, screenEdge: l.edge };
+    it(`${name}: never in front of the sleeve while overlapping it before it has cleared, in front at the end, exactly on the HTML disc`, () => {
+      let cleared = false;
+      let prev = discSlide(0, g);
+      expect(prev.inFront).toBe(false);
+      for (let t = 0; t <= 1.0000001; t += 1 / 600) {
+        const p = discSlide(t, g);
+        // the depth switch happens only where nothing overlaps
+        if (p.inFront !== prev.inFront) {
+          expect(overlapsSleeve(p, l.sleeve)).toBe(false);
+          expect(overlapsSleeve(prev, l.sleeve)).toBe(false);
+          cleared = true;
+        }
+        // never drawn in front while overlapping before it cleared
+        if (!cleared) expect(p.inFront).toBe(false);
+        // continuous: no jump in place or size between frames at 60 Hz of a 2.2 s slide
+        expect(Math.abs(p.x - prev.x)).toBeLessThan(0.05);
+        expect(Math.abs(p.r - prev.r)).toBeLessThan(0.05);
+        prev = p;
+      }
+      expect(cleared).toBe(true);
+      const end = discSlide(1, g);
+      expect(end.inFront).toBe(true);
+      expect(end.x).toBeCloseTo(l.rest.x, 9);
+      expect(end.y).toBeCloseTo(l.rest.y, 9);
+      expect(end.r).toBeCloseTo(l.rest.r, 9);
+      // it does come back over the sleeve's edge, in front of it
+      expect(overlapsSleeve(end, l.sleeve)).toBe(true);
+      // and the turn is at SLIDE_CLEAR, clear of the paper, without leaving
+      // the screen by more than a sliver
+      const turn = discSlide(SLIDE_CLEAR, g);
+      expect(overlapsSleeve(turn, l.sleeve)).toBe(false);
+      expect(turn.x - turn.r).toBeGreaterThan(l.edge - 0.15 * turn.r);
+      expect(turn.r).toBeGreaterThanOrEqual(l.rest.r * 0.85 - 1e-9);
+    });
+  }
+
+  it("a record that rests behind the sleeve (compact) just slides there and stays behind", () => {
+    const g = { tucked: { x: 0, y: 0, r: 0.4 }, rest: { x: -1, y: 0, r: 0.8 }, sleeve: { x: 0.5, y: 0, half: 0.9 }, restInFront: false };
+    for (let t = 0; t <= 1; t += 0.05) expect(discSlide(t, g).inFront).toBe(false);
+    expect(discSlide(1, g)).toMatchObject({ x: -1, r: 0.8 });
+  });
+
+  it("the close runs it backwards: in front, out past the edge, behind, tucked", () => {
+    const l = layouts["1920x1080"];
+    const g = { tucked: { x: l.sleeve.x - 0.44 * l.size, y: l.sleeve.y, r: l.size * 0.46 }, rest: l.rest, sleeve: l.sleeve, restInFront: true };
+    const c = newChoreo();
+    openTimeline(c, { angle: 0, boost: 0 }, { phone: false }).progress(1).kill();
+    expect(c.slide).toBe(1);
+    const close = closeTimeline(c);
+    let was = discSlide(c.slide, g);
+    expect(was.inFront).toBe(true);
+    let behindSeen = false;
+    for (let t = 0; t <= close.duration(); t += 1 / 60) {
+      close.time(t);
+      const p = discSlide(c.slide, g);
+      if (p.inFront !== was.inFront) expect(overlapsSleeve(p, l.sleeve) || overlapsSleeve(was, l.sleeve)).toBe(false);
+      if (!p.inFront) behindSeen = true;
+      if (behindSeen) expect(p.inFront).toBe(false);
+      was = p;
+    }
+    expect(c.slide).toBe(0);
     close.kill();
   });
 });

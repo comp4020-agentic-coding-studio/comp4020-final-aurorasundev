@@ -6,8 +6,8 @@ import { beltCards, beltPoint, cardFrame, cardPlacement, CAMERA_HALF, dissolveAt
 import { createBeltGlobe } from "./belt-globe.ts";
 import { mergeOrbitItems, nextFocusIndex, type OrbitItem } from "./orbit-items.ts";
 import { advanceSpin, dampPhase, spinning, tumbleAt, wheelItems, wheelSnap, SPIN_GAIN, SPIN_IDLE, SPIN_RESPONSE, WHEEL_QUIET_MS } from "./gallery-motion.ts";
-import { cardRitual, closeTimeline, newChoreo, newSwap, openTimeline, pruneSwap, retarget, shiftSwap, slideStages, stepTimeline, type SpinClock } from "./record-timeline.ts";
-import { createSleeveKit, type SleeveMesh } from "./sleeve-kit.ts";
+import { cardRitual, closeTimeline, newChoreo, newSwap, openTimeline, pruneSwap, retarget, shiftSwap, discSlide, stepTimeline, type SpinClock } from "./record-timeline.ts";
+import { createSleeveKit, FRAME_PLATE, SLEEVE_FRONT, type SleeveMesh } from "./sleeve-kit.ts";
 import { applyVinylSheen } from "./vinyl-sheen.ts";
 import { createCardParticles } from "./card-particles.ts";
 import { driftSign, fastTurn, GATHER_SECONDS, hideStart, HIDE_SECONDS, IMAGE_FADE_SECONDS, imageShown, meshAlpha, particleAlpha, planExit, planParticles, zoneMode, type Candidate, type ExitSlot, type Mode, type Render } from "./particles-plan.ts";
@@ -867,16 +867,21 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       const tucked: Pose = { x: hp.x + out, y: hp.y, z: hp.z - 0.05, size: hp.size * 0.46, q: hp.q.clone(), fade: 1, tone: 1 };
       dp = blend(dp, tucked, c.tuck);
       if (c.slide > 0) {
-        const { out, settle: rest } = slideStages(c.slide);
+        // out past the sleeve's edge behind it, then in front of it and back
+        // over the edge to the HTML disc frame (record-timeline.ts discSlide)
         const D = L.discDetail;
-        // a record that rests in front of the sleeve first clears its edge,
-        // so it never passes through the paper
-        const front = D.z >= L.hero.z;
-        const halfW = (L.w * L.k) / 2;
-        const clearX = front ? Math.max(Math.min(D.x, tucked.x, L.hero.x - L.hero.size / 2 - D.size * 0.98), -halfW + D.size * 0.8) : D.x;
-        const mid: Pose = { x: clearX, y: lerp(hp.y, D.y, 0.5), z: tucked.z, size: D.size, q: IDENTITY.clone(), fade: 1, tone: 1 };
-        dp = blend(blend(dp, mid, out), D, rest);
-        dp.z = lerp(tucked.z, D.z, smooth(0, 0.15, rest));
+        const restInFront = D.z >= L.hero.z;
+        const sp = discSlide(c.slide, {
+          tucked: { x: tucked.x, y: tucked.y, r: tucked.size },
+          rest: { x: D.x, y: D.y, r: D.size },
+          sleeve: { x: hp.x, y: hp.y, half: (hp.size * FRAME_PLATE) / 2 },
+          restInFront,
+          screenEdge: Math.sign(D.x - hp.x || -1) * ((L.w * L.k) / 2),
+        });
+        // in front: past the sleeve's front face and paper frame, so the
+        // depth test agrees with the draw order
+        const frontZ = hp.z + hp.size * SLEEVE_FRONT + 0.02;
+        dp = { x: sp.x, y: sp.y, z: sp.inFront ? Math.max(frontZ, D.z) : restInFront ? tucked.z : lerp(tucked.z, D.z, sp.settle), size: sp.r, q: hp.q.clone().slerp(IDENTITY, sp.turn), fade: 1, tone: 1 };
       }
     }
     // the entrance: the record rises from the centre and tilts to rest

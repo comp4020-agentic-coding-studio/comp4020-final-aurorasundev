@@ -12,7 +12,10 @@ import type { ExitSlot, Kind, Mode } from "./particles-plan.ts";
 //               globe dims and holds still by the same value)
 //   tuck   0→1  the record goes into the chosen sleeve (on a desktop it
 //               rests there part-way out, so it can be seen turning)
-//   slide  0→1  the record slides out of the sleeve to the HTML disc frame
+//   slide  0→1  the record slides out of the sleeve, behind it, until it has
+//               cleared the sleeve's edge; there (nothing overlapping) it
+//               steps in front, and comes back over the edge to the HTML
+//               disc frame (discSlide)
 //   idle   1→0  the record's idle turning (held still while a record is open)
 //   tumble 1→0  the record's slow 3D tumble at rest, blended out over the
 //               tuck so it meets the sleeve square, and back in on close
@@ -65,27 +68,30 @@ export const TUCK_SECONDS = 1.3;
 // there, slowly enough to follow
 export const TURN_AT = HERO_AT + HERO_SECONDS - 0.05;
 export const TURN_SECONDS = 1.3;
-// then slides out of the sleeve to its resting place on a soft ease (a phone
-// keeps it tucked)
+// then slides out of the sleeve past its edge and back in front of it to its
+// resting place, on a soft ease (owner, 2026-10-20, revision two: the
+// out-and-back added 0.7 s; a phone keeps the record tucked)
 export const SLIDE_AT = TURN_AT + TURN_SECONDS;
-export const SLIDE_SECONDS = 1.5;
-export const SLIDE_EASE = "sine.inOut";
+export const SLIDE_SECONDS = 2.2;
+// linear: discSlide eases each leg itself (out, a rest at the sleeve's edge,
+// and back), so the slide's own tween adds no second ease
+export const SLIDE_EASE = "none";
 // as it comes in to land it spins up gently and settles upright (half to
 // one and a half turns on), so the still HTML record can take over without a
 // jump
-export const SPIN_AT = SLIDE_AT + SLIDE_SECONDS * 0.6;
+export const SPIN_AT = SLIDE_AT + SLIDE_SECONDS * 0.65;
 export const SPIN_SECONDS = 1.3;
 export const SPIN_TURNS = 0.5;
 // where the HTML reveal (title letters, then caption, report link, arrows)
 // begins: as the record settles
-export const LAND_AT = SLIDE_AT + SLIDE_SECONDS * 0.6;
+export const LAND_AT = SLIDE_AT + SLIDE_SECONDS * 0.65;
 export const LAND_AT_PHONE = HERO_AT + HERO_SECONDS - 0.1;
 // the mineral surface comes up behind the sleeve as it walks forward
 export const BACKDROP_AT = HERO_AT;
 export const BACKDROP_SECONDS = HERO_SECONDS + 0.4;
 // close (about 60–70 % of the open): the disc goes back, the sleeve returns,
 // then the cards gather and the tumble returns
-export const CLOSE_SLIDE_SECONDS = 1.0;
+export const CLOSE_SLIDE_SECONDS = 1.3;
 export const CLOSE_HERO_AT = 0.5;
 export const CLOSE_HERO_SECONDS = 1.0;
 export const CLOSE_TUCK_SECONDS = 0.9;
@@ -102,6 +108,7 @@ export const STEP_SPIN_SECONDS = 1.3;
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const inOut = gsap.parseEase("power2.inOut");
+const sineInOut = gsap.parseEase("sine.inOut");
 
 // One card's eased progress at the shared `exit` value. `rank` is its place in
 // the exit order (0 = the nearest neighbour, particles-plan.ts planExit). With
@@ -114,14 +121,54 @@ export function local(exit: number, rank: number, order: 1 | -1 = 1): number {
   return inOut(clamp01((exit * EXIT_SPAN - delay) / EXIT_ITEM));
 }
 
-// Where along the slide the record is: first out through the sleeve's edge,
-// still at the sleeve's depth, then forward and onto its resting place.
-export const SLIDE_OUT = 0.58;
-export function slideStages(slide: number): { out: number; settle: number } {
-  return {
-    out: inOut(clamp01(slide / SLIDE_OUT)),
-    settle: inOut(clamp01((slide - SLIDE_OUT) / (1 - SLIDE_OUT))),
-  };
+// --- the slide out of the sleeve (owner, 2026-10-20, revision two) ---------
+// A record that rests in front of the sleeve (the desktop's HTML record
+// overlaps the sleeve's left edge, in front) must not pop from behind it to
+// in front. So the slide is out and back: behind the sleeve it slides out
+// past the sleeve's edge until it clears it (SLIDE_CLEAR of the slide);
+// there, with nothing overlapping, it steps in front (an invisible change),
+// and it comes back over the edge to rest exactly on the HTML disc frame.
+// A record that rests behind the sleeve (the compact layout) just slides
+// there and stays behind. Close runs the same path backwards.
+export const SLIDE_CLEAR = 0.55;
+// the gap left between the record's rim and the sleeve's paper at the
+// turn, as a share of the record's radius
+export const CLEAR_GAP = 0.04;
+export type Disc = { x: number; y: number; r: number };
+// sleeve: its centre and half its visible width (the frame's paper)
+// screenLeft (optional): the viewport's edge on the side the record goes, so
+// at the turn it stays on screen (it may be up to CLEAR_SHRINK smaller there,
+// and grows to its rest size as it comes forward over the sleeve)
+export type SlideGeometry = { tucked: Disc; rest: Disc; sleeve: { x: number; y: number; half: number }; restInFront: boolean; screenEdge?: number };
+export const CLEAR_SHRINK = 0.15;
+export const SCREEN_MARGIN = 0.02;
+export type SlidePose = Disc & { inFront: boolean; turn: number; settle: number };
+export function discSlide(slide: number, g: SlideGeometry): SlidePose {
+  const t = clamp01(slide);
+  if (!g.restInFront) {
+    const k = inOut(t);
+    return { x: g.tucked.x + (g.rest.x - g.tucked.x) * k, y: g.tucked.y + (g.rest.y - g.tucked.y) * k, r: g.tucked.r + (g.rest.r - g.tucked.r) * k, inFront: false, turn: k, settle: k };
+  }
+  const side = Math.sign(g.rest.x - g.sleeve.x) || -1;
+  // the radius at the turn: the rest size, unless that would leave the screen
+  const room = g.screenEdge === undefined ? Infinity : (Math.abs(g.screenEdge - g.sleeve.x) - g.sleeve.half - SCREEN_MARGIN) / (2 + CLEAR_GAP);
+  const rc = Math.max(g.rest.r * (1 - CLEAR_SHRINK), Math.min(g.rest.r, room));
+  const clearX = g.sleeve.x + side * (g.sleeve.half + rc * (1 + CLEAR_GAP));
+  const turn = inOut(clamp01(t / SLIDE_CLEAR));
+  const settle = inOut(clamp01((t - SLIDE_CLEAR) / (1 - SLIDE_CLEAR)));
+  // height and size move once, over the whole slide (a soft ease)
+  const k = sineInOut(t);
+  const x = t < SLIDE_CLEAR ? g.tucked.x + (clearX - g.tucked.x) * turn : clearX + (g.rest.x - clearX) * settle;
+  // the size reaches the turn's size by the turn, so the clearing is real,
+  // then the rest size as it comes forward
+  const r = t < SLIDE_CLEAR ? g.tucked.r + (rc - g.tucked.r) * turn : rc + (g.rest.r - rc) * settle;
+  return { x, y: g.tucked.y + (g.rest.y - g.tucked.y) * k, r, inFront: t >= SLIDE_CLEAR, turn, settle };
+}
+// whether a round record of this pose overlaps the sleeve's square
+export function overlapsSleeve(d: Disc, sleeve: SlideGeometry["sleeve"]): boolean {
+  const dx = Math.max(Math.abs(d.x - sleeve.x) - sleeve.half, 0);
+  const dy = Math.max(Math.abs(d.y - sleeve.y) - sleeve.half, 0);
+  return dx * dx + dy * dy < d.r * d.r;
 }
 
 // the next upright angle at least `turns` revolutions further on (spin runs

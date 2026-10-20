@@ -17,6 +17,9 @@ export const FRAME_PLATE = 1.076;
 export const ART_INSET = 0.87;
 // thickness and edge roundness, as fractions of the sleeve's width
 const DEPTH = 0.042;
+// the sleeve's front (its paper frame), in sleeve widths from its centre:
+// anything meant to draw in front of it sits past this
+export const SLEEVE_FRONT = DEPTH / 2 + 0.0012;
 const RADIUS = 0.012;
 
 export type SleeveMesh = {
