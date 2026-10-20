@@ -183,7 +183,7 @@ export function planExit(ring: number, phone: boolean): Map<number, ExitSlot> {
 
 // --- the record's rim (owner, 2026-10-20, revision two) ---------------------
 // As the belt turns, a front-half card crossing the record's silhouette edge,
-// on its way in front of the record and again on its way out, breaks briefly
+// on its way in front of the record, breaks briefly
 // into grain and re-forms, as if it passed through a veil at the record's
 // rim. It never disappears: the dissolve rises to RIM_PEAK and back to 0 over
 // the crossing, drawn in place (mode "inplace") through the same particle
@@ -211,9 +211,10 @@ export function rimU(theta: number, fit: Pick<Fit, "phone" | "cx" | "S" | "disc"
 }
 // the pulse at u (0 outside the band, RIM_PEAK on the rim, a smooth bump),
 // for front-half cards only, and never while a record is open or under
-// reduced motion (`active` false)
-export function rimPulse(u: number, theta: number, active: boolean): number {
-  if (!active || halfOf(theta) !== "front") return 0;
+// reduced motion (`active` false). Increasing distance is a departure, so it
+// never starts another pulse; an existing pulse can finish gathering back.
+export function rimPulse(u: number, theta: number, active: boolean, previousU: number): number {
+  if (!active || halfOf(theta) !== "front" || u >= previousU - 1e-6) return 0;
   const d = Math.abs(u - 1) / RIM_BAND;
   if (d >= 1) return 0;
   return RIM_PEAK * 0.5 * (1 + Math.cos(Math.PI * d));

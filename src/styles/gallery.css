@@ -419,6 +419,14 @@
   min-height: 100dvh;
 }
 
+/* Keep the back row fixed; the ghost shares this offset for the landing. */
+.record-art,
+.record-disc,
+.record-text,
+.record-steps {
+  translate: 0 15px;
+}
+
 .record-ghost {
   position: fixed;
   inset: 0;
@@ -660,9 +668,10 @@
   background: var(--bg) url("/textures/gallery/mineral-surface.jpg") center / cover no-repeat;
 }
 
-/* without the orbit the opened record has its own backdrop */
-.records-page:not(.has-orbit) ~ .record-dialog::backdrop,
-.record-dialog:not(.is-arriving)::backdrop {
+/* Only the plain fallback needs this wash. Over WebGL, keep the backdrop
+   transparent through handover: the HTML disc fades in over the same scene
+   and mineral ground, without briefly brightening the canvas underneath. */
+.records-page:not(.has-orbit) .record-dialog::backdrop {
   background: rgb(198 205 204 / 0.18);
 }
 
@@ -972,7 +981,7 @@
     left: var(--text-left);
     width: auto;
     right: var(--gutter);
-    max-height: calc(100dvh - var(--top));
+    max-height: calc(100dvh - var(--top) - 15px);
     padding-bottom: 16px;
   }
 

@@ -852,7 +852,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     // reduced motion (alpha only) they follow at once
     const instant = reduced();
     card.zoneTarget = dissolveAt(card.theta, L.phone);
-    card.rimTarget = rimPulse(rimU(card.theta, L), card.theta, browsing);
+    card.rimTarget = rimPulse(rimU(card.theta, L), card.theta, browsing, rimU(card.prevTheta, L));
     card.shownZone = easeDissolve(card.shownZone, card.zoneTarget, dt, instant);
     card.shownRim = easeDissolve(card.shownRim, card.rimTarget, dt, instant || !browsing);
     card.rim = card.shownRim.shown;

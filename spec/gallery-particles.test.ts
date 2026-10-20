@@ -251,27 +251,27 @@ describe("the record's rim (revision two)", () => {
   it("a card crossing the record's edge pulses to about 0.6-0.8 and back, never disappearing", () => {
     expect(RIM_PEAK).toBeGreaterThanOrEqual(0.6);
     expect(RIM_PEAK).toBeLessThanOrEqual(0.8);
-    expect(rimPulse(1, 0.3, true)).toBeCloseTo(RIM_PEAK, 9);
-    expect(rimPulse(1 + RIM_BAND, 0.3, true)).toBe(0);
-    expect(rimPulse(1 - RIM_BAND, 0.3, true)).toBe(0);
-    for (let u = 0; u <= 3; u += 0.01) expect(rimPulse(u, 0.3, true)).toBeLessThanOrEqual(RIM_PEAK + 1e-9);
+    expect(rimPulse(1, 0.3, true, 1.1)).toBeCloseTo(RIM_PEAK, 9);
+    expect(rimPulse(1 + RIM_BAND, 0.3, true, 2)).toBe(0);
+    expect(rimPulse(1 - RIM_BAND, 0.3, true, 2)).toBe(0);
+    for (let u = 0; u <= 3; u += 0.01) expect(rimPulse(u, 0.3, true, u + 0.01)).toBeLessThanOrEqual(RIM_PEAK + 1e-9);
   });
 
   for (const [name, fit] of Object.entries(fits)) {
-    it(`${name}: turning one step, each card that crosses the rim rises and falls once, entering and again leaving; at rest no card is mid-pulse`, () => {
+    it(`${name}: either scroll direction pulses the entering card once and never the departing card`, () => {
       const ring = ringSize(fit.phone, 18);
       const step = tileStep(ring);
       // at every rest pose every card is clear of the band
-      for (const bc of beltCards(0, ring, 18)) expect(rimPulse(rimU(bc.theta, fit), bc.theta, true), `rest θ=${bc.theta.toFixed(2)}`).toBe(0);
-      // a step: the front card leaves the record (one pulse), the next comes in (one pulse)
-      const pulses = (theta0: number) => {
+      for (const bc of beltCards(0, ring, 18)) expect(rimPulse(rimU(bc.theta, fit), bc.theta, true, rimU(bc.theta, fit)), `rest θ=${bc.theta.toFixed(2)}`).toBe(0);
+      const pulses = (theta0: number, direction: number) => {
         let rises = 0;
         let up = false;
         let peak = 0;
         let prev = 0;
         for (let t = 0; t <= 1.0001; t += 0.002) {
-          const theta = theta0 - t * step;
-          const v = rimPulse(rimU(theta, fit), theta, true);
+          const theta = theta0 - direction * t * step;
+          const previousTheta = theta0 - direction * Math.max(0, t - 0.002) * step;
+          const v = rimPulse(rimU(theta, fit), theta, true, rimU(previousTheta, fit));
           if (v > prev + 1e-9 && !up) {
             up = true;
             rises++;
@@ -282,13 +282,15 @@ describe("the record's rim (revision two)", () => {
         }
         return { rises, peak, end: prev };
       };
-      const leaving = pulses(0);
-      expect(leaving.rises).toBe(1);
-      expect(leaving.peak).toBeGreaterThan(RIM_PEAK * 0.95);
-      expect(leaving.end).toBe(0);
-      const entering = pulses(step);
-      expect(entering.rises).toBe(1);
-      expect(entering.end).toBe(0);
+      for (const direction of [-1, 1]) {
+        const leaving = pulses(0, direction);
+        expect(leaving.rises).toBe(0);
+        expect(leaving.peak).toBe(0);
+        const entering = pulses(direction * step, direction);
+        expect(entering.rises).toBe(1);
+        expect(entering.peak).toBeGreaterThan(RIM_PEAK * 0.95);
+        expect(entering.end).toBe(0);
+      }
     });
   }
 
@@ -301,10 +303,14 @@ describe("the record's rim (revision two)", () => {
   });
 
   it("never pulses under reduced motion, while a record is open, or on the far half", () => {
-    expect(rimPulse(1, 0.3, false)).toBe(0);
-    expect(rimPulse(1, Math.PI - 0.3, true)).toBe(0);
+    expect(rimPulse(1, 0.3, false, 1.1)).toBe(0);
+    expect(rimPulse(1, Math.PI - 0.3, true, 1.1)).toBe(0);
     // and reduced motion plans alpha anyway
     expect(planParticles([zone("a", 0.5)], { ...base, reduced: true }).get("a")).toBe("alpha");
+  });
+
+  it("does not start a new pulse when a card is stationary at the rim", () => {
+    expect(rimPulse(1, 0.3, true, 1)).toBe(0);
   });
 });
 

@@ -296,3 +296,16 @@ These replace the earlier text where they differ.
   crossing during one step reads for about 1.5 s. Reduced motion and an open
   follow at once. `RIM_BAND` is 0.4 (so the phone's resting neighbours, at
   u ≈ 1.43, stay outside it).
+
+## 7d. Owner follow-up (2026-10-20)
+
+- **Rim particles only on approach.** In either scroll direction, compare a
+  card's distance from the record's centre with its previous frame. Only an
+  approaching front-half card may start the rim pulse. Leaving the record
+  never starts a second pulse; a pulse already in flight finishes gathering
+  at the existing calm pace. This replaces the two-crossing rule in §7b.
+- **No bright wash at handover.** Keep a WebGL record dialog's backdrop
+  transparent while its static artwork fades in. The mineral ground is
+  already present, so adding a light wash at that instant brightens the
+  live canvas before the HTML disc has covered it. The plain fallback
+  retains its own background and backdrop.
