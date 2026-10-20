@@ -46,6 +46,8 @@ export function GalleryApp() {
   const band = useRef<HTMLDivElement>(null);
   const ghostArt = useRef<HTMLDivElement>(null);
   const ghostDisc = useRef<HTMLDivElement>(null);
+  // the opened record's mineral surface, faded by the scene's open timeline
+  const backdrop = useRef<HTMLDivElement>(null);
   // the grid's tile that opened a record gets focus back
   const opener = useRef<HTMLElement | null>(null);
 
@@ -177,7 +179,7 @@ export function GalleryApp() {
   }, [orbit, hasMore, loadingMore, loadMore, focused, g.items]);
 
   const frames = useCallback(
-    () => (band.current && ghostArt.current && ghostDisc.current ? { band: band.current, art: ghostArt.current, disc: ghostDisc.current } : null),
+    () => (band.current && ghostArt.current && ghostDisc.current ? { band: band.current, art: ghostArt.current, disc: ghostDisc.current, backdrop: backdrop.current } : null),
     [],
   );
 
@@ -190,6 +192,8 @@ export function GalleryApp() {
       className={`records-page${showOrbit ? " has-orbit" : ""}${entry && orbit ? " has-entry" : " is-plain"}${isOpen ? " is-open" : ""}${returning && showOrbit && !isOpen ? " is-returning" : ""}`}
     >
       <div className="records-surface" aria-hidden="true" />
+      {/* behind the scene, above the stage plate: the opened record's ground */}
+      {showOrbit && <div ref={backdrop} className="record-backdrop" aria-hidden="true" />}
       {mistOn && <GalleryMist mist={mist} still={still || !entry} behind={!entry || stage === "exhibition"} onLost={() => setMistOn(false)} />}
       {showOrbit && (
         <GalleryOrbit

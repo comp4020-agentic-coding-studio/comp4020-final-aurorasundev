@@ -38,6 +38,20 @@
   background: var(--bg) url("/textures/gallery/gallery-stage-mist-v2.jpg") center bottom / cover no-repeat;
 }
 
+/* The opened record's ground (owner, 2026-10-20): the mineral surface,
+   behind the scene's sleeve and record and above the stage plate. The open
+   timeline fades it in and the close out (gallery-belt.ts sets its opacity
+   from the choreography), so there is never a hard cut. */
+.record-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg) url("/textures/gallery/mineral-surface.jpg") center / cover no-repeat;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .gl-stage {
   position: fixed;
   inset: 0;
@@ -656,6 +670,12 @@
   }
 }
 
+/* without the orbit (reduced motion, no WebGL) the opened record stands on
+   the mineral surface at once */
+.records-page:not(.has-orbit) .record-dialog {
+  background: var(--bg) url("/textures/gallery/mineral-surface.jpg") center / cover no-repeat;
+}
+
 /* without the orbit the opened record has its own backdrop */
 .records-page:not(.has-orbit) ~ .record-dialog::backdrop,
 .record-dialog:not(.is-arriving)::backdrop {
@@ -791,15 +811,16 @@
     visibility: hidden;
   }
 
-  /* here the dialog scrolls; once the HTML record has taken over, the same
-     mist plate stands behind it, so the scene's fixed sleeve never shows
-     through the text as it scrolls past */
+  /* here the dialog scrolls; once the HTML record has taken over, the
+     opened record's mineral surface stands behind it (the same ground the
+     scene faded in), so the scene's fixed sleeve never shows through the
+     text as it scrolls past */
   .record-dialog::before {
     content: "";
     position: fixed;
     inset: 0;
     z-index: -1;
-    background: var(--bg) url("/textures/gallery/gallery-stage-mist-v2.jpg") center bottom / cover no-repeat;
+    background: var(--bg) url("/textures/gallery/mineral-surface.jpg") center / cover no-repeat;
     opacity: 1;
     transition: opacity 240ms ease;
   }
