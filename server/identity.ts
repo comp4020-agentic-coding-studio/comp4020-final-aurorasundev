@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Router } from "express";
 import type { DB } from "./db.ts";
 import { clientAddress, windowCounter } from "./address.ts";
-import { log } from "./log.ts";
+import { log, person } from "./log.ts";
 import { identityFor, startSession } from "./session.ts";
 
 // Crockford base32: no I, L, O or U, so a key read aloud or retyped survives.
@@ -86,7 +86,7 @@ export function identityRouter(db: DB): Router {
       res.status(409).json({ code: "already_saved", error: "You already saved a return key." });
       return;
     }
-    log("return_key", { identity: identityId, outcome: "issued" });
+    log("return_key", { ...person(identityId), outcome: "issued" });
     res.json({ return_key: key, issuance_id: issuanceId });
   });
 
@@ -117,7 +117,7 @@ export function identityRouter(db: DB): Router {
         | undefined;
       return row?.state === "saved" && row.issuance_id === issuanceId ? "repeat" : "superseded";
     })();
-    log("return_key", { identity: identityId, outcome });
+    log("return_key", { ...person(identityId), outcome });
     if (outcome === "superseded") {
       res.status(409).json({ code: "key_superseded", error: "This key was replaced in another tab. Generate and save a new key." });
       return;
@@ -160,7 +160,7 @@ export function identityRouter(db: DB): Router {
       return;
     }
     startSession(db, res, row.identity_id);
-    log("restore", { identity: row.identity_id, outcome: "restored" });
+    log("restore", { ...person(row.identity_id), outcome: "restored" });
     res.json({ ok: true });
   });
 

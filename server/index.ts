@@ -2,9 +2,10 @@ import express from "express";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { extname, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
-import { openDb } from "./db.ts";
+import { openDb, serverSecret } from "./db.ts";
 import { closeAllStreams, eventsRouter } from "./events.ts";
 import { identityRouter } from "./identity.ts";
+import { log, person, setAliasKey } from "./log.ts";
 import { check, providerFromEnv } from "./moderation.ts";
 import { papersRouter } from "./papers.ts";
 import { renderReadmePage } from "./readme.ts";
@@ -17,6 +18,8 @@ const port = Number(process.env.PORT ?? 8080);
 const dbPath = process.env.DATABASE_PATH ?? "/data/throwaway.sqlite";
 
 const db = openDb(dbPath);
+// log aliases (`who=visitor-…`) are keyed off a server secret, never stored
+setAliasKey(serverSecret(db, "read_receipt"));
 // Refuses to start with the test double on Fly; without a key, publication
 // fails closed ("could not be checked") rather than passing anything.
 const provider = providerFromEnv();
@@ -31,7 +34,8 @@ app.set("trust proxy", true);
 app.use(express.json({ limit: "512kb" }));
 
 app.post("/api/session", (req, res) => {
-  ensureSession(db, req, res);
+  const { identityId, fresh } = ensureSession(db, req, res);
+  log("session", { ...person(identityId), outcome: fresh ? "new" : "resumed" });
   res.json({ ok: true });
 });
 app.get("/api/safety", (_req, res) => {

@@ -3,7 +3,7 @@ import { Router } from "express";
 import { activeTotal, bumpRevision, currentRevision, requestDigest, serverSecret, type DB } from "./db.ts";
 import { broadcast } from "./events.ts";
 import { keyState } from "./identity.ts";
-import { log } from "./log.ts";
+import { log, person } from "./log.ts";
 import type { Payload, Verdict } from "./moderation.ts";
 import { checkReceipt, issueReceipt } from "./receipt.ts";
 import { identityFor } from "./session.ts";
@@ -297,11 +297,14 @@ export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise
   router.get("/papers/:id", (req, res) => {
     res.set("Cache-Control", "no-store");
     const paper = paperRow(db, req.params.id);
+    const identityId = identityFor(db, req);
     if (!paper || paper.status !== "ACTIVE") {
+      log("open", { ...person(identityId), paper: req.params.id, outcome: "paper_gone" });
       res.status(404).json({ code: "paper_gone", error: "This paper is no longer here." });
       return;
     }
-    const identityId = identityFor(db, req);
+    // reading is logged as reading only: no count, no witness, no content
+    log("open", { ...person(identityId), paper: paper.id, outcome: paper.owner_identity_id === identityId ? "own" : "other" });
     res.json({
       ...publicPaper(db, paper, identityId),
       content: paper.content,
@@ -319,18 +322,18 @@ export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise
       return;
     }
     if (!checkReceipt(serverSecret(db, "read_receipt"), req.body?.read_receipt, paperId, identityId)) {
-      log("witness", { identity: identityId, paper: paperId, outcome: "forbidden" });
+      log("witness", { ...person(identityId), paper: paperId, outcome: "forbidden" });
       res.status(403).json({ code: "forbidden", error: "Open the paper before witnessing it." });
       return;
     }
     const result = witnessPaper(db, paperId, identityId);
     if (!result.ok) {
-      log("witness", { identity: identityId, paper: paperId, outcome: "paper_gone" });
+      log("witness", { ...person(identityId), paper: paperId, outcome: "paper_gone" });
       res.status(410).json({ code: "paper_gone", error: "This paper is no longer here." });
       return;
     }
     const { paper, fresh, revision, counted } = result;
-    log("witness", { identity: identityId, paper: paperId, outcome: fresh ? (counted ? "counted" : "author") : "repeat", revision });
+    log("witness", { ...person(identityId), paper: paperId, outcome: fresh ? (counted ? "counted" : "author") : "repeat", revision });
     if (fresh) broadcast("paper:witnessed", { id: paperId, version: paper.version, revision });
     res.json(publicPaper(db, paper, identityId));
   });
@@ -349,13 +352,13 @@ export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise
       return;
     }
     if (!checkReceipt(serverSecret(db, "read_receipt"), req.body?.read_receipt, paperId, identityId)) {
-      log("burn", { identity: identityId, paper: paperId, outcome: "forbidden_receipt" });
+      log("burn", { ...person(identityId), paper: paperId, outcome: "forbidden_receipt" });
       res.status(403).json({ code: "forbidden", error: "Open the paper before letting it go." });
       return;
     }
     const result = burnPaper(db, paperId, identityId, opKey, req.body?.confirmed === true);
     log("burn", {
-      identity: identityId,
+      ...person(identityId),
       paper: paperId,
       outcome: result.fresh ? "destroyed" : result.outcome === "destroyed" ? "retry" : result.outcome,
       revision: result.revision ?? undefined,
@@ -397,7 +400,7 @@ export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise
     }
     const valid = validateSubmission(req.body?.content, key, req.body?.mode, req.body?.drawing);
     if (!valid.ok) {
-      log("create", { identity: ownerId, outcome: valid.code });
+      log("create", { ...person(ownerId), outcome: valid.code });
       res.status(valid.status).json({ code: valid.code, error: valid.error });
       return;
     }
@@ -409,7 +412,7 @@ export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise
       const flightKey = `${ownerId}:${submission.submissionKey}`;
       let flight = inFlight.get(flightKey);
       if (flight && flight.digest !== submission.digest) {
-        log("create", { identity: ownerId, outcome: "submission_conflict" });
+        log("create", { ...person(ownerId), outcome: "submission_conflict" });
         res.status(409).json({ code: "submission_conflict", error: "This submission is already being saved with different words, drawing or choice." });
         return;
       }
@@ -425,7 +428,7 @@ export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise
       const verdict = await flight.verdict;
       if (verdict.kind !== "allow") {
         const refusal = moderationRefusal(verdict);
-        log("create", { identity: ownerId, outcome: refusal.body.code, reason: refusal.logReason });
+        log("create", { ...person(ownerId), outcome: refusal.body.code, reason: refusal.logReason });
         res.status(refusal.status).json(refusal.body);
         return;
       }
@@ -438,12 +441,12 @@ export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise
 
     const result = createPaper(db, ownerId, submission.content, key, submission.mode, submission.drawing);
     if (!result.ok) {
-      log("create", { identity: ownerId, outcome: result.code });
+      log("create", { ...person(ownerId), outcome: result.code });
       res.status(result.status).json({ code: result.code, error: result.error });
       return;
     }
     const { id, version, status, revision, total, fresh } = result.value;
-    log("create", { identity: ownerId, paper: id, outcome: fresh ? "created" : "retry", revision });
+    log("create", { ...person(ownerId), paper: id, outcome: fresh ? "created" : "retry", revision });
     if (fresh) broadcast("paper:created", { id, version, revision, active_total: total, op: key });
     // After a Keep, offer a return key until one has been confirmed saved.
     const offerReturnKey = req.body.mode === "KEEP" && keyState(db, ownerId) !== "saved";

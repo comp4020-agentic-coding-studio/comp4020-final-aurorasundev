@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Router, type Response } from "express";
 import { activeTotal, currentRevision, type DB } from "./db.ts";
-import { log } from "./log.ts";
+import { log, person } from "./log.ts";
+import { identityFor } from "./session.ts";
 
 const HEARTBEAT_MS = 20_000;
 // A client that stops reading gets dropped rather than buffered without bound;
@@ -73,15 +74,18 @@ export function eventsRouter(db: DB): Router {
     res.socket?.setNoDelay(true);
 
     const sub: Subscriber = { id: randomUUID(), res };
+    // who is watching, for the logs only: the stream itself is the same for
+    // everyone and carries no one's identity
+    const viewer = person(identityFor(db, req));
     subscribers.add(sub);
     write(sub, "space:snapshot", snapshot(db, knownIds, limit));
-    log("connect", { conn: sub.id, outcome: "ok", subscribers: subscribers.size });
+    log("connect", { ...viewer, conn: sub.id, outcome: "ok", subscribers: subscribers.size });
 
     const heartbeat = setInterval(() => res.write(": ping\n\n"), HEARTBEAT_MS);
     req.on("close", () => {
       clearInterval(heartbeat);
       subscribers.delete(sub);
-      log("disconnect", { conn: sub.id, subscribers: subscribers.size });
+      log("disconnect", { ...viewer, conn: sub.id, subscribers: subscribers.size });
     });
   });
 

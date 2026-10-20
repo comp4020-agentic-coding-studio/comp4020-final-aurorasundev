@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { clientAddress, windowCounter } from "./address.ts";
 import { serverSecret, type DB } from "./db.ts";
-import { log } from "./log.ts";
+import { log, person } from "./log.ts";
 import { checkReceipt } from "./receipt.ts";
 import { MAX_RUNS } from "./reviews.ts";
 import { identityFor } from "./session.ts";
@@ -106,7 +106,7 @@ export function reportsRouter(db: DB, onEnqueued: () => void): Router {
       return;
     }
     if (!checkReceipt(serverSecret(db, "read_receipt"), req.body?.read_receipt, paperId, identityId)) {
-      log("report", { identity: identityId, paper: paperId, outcome: "forbidden" });
+      log("report", { ...person(identityId), paper: paperId, outcome: "forbidden" });
       res.status(403).json({ code: "forbidden", error: "Open the paper before reporting it." });
       return;
     }
@@ -123,7 +123,7 @@ export function reportsRouter(db: DB, onEnqueued: () => void): Router {
           .get(identityId, new Date(Date.now() - HOUR_MS).toISOString()) as { n: number }
       ).n;
       if (recent >= REPORTS_PER_IDENTITY_HOUR || perAddress.blocked(address)) {
-        log("report", { identity: identityId, paper: paperId, outcome: "rate_limited" });
+        log("report", { ...person(identityId), paper: paperId, outcome: "rate_limited" });
         res.status(429).json({ code: "rate_limited", error: "Too many reports for now. Try again later." });
         return;
       }
@@ -131,12 +131,12 @@ export function reportsRouter(db: DB, onEnqueued: () => void): Router {
 
     const result = enqueueReport(db, paperId, identityId, reason, note, opKey);
     if (result.kind === "conflict") {
-      log("report", { identity: identityId, paper: paperId, outcome: "operation_conflict" });
+      log("report", { ...person(identityId), paper: paperId, outcome: "operation_conflict" });
       res.status(409).json({ code: "operation_conflict", error: "This report was already sent for something else." });
       return;
     }
     if (result.kind === "gone") {
-      log("report", { identity: identityId, paper: paperId, outcome: "paper_gone" });
+      log("report", { ...person(identityId), paper: paperId, outcome: "paper_gone" });
       res.status(410).json({ code: "paper_gone", error: "This paper is no longer here." });
       return;
     }
@@ -144,7 +144,7 @@ export function reportsRouter(db: DB, onEnqueued: () => void): Router {
       perAddress.hit(address);
       onEnqueued();
     }
-    log("report", { identity: identityId, paper: paperId, report: result.reportId, outcome: result.kind === "created" ? "queued" : "repeat" });
+    log("report", { ...person(identityId), paper: paperId, report: result.reportId, outcome: result.kind === "created" ? "queued" : "repeat" });
     res.status(202).json({ report_id: result.reportId, status: "queued" });
   });
 

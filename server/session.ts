@@ -26,13 +26,13 @@ export function identityFor(db: DB, req: Request): string | undefined {
   return row?.identity_id;
 }
 
-export function ensureSession(db: DB, req: Request, res: Response): string {
+export function ensureSession(db: DB, req: Request, res: Response): { identityId: string; fresh: boolean } {
   const existing = identityFor(db, req);
-  if (existing) return existing;
+  if (existing) return { identityId: existing, fresh: false };
   const identityId = randomUUID();
   db.prepare("INSERT INTO identities (id, created_at) VALUES (?, ?)").run(identityId, new Date().toISOString());
   startSession(db, res, identityId);
-  return identityId;
+  return { identityId, fresh: true };
 }
 
 // A fresh cookie mapped to an identity: a new visitor's, or one restored
