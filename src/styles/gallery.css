@@ -410,6 +410,10 @@
 .record-frame {
   --art: min(60dvh, 36vw);
   --disc: min(58dvh, 36vw);
+  /* owner, 2026-10-20: the sleeve, record and text sit 15px lower as one
+     group under "Back to the Gallery" (every layout; the scene measures the
+     ghost copy, so its landing frames move with it) */
+  --drop: 15px;
   position: relative;
   min-height: 100dvh;
 }
@@ -448,31 +452,13 @@
   display: none;
 }
 
-.record-close {
-  position: absolute;
-  top: 112px;
-  right: var(--gutter);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: none;
-  color: var(--ink);
-  cursor: pointer;
-}
-
-.record-back:hover,
-.record-close:hover {
+.record-back:hover {
   opacity: 0.7;
 }
 
 .record-art {
   position: absolute;
-  top: 18dvh;
+  top: calc(18dvh + var(--drop));
   left: 28.2vw;
   width: var(--art);
   height: var(--art);
@@ -480,8 +466,8 @@
 
 .record-disc {
   position: absolute;
-  /* never higher than the back/close row (112px + 44px) */
-  top: max(calc(48dvh - var(--disc) / 2), 164px);
+  /* never higher than the back row (112px + 44px) */
+  top: calc(max(calc(48dvh - var(--disc) / 2), 164px) + var(--drop));
   left: calc(22vw - var(--disc) / 2);
   width: var(--disc);
   height: var(--disc);
@@ -501,11 +487,11 @@
    the scene's fixed sleeve instead of sliding off it. */
 .record-text {
   position: absolute;
-  top: 25dvh;
+  top: calc(25dvh + var(--drop));
   left: 69vw;
   /* the padding keeps focus rings and the scrollbar off the text */
   width: calc(min(27vw, 440px) + 10px);
-  max-height: calc(75dvh - 24px);
+  max-height: calc(75dvh - 24px - var(--drop));
   padding: 0 6px 24px 4px;
   margin-left: -4px;
   overflow-y: auto;
@@ -639,7 +625,6 @@
 
 .record-dialog .record-text,
 .record-dialog .record-back,
-.record-dialog .record-close,
 .record-dialog .record-steps,
 .record-dialog .record-header-copy {
   animation: record-in 420ms ease both;
@@ -650,7 +635,6 @@
    record, so a CSS clock never races it */
 .has-orbit .record-dialog .record-text,
 .has-orbit .record-dialog .record-back,
-.has-orbit .record-dialog .record-close,
 .has-orbit .record-dialog .record-steps {
   animation: none;
 }
@@ -658,7 +642,6 @@
 /* held back until the open's reveal has begun (it marks the dialog) */
 .has-orbit .record-dialog.is-arriving:not([data-revealed]) .record-text > *,
 .has-orbit .record-dialog.is-arriving:not([data-revealed]) .record-back,
-.has-orbit .record-dialog.is-arriving:not([data-revealed]) .record-close,
 .has-orbit .record-dialog.is-arriving:not([data-revealed]) .record-steps {
   visibility: hidden;
 }
@@ -791,19 +774,18 @@
     padding: 30px 0 16px;
   }
 
-  .record-back,
-  .record-close {
+  .record-back {
     top: 80px;
     font-size: 15px;
   }
 
   .record-art {
-    top: 128px;
+    top: calc(128px + var(--drop));
     left: calc(50% - var(--art) / 2);
   }
 
   .record-disc {
-    top: 128px;
+    top: calc(128px + var(--drop));
     left: calc(50% - var(--art) / 2);
   }
 
@@ -837,7 +819,7 @@
     width: auto;
     max-height: none;
     margin-left: 0;
-    padding: calc(128px + var(--art) + 24px) 20px 0;
+    padding: calc(128px + var(--drop) + var(--art) + 24px) 20px 0;
     overflow: visible;
   }
 
@@ -872,7 +854,7 @@
 
   .record-steps {
     position: absolute;
-    top: calc(128px + var(--art) + 24px);
+    top: calc(128px + var(--drop) + var(--art) + 24px);
     right: 20px;
     bottom: auto;
     left: auto;
@@ -950,8 +932,9 @@
 
   /* the opened record */
   .record-frame {
-    --top: 112px;
-    --art: max(180px, min(calc(100dvh - var(--top) - 14px), 34vw));
+    --top: calc(112px + var(--drop));
+    /* the 15px drop takes most of the bottom margin first */
+    --art: max(180px, min(calc(100dvh - var(--top) - 4px), 34vw));
     --disc: calc(var(--art) * 0.9);
     --text-left: calc(var(--gutter) + var(--disc) * 0.55 + var(--art) + 32px);
   }
@@ -964,8 +947,7 @@
     font-size: 26px;
   }
 
-  .record-back,
-  .record-close {
+  .record-back {
     top: 58px;
     font-size: 15px;
   }
@@ -1053,7 +1035,6 @@
 @media (prefers-reduced-motion: reduce) {
   .record-dialog .record-text,
   .record-dialog .record-back,
-  .record-dialog .record-close,
   .record-dialog .record-steps,
   .record-dialog .record-header-copy {
     animation: none;

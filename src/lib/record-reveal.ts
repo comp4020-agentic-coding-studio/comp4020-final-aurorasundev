@@ -29,7 +29,7 @@ export const titleStagger = (letters: number) => Math.min(TITLE_STAGGER, TITLE_S
 export function recordReveal(dialog: HTMLElement): gsap.core.Timeline | null {
   const text = dialog.querySelector<HTMLElement>(".record-text");
   if (!text) return null;
-  const chrome = [".record-back", ".record-close", ".record-steps"].map((s) => dialog.querySelector<HTMLElement>(s)).filter((e): e is HTMLElement => !!e);
+  const chrome = [".record-back", ".record-steps"].map((s) => dialog.querySelector<HTMLElement>(s)).filter((e): e is HTMLElement => !!e);
   const title = text.querySelector<HTMLElement>(".record-title");
   const body = [...text.children].filter((e) => e !== title) as HTMLElement[];
   const still = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;

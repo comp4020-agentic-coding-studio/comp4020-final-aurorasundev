@@ -164,7 +164,7 @@ it("a close keeps the browsing caption back until the scene hands back", async (
   await mount([1, 2]);
   await press(".orbit-open");
   await act(async () => control.scene.cb!.onArrive());
-  await press(".record-close");
+  await press(".record-dialog .record-back");
   expect(dialog()).toBeNull();
   expect(control.scene.opens).toEqual([true, false]);
   expect(pageEl().classList.contains("is-returning")).toBe(true);
@@ -177,7 +177,7 @@ it("a close keeps the browsing caption back until the scene hands back", async (
 it("closing during the open hands over cleanly, and reopening starts a fresh arrival", async () => {
   await mount([1, 2]);
   await press(".orbit-open");
-  await press(".record-close");
+  await press(".record-dialog .record-back");
   // a late arrival from the cancelled open changes nothing on the closed page
   await act(async () => control.scene.cb!.onArrive());
   expect(dialog()).toBeNull();
@@ -209,4 +209,16 @@ it("a record hidden while open closes and hands back like a close", async () => 
   expect(pageEl().classList.contains("is-returning")).toBe(true);
   await act(async () => control.scene.cb!.onHandBack());
   expect(pageEl().classList.contains("is-returning")).toBe(false);
+});
+
+it("the opened record has one way back, 'Back to the Gallery' (no separate close button)", async () => {
+  await mount([1, 2]);
+  await press(".orbit-open");
+  expect(dialog()!.querySelector(".record-close")).toBeNull();
+  expect(dialog()!.querySelector('button[aria-label="Close"]')).toBeNull();
+  const back = dialog()!.querySelector<HTMLButtonElement>(".record-back")!;
+  expect(back.textContent).toContain("Back to the Gallery");
+  await act(async () => back.click());
+  expect(dialog()).toBeNull();
+  expect(control.scene.opens).toEqual([true, false]);
 });
