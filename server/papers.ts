@@ -446,7 +446,7 @@ export function papersRouter(db: DB, checkContent: (payload: Payload) => Promise
       return;
     }
     const { id, version, status, revision, total, fresh } = result.value;
-    log("create", { ...person(ownerId), paper: id, outcome: fresh ? "created" : "retry", revision });
+    log("create", { ...person(ownerId), paper: id, mode: submission.mode.toLowerCase(), outcome: fresh ? "created" : "retry", revision });
     if (fresh) broadcast("paper:created", { id, version, revision, active_total: total, op: key });
     // After a Keep, offer a return key until one has been confirmed saved.
     const offerReturnKey = req.body.mode === "KEEP" && keyState(db, ownerId) !== "saved";

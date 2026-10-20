@@ -68,7 +68,7 @@ window is someone else. The server decides what each visitor may do: only
 the person who kept a paper can let it go, and only someone who has
 witnessed a released paper can let that one go. The server log names each
 visitor by a short alias, never by their words. See the
-[permissions decision](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/005-people-and-permissions.md)
+[permissions decision](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/007-people-and-permissions.md)
 and the
 [logging runbook](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/logging-runbook.md).
 

@@ -88,6 +88,7 @@ describe("the server's log tells two visitors apart", () => {
 
     const create = lines("create").find((l) => field(l, "paper") === paper)!;
     expect(field(create, "who")).toBe(aWho);
+    expect(field(create, "mode")).toBe("keep");
     const open = lines("open").find((l) => field(l, "paper") === paper)!;
     expect(field(open, "who")).toBe(bWho);
     expect(field(open, "outcome")).toBe("other");

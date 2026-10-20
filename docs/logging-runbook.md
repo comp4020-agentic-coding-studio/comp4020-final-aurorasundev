@@ -2,7 +2,7 @@
 
 The server writes one line per action to stdout, which Fly keeps in the app's
 log stream. Rules for who may do what are in
-[ADR 005](adr/005-people-and-permissions.md).
+[ADR 007](adr/007-people-and-permissions.md).
 
 ## Watching the live app
 
@@ -21,7 +21,7 @@ mise exec -- flyctl logs -a comp4020-final-aurorasundev | grep --line-buffered -
 ## Line shape
 
 ```
-<ISO time> <action> who=visitor-xxxxxx identity=<id> [paper=<id>] outcome=<…> [revision=<n>]
+<ISO time> <action> who=visitor-xxxxxx identity=<id> [paper=<id>] [mode=keep|release] outcome=<…> [revision=<n>]
 ```
 
 `who` is the short name to say aloud; it is the same for one person on
@@ -47,8 +47,8 @@ Two pod members open the URL in separate Chrome profiles. Read the log, not
 the screen:
 
 1. Two `session … outcome=new` lines with different `who=`: call them A and B.
-2. `create who=A paper=P outcome=created`: A threw paper P. The mode is not
-   logged; ask A, or check `papers.mode` for P with the `identity=` value.
+2. `create who=A paper=P mode=keep outcome=created`: A threw paper P and
+   kept it (`mode=release` if released).
 3. `open who=B paper=P outcome=other`: B came across A's paper and opened it.
 4. `witness who=B paper=P outcome=counted`: B said "I saw it".
 5. If P was kept: `burn who=B paper=P outcome=forbidden`. B tried to let go
@@ -56,7 +56,7 @@ the screen:
    `burn who=B paper=P outcome=destroyed`. B, as a witness, let it go.
 
 A finding is any line where an action on someone else's paper succeeds that
-ADR 005 says should not, or where two people share one `who`.
+ADR 007 says should not, or where two people share one `who`.
 
 ## Retention
 

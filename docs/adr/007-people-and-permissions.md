@@ -1,4 +1,4 @@
-# 005 — Who a person is, what they may see and change, and how the log names them
+# 007 — Who a person is, what they may see and change, and how the log names them
 
 Status: accepted. The rules below were already enforced on the server; the
 log names (`who=`) and the `session`, `open` and named `connect` lines were
