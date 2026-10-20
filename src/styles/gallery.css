@@ -126,13 +126,14 @@
 }
 
 .records-paused {
-  margin: 0;
+  margin: 24px 0 0;
   padding: 0 var(--gutter);
   color: var(--muted);
   font-size: 15px;
 }
 
 .has-orbit .records-paused {
+  margin: 0;
   padding: 0;
 }
 
@@ -776,6 +777,7 @@
 
   .record-back {
     top: 80px;
+    z-index: 1;
     font-size: 15px;
   }
 
