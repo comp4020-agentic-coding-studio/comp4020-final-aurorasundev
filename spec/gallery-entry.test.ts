@@ -444,6 +444,9 @@ describe("the entry page", () => {
     const copy = host.querySelector<HTMLAnchorElement>("dialog .wordmark")!;
     expect(copy.getAttribute("aria-label")).toBe("The Throwaway Gallery");
     expect(copy.textContent).toBe("The Throwaway Gallery");
+    // the page header's entry-state rules never hide the dialog's copy
+    expect(copy.closest("dialog .records-header")).not.toBeNull();
+    expect(copy.querySelector(".wm-old")).toBeNull();
     // Space works as on a button (Enter is the link's own click)
     await key(" ", copy);
     expect(host.querySelector("dialog")).toBeNull();

@@ -1216,11 +1216,11 @@
   letter-spacing: -0.01em;
 }
 
-.has-entry .records-header .wm-name {
+.has-entry > .records-header .wm-name {
   opacity: 0;
 }
 
-.is-plain .records-header .wm-old {
+.is-plain > .records-header .wm-old {
   opacity: 0;
 }
 
