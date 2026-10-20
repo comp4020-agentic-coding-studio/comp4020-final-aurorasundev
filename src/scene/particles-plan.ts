@@ -198,7 +198,9 @@ export function planExit(ring: number, phone: boolean): Map<number, ExitSlot> {
 // neighbours sit at u ≈ 1.59 (desktop, 36°) and 1.45 (phone, 60°), outside
 // the band, and the front card at 0, so no card rests mid-pulse.
 export const RIM_PEAK = 0.62;
-export const RIM_BAND = 0.32;
+// wide enough that the pulse's target holds while a step carries the card
+// across the rim (owner, 2026-10-20: the crossing read as too quick)
+export const RIM_BAND = 0.4;
 // a card's centre from the record's centre, in the record's on-screen
 // horizontal radii (the record turned DISC_YAW on a desktop is a little
 // narrower; its slow tumble is ignored)
@@ -216,6 +218,36 @@ export function rimPulse(u: number, theta: number, active: boolean): number {
   if (d >= 1) return 0;
   return RIM_PEAK * 0.5 * (1 + Math.cos(Math.PI * d));
 }
+
+// --- pace ---------------------------------------------------------------------
+// The zones and the rim give a card's dissolve as a function of where it is,
+// so on their own a step (a card crosses a zone in ~0.15 s) is over before
+// anyone sees it. The shown dissolve follows that target in time instead
+// (owner, 2026-10-20: "slow the whole process down"): it breaks up quickly
+// to what the target reached, holds there a moment, then gathers back
+// slowly, so a card that has already passed finishes re-forming as it goes.
+// Exponential, so the same at any frame rate.
+export const BREAK_SECONDS = 0.12;
+export const HOLD_SECONDS = 0.25;
+export const GATHER_BACK_SECONDS = 0.6;
+export type Paced = { shown: number; held: number; hold: number };
+export const paced = (): Paced => ({ shown: 0, held: 0, hold: 0 });
+export function easeDissolve(p: Paced, target: number, dt: number, instant = false): Paced {
+  if (instant) return { shown: target, held: target, hold: 0 };
+  let want = target;
+  let { held, hold } = p;
+  if (target >= held) {
+    held = target;
+    hold = HOLD_SECONDS;
+  } else if ((hold -= dt) > 0) want = held;
+  else held = target;
+  const tau = want > p.shown ? BREAK_SECONDS : GATHER_BACK_SECONDS;
+  let shown = want + (p.shown - want) * Math.exp(-dt / tau);
+  if (Math.abs(shown - want) < 1e-3) shown = want;
+  return { shown, held, hold };
+}
+// whether it still needs frames
+export const settling = (p: Paced, target: number) => p.hold > 0 || Math.abs(p.shown - target) > 1e-3;
 
 // --- hides ------------------------------------------------------------------
 // A hidden card dissolves in place: it takes over from the mesh already

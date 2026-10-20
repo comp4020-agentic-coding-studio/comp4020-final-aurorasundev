@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { beltCards, dissolveAt, fitBelt, ringSize, tileStep, ZONE_DESKTOP, ZONE_PHONE } from "../src/scene/belt-layout.ts";
 import {
   BUDGET_DESKTOP,
+  BREAK_SECONDS,
   BUDGET_PHONE,
+  easeDissolve,
+  GATHER_BACK_SECONDS,
+  HOLD_SECONDS,
+  paced,
   CROSS_IN,
   CROSS_OUT,
   driftSign,
@@ -300,5 +305,46 @@ describe("the record's rim (revision two)", () => {
     expect(rimPulse(1, Math.PI - 0.3, true)).toBe(0);
     // and reduced motion plans alpha anyway
     expect(planParticles([zone("a", 0.5)], { ...base, reduced: true }).get("a")).toBe("alpha");
+  });
+});
+
+describe("pace (owner, 2026-10-20: slower, so it can be seen)", () => {
+  // a rim crossing during one arrow step: the target rises to the peak and
+  // back within ~0.15 s, as the card passes
+  const target = (t: number) => (t < 0.15 ? RIM_PEAK * Math.sin((Math.PI * t) / 0.15) : 0);
+  const run = (fps: number, seconds: number) => {
+    const dt = 1 / fps;
+    let p = paced();
+    let peak = 0;
+    let visible = 0;
+    for (let t = 0; t < seconds; t += dt) {
+      p = easeDissolve(p, target(t), dt);
+      peak = Math.max(peak, p.shown);
+      if (p.shown > 0.08) visible += dt;
+    }
+    return { shown: p.shown, peak, visible };
+  };
+
+  it("turns a quick crossing into a break-up, a hold and a slow re-forming that can be seen", () => {
+    const r = run(60, 4);
+    // it still breaks up nearly as far as the crossing asked
+    expect(r.peak).toBeGreaterThan(RIM_PEAK * 0.85);
+    // the grain is visible for over a second, not the 0.15 s of the crossing
+    expect(r.visible).toBeGreaterThan(1);
+    expect(r.visible).toBeLessThan(2.5);
+    // and the card is whole again afterwards
+    expect(r.shown).toBeLessThan(0.005);
+  });
+
+  it("gathers back more slowly than it breaks, holding first, at the same pace at any frame rate", () => {
+    expect(GATHER_BACK_SECONDS).toBeGreaterThan(BREAK_SECONDS);
+    expect(HOLD_SECONDS).toBeGreaterThan(0);
+    const a = run(30, 3);
+    const b = run(120, 3);
+    expect(Math.abs(a.visible - b.visible)).toBeLessThan(0.08);
+  });
+
+  it("follows at once when asked (reduced motion, an open)", () => {
+    expect(easeDissolve({ shown: 0.6, held: 0.6, hold: 0.2 }, 0, 1 / 60, true).shown).toBe(0);
   });
 });

@@ -10,7 +10,7 @@ import { cardRitual, closeTimeline, newChoreo, newSwap, openTimeline, pruneSwap,
 import { createSleeveKit, FRAME_PLATE, SLEEVE_FRONT, type SleeveMesh } from "./sleeve-kit.ts";
 import { applyVinylSheen } from "./vinyl-sheen.ts";
 import { createCardParticles } from "./card-particles.ts";
-import { driftSign, fastTurn, GATHER_SECONDS, hideStart, HIDE_SECONDS, IMAGE_FADE_SECONDS, imageShown, meshAlpha, particleAlpha, planExit, planParticles, rimPulse, rimU, zoneMode, type Candidate, type ExitSlot, type Mode, type Render } from "./particles-plan.ts";
+import { driftSign, fastTurn, GATHER_SECONDS, hideStart, HIDE_SECONDS, IMAGE_FADE_SECONDS, imageShown, meshAlpha, particleAlpha, planExit, planParticles, rimPulse, rimU, easeDissolve, paced, settling, type Paced, zoneMode, type Candidate, type ExitSlot, type Mode, type Render } from "./particles-plan.ts";
 
 // The Gallery's record exhibition as a belt round a globe (design 2026-10-19
 // §4): an orthographic view of a flattened sphere drawn in graphite thread
@@ -168,6 +168,12 @@ type Card = {
   // the part of `zone` from crossing the record's rim (in place, not along
   // the band)
   rim: number;
+  // the zone and rim dissolves as shown: they follow where the card is in
+  // time (particles-plan.ts easeDissolve), so a crossing is seen
+  shownZone: Paced;
+  shownRim: Paced;
+  zoneTarget: number;
+  rimTarget: number;
   ritual: number;
   ritualMode: Mode;
   // whether the ritual's dissolve may take a particle slot (planExit)
@@ -369,6 +375,10 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       base,
       zone: 0,
       rim: 0,
+      shownZone: paced(),
+      shownRim: paced(),
+      zoneTarget: 0,
+      rimTarget: 0,
       ritual: 0,
       ritualMode: "leave",
       ritualParticles: false,
@@ -832,15 +842,21 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
   // sleeve comes forward to the HTML art frame (and, on a step, swaps there
   // in place), a hovered one lifts, and the page's entrance gathers them
   // from the front
-  function cardPose(card: Card, s: number, m: number): Pose {
+  function cardPose(card: Card, s: number, m: number, dt: number): Pose {
     let p = beltPose(card.theta);
     const rit = cardRitual(m, heroM, c, swap, exits, closing);
-    card.zone = dissolveAt(card.theta, L.phone);
     // crossing the record's rim: a brief in-place pulse, only while browsing
     // at rest from any open (revision two; particles-plan.ts rimPulse)
     const browsing = !open && c.hero <= 0.001 && c.exit <= 0.001 && c.tuck <= 0.001 && intro.entry >= 0.999 && !reduced();
-    card.rim = rimPulse(rimU(card.theta, L), card.theta, browsing);
-    card.zone = Math.max(card.zone, card.rim);
+    // both follow where the card is in time, so a crossing is seen; under
+    // reduced motion (alpha only) they follow at once
+    const instant = reduced();
+    card.zoneTarget = dissolveAt(card.theta, L.phone);
+    card.rimTarget = rimPulse(rimU(card.theta, L), card.theta, browsing);
+    card.shownZone = easeDissolve(card.shownZone, card.zoneTarget, dt, instant);
+    card.shownRim = easeDissolve(card.shownRim, card.rimTarget, dt, instant || !browsing);
+    card.rim = card.shownRim.shown;
+    card.zone = Math.max(card.shownZone.shown, card.rim);
     if (rit.heroW > 0) {
       // in the frame, the belt's zone no longer applies
       p = blend(p, L.hero, rit.heroW);
@@ -1008,7 +1024,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
               ? "inplace"
               : zoneMode(bc.theta, card.prevTheta, card.mode === "inplace" ? "leave" : card.mode);
       const s = bc.m - phase;
-      const p = cardPose(card, s, bc.m);
+      const p = cardPose(card, s, bc.m, dt);
       card.pose = p;
       if (bc.m === heroM) heroPose = p;
       // every card on the ring keeps its image warm (ring ≤ 10 of the 14), but
@@ -1169,7 +1185,9 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
 
     // render on demand: only while something moves, or the record turns
     const turning = disc.visible && (spinning(spinClock, idle) || tumbleW > 0.0005);
-    if (moving || turning || driftRate !== 0 || dirty > 0 || tl !== null || gsap.isTweening(intro)) {
+    // a card still breaking up or gathering back after it stopped
+    const easing = cards.some((k) => k.m !== null && (settling(k.shownZone, k.zoneTarget) || settling(k.shownRim, k.rimTarget)));
+    if (moving || turning || easing || driftRate !== 0 || dirty > 0 || tl !== null || gsap.isTweening(intro)) {
       renderer.render(scene, camera);
       if (dirty > 0) dirty--;
       if (warmFrames > 0 && --warmFrames === 0) cb.onReady?.();

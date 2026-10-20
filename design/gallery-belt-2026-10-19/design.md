@@ -26,8 +26,8 @@ wheel stays free to turn the belt once `p = 1`.
 - **Advance:** wheel, swipe up, Space, PageDown or ArrowDown, or the "Enter"
   hint. Each gesture drives one GSAP timeline toward `p = 1`. It is not
   scrubbed per pixel.
-- **Return:** wheel or swipe down at the belt's rest, or Escape with no
-  record open, plays it back to `p = 0`.
+- **Return:** the corner wordmark, or Escape with no record open, plays it
+  back to `p = 0`. Wheel and swipe never return from the exhibition (§7c).
 - **Replay:** the entry plays on every visit and can be skipped at once by
   any advance gesture. Closing a record never replays it.
 - **Load gating:** the entry is visible while textures decode,
@@ -113,9 +113,8 @@ steepen. Scene units are tied to the viewport height.
 - **Hover** on desktop lifts a front-half card slightly.
 - **Click:** clicking the front card or the vinyl opens the record; clicking
   another front-half card turns it to the front.
-- **Wheel down at rest** returns to the entry only after a deliberate second
-  gesture: the first is absorbed while the belt settles, and the belt's own
-  turning comes first.
+- **Wheel in either direction** turns the belt; it never returns to the
+  entry (§7c).
 
 **Particles (dissolve zones):** the stretches where the band rounds the
 globe's left and right silhouettes are dissolve zones.
@@ -280,3 +279,20 @@ These replace the earlier text where they differ.
   fast-turn alpha fallback with its hysteresis, and none under reduced
   motion, while any part of an open shows, or before the entrance has
   finished. The side dissolve zones are unchanged.
+
+## 7c. Owner revision three (2026-10-20)
+
+- **No scrolling back to the entry.** In the exhibition the wheel (and a
+  swipe) turns the belt both ways; the "absorb the first wheel-up, return on
+  the second" rule is gone. The way back is the corner wordmark, or Escape
+  with no record open. A wheel-up while the transition is still advancing
+  still turns it back.
+- **Slower dissolves.** The zones and the rim give a dissolve by position, so
+  a card crossed a zone in ~0.15 s and the grain was gone before anyone saw
+  it. The shown dissolve now follows that target in time
+  (`particles-plan.ts` `easeDissolve`): it breaks up quickly to what the
+  target reached (`BREAK_SECONDS` 0.12), holds a moment (`HOLD_SECONDS`
+  0.25), then gathers back slowly (`GATHER_BACK_SECONDS` 0.6), so a rim
+  crossing during one step reads for about 1.5 s. Reduced motion and an open
+  follow at once. `RIM_BAND` is 0.4 (so the phone's resting neighbours, at
+  u ≈ 1.43, stay outside it).
