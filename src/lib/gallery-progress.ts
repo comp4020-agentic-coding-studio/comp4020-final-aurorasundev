@@ -13,7 +13,8 @@ export type Stage = "entry" | "advancing" | "exhibition" | "returning";
 export type ProgressEvent =
   // wheel down, swipe up, Space, PageDown, ArrowDown or the Enter hint
   | { type: "advance" }
-  // a return gesture that got through (or Escape); refused while a record is open
+  // Escape or the corner wordmark (or wheel-up while still advancing); refused
+  // while a record is open
   | { type: "back"; recordOpen: boolean }
   // the transition's timeline reached one of its ends
   | { type: "settled"; at: 0 | 1 };
@@ -36,22 +37,9 @@ export function progress(stage: Stage, e: ProgressEvent): Stage {
 // Only the settled exhibition gives the orbit (and its controls) input.
 export const takesInput = (stage: Stage): boolean => stage === "exhibition";
 
-// --- the return gesture -----------------------------------------------------
-// At p = 1 a wheel-up or a swipe down counts only when it *starts* while the
-// orbit is at rest, so a flick's inertia tail never sends the visitor back.
-// The first such gesture is absorbed and arms the return; a second one, while
-// armed, plays it. Anything that is not at rest disarms.
-
-export const RETURN_ARM_MS = 2500;
-
-export type ReturnArm = { armedAt: number | null };
-export type ReturnResult = "ignore" | "absorb" | "return";
-
-export function returnGesture(arm: ReturnArm, now: number, atRest: boolean, windowMs = RETURN_ARM_MS): { result: ReturnResult; arm: ReturnArm } {
-  if (!atRest) return { result: "ignore", arm: { armedAt: null } };
-  if (arm.armedAt !== null && now - arm.armedAt <= windowMs) return { result: "return", arm: { armedAt: null } };
-  return { result: "absorb", arm: { armedAt: now } };
-}
+// The exhibition never returns to the entry by wheel or swipe: there both
+// directions turn the belt (owner, 2026-10-20). Escape and the corner
+// wordmark send a "back".
 
 // --- load gating ------------------------------------------------------------
 // The entry is visible while the exhibition decodes its textures, compiles

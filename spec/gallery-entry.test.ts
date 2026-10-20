@@ -4,7 +4,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GalleryPage, PublicArtifact } from "../src/lib/gallery-api.ts";
-import { createGate, GATE_CAP_MS, isAdvanceKey, progress, returnGesture, swipeDirection, takesInput, wheelDirection, type Stage } from "../src/lib/gallery-progress.ts";
+import { createGate, GATE_CAP_MS, isAdvanceKey, progress, swipeDirection, takesInput, wheelDirection, type Stage } from "../src/lib/gallery-progress.ts";
 import type { OrbitCallbacks, OrbitOptions } from "../src/scene/gallery-belt.ts";
 import { flight } from "../src/lib/entry-motion.ts";
 
@@ -73,27 +73,6 @@ describe("the title's flight into the corner", () => {
     expect(land.left).toBeCloseTo(to.left, 9);
     expect(land.top).toBeCloseTo(to.top, 9);
     expect(f.scale).toBe(scale);
-  });
-});
-
-describe("the return gesture at p = 1", () => {
-  it("absorbs the first wheel-up at rest and returns on the second", () => {
-    const a = returnGesture({ armedAt: null }, 1000, true);
-    expect(a.result).toBe("absorb");
-    expect(returnGesture(a.arm, 1600, true).result).toBe("return");
-  });
-
-  it("never counts a gesture that starts while the exhibition is still turning (a flick's tail)", () => {
-    const armed = returnGesture({ armedAt: null }, 1000, true).arm;
-    const tail = returnGesture(armed, 1100, false);
-    expect(tail.result).toBe("ignore");
-    // and the tail disarms: the next gesture at rest is absorbed again
-    expect(returnGesture(tail.arm, 1300, true).result).toBe("absorb");
-  });
-
-  it("a stale arm is absorbed again rather than returning", () => {
-    const armed = returnGesture({ armedAt: null }, 0, true).arm;
-    expect(returnGesture(armed, 60_000, true).result).toBe("absorb");
   });
 });
 
@@ -342,24 +321,29 @@ describe("the entry page", () => {
     }
   });
 
-  it("a wheel down advances; at rest the first wheel up is absorbed and the second returns", async () => {
+  it("a wheel down advances; in the exhibition the wheel turns the belt both ways and never returns", async () => {
     await mount();
     await act(async () => control.scene.cb!.onReady?.());
-    const wheel = (deltaY: number) => act(async () => window.dispatchEvent(new WheelEvent("wheel", { deltaY, cancelable: true })));
+    const wheel = (deltaY: number) =>
+      act(async () => {
+        const e = new WheelEvent("wheel", { deltaY, cancelable: true });
+        window.dispatchEvent(e);
+        return e;
+      });
     await wheel(60);
     expect(stage()).toBe("advancing");
     await play(2.4);
     expect(stage()).toBe("exhibition");
-    // a wheel-up that starts while the orbit is still turning is the orbit's
-    control.scene.rest = false;
-    await wheel(-80);
-    expect(stage()).toBe("exhibition");
+    // at rest, wheel-ups, however many and however spaced, stay with the belt
     control.scene.rest = true;
-    await new Promise((r) => setTimeout(r, 260));
-    await wheel(-80);
-    expect(stage(), "the first gesture at rest is absorbed").toBe("exhibition");
-    await new Promise((r) => setTimeout(r, 260));
-    await wheel(-80);
+    for (let i = 0; i < 3; i++) {
+      await new Promise((r) => setTimeout(r, 260));
+      const e = await wheel(-80);
+      expect(stage()).toBe("exhibition");
+      expect(e.defaultPrevented, "the page does not take the belt's wheel").toBe(false);
+    }
+    // the corner wordmark is the way back (Escape too, tested below)
+    await act(async () => host.querySelector<HTMLAnchorElement>(".records-page > .records-header .gallery-wordmark")!.click());
     expect(stage()).toBe("returning");
     await play(2.4);
     expect(stage()).toBe("entry");

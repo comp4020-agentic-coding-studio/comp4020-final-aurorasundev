@@ -2,7 +2,7 @@ import { gsap } from "gsap";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { MIST_BEHIND, MIST_ENTRY, type Mist } from "../scene/mist.ts";
 import { entryReveal, entryTransition } from "./entry-motion.ts";
-import { isAdvanceKey, progress, returnGesture, swipeDirection, wheelDirection, type Gate, type ProgressEvent, type ReturnArm, type Stage } from "./gallery-progress.ts";
+import { isAdvanceKey, progress, swipeDirection, wheelDirection, type Gate, type ProgressEvent, type Stage } from "./gallery-progress.ts";
 
 // The Gallery's entry and its virtual progress p (design 2026-10-19 §1–§3),
 // wired to the page. The document never scrolls: wheel, swipe and keys are
@@ -160,7 +160,6 @@ export function useEntryProgress(o: Options) {
   // gestures: wheel, swipe and keys, read before the scene sees them
   useEffect(() => {
     if (!o.enabled) return;
-    let arm: ReturnArm = { armedAt: null };
     let gesture: { page: boolean; last: number } | null = null;
 
     const onWheel = (e: WheelEvent) => {
@@ -174,18 +173,10 @@ export function useEntryProgress(o: Options) {
           if (dir === 1) advance();
         } else if (s === "advancing") {
           if (dir === -1) back();
-        } else if (opts.current.recordOpen) {
-          page = false;
-        } else if (dir === -1) {
-          // only a wheel-up that *starts* while the exhibition is at rest
-          // counts: the first arms, a second plays the return. A flick's tail
-          // or a turn still settling belongs to the scene.
-          const r = returnGesture(arm, now, opts.current.atRest());
-          arm = r.arm;
-          page = r.result !== "ignore";
-          if (r.result === "return") back();
         } else {
-          arm = { armedAt: null };
+          // in the exhibition the wheel turns the belt, both ways (owner,
+          // 2026-10-20): it never returns to the entry. The corner wordmark
+          // and Escape do.
           page = false;
         }
         gesture = { page, last: now };
@@ -212,11 +203,8 @@ export function useEntryProgress(o: Options) {
         if (dir === 1) advance();
       } else if (s === "advancing") {
         if (dir === -1) back();
-      } else if (!opts.current.recordOpen && dir === -1) {
-        const r = returnGesture(arm, e.timeStamp || performance.now(), opts.current.atRest());
-        arm = r.arm;
-        if (r.result === "return") back();
       }
+      // in the exhibition a swipe is the belt's, as the wheel is
     };
 
     const onKey = (e: KeyboardEvent) => {
