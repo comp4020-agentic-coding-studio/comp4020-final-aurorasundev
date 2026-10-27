@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { gsap } from "gsap";
 import { Observer } from "gsap/Observer";
-import { beltCards, beltPoint, cardFrame, cardPlacement, CAMERA_HALF, DISC_YAW, dissolveAt, FACE_EDGE, FACE_WINDOW, fitBelt, globeAngle, GLOBE_OPEN, halfOf, LABEL_OF_DISC, ringSize, RING_DESKTOP, swipeTarget, type Fit } from "./belt-layout.ts";
+import { beltCards, beltPoint, cardFrame, cardPlacement, CAMERA_HALF, DISC_YAW, dissolveAt, FACE_EDGE, FACE_WINDOW, fitBelt, globeAngle, GLOBE_OPEN, halfOf, LABEL_OF_DISC, ringSize, RING_DESKTOP, swipeTarget, toWorld, type Fit } from "./belt-layout.ts";
 import { createBeltGlobe } from "./belt-globe.ts";
 import { mergeOrbitItems, nextFocusIndex, type OrbitItem } from "./orbit-items.ts";
 import { advanceSpin, dampPhase, spinning, tumbleAt, wheelItems, wheelSnap, SPIN_GAIN, SPIN_IDLE, SPIN_RESPONSE, WHEEL_QUIET_MS } from "./gallery-motion.ts";
@@ -465,6 +465,9 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     };
     globeRoot.position.set(L.cx, L.cy, 0);
     globeRoot.scale.setScalar(L.S);
+    // the vertical orbit: the whole globe a quarter turn clockwise, its poles
+    // left and right, its meridians crossing the vertical band
+    globeRoot.rotation.z = L.vertical ? -Math.PI / 2 : 0;
     globe.setScale(L.S);
     grain.setScreen(L.k, dpr, L.phone);
     dirty = 4;
@@ -524,8 +527,22 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     const h = 1e-3;
     const a = beltPoint(theta - h);
     const b = beltPoint(theta + h);
-    return out.set(b.x - a.x, b.y - a.y, b.z - a.z).normalize().multiplyScalar(driftSign(theta));
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    // turned with the vertical orbit, (x, y) → (y, −x)
+    if (L.vertical) out.set(dy, -dx, b.z - a.z);
+    else out.set(dx, dy, b.z - a.z);
+    return out.normalize().multiplyScalar(driftSign(theta));
   };
+  // The far half's faint silhouettes and the zones that run past the
+  // silhouette: hidden only by the retired horizontal phone layout. The
+  // vertical orbit has room above and below for the desktop's zones, so a
+  // card fades behind the globe's top and bottom (owner, 2026-10-27).
+  const hideBack = () => L.phone && !L.vertical;
+  // the quarter turn of the vertical orbit, and its undoing about each
+  // card's own face, so the images stay upright
+  const turnQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
+  const unturnQ = turnQ.clone().invert();
 
   const count = () => items.length;
   const ring = () => ringSize(L.phone, count());
@@ -725,18 +742,22 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     },
     onDrag: (self) => {
       if (!dragging) return;
-      dragDx += self.deltaX;
-      target -= self.deltaX / pxPerItem();
+      // along the band: across on a horizontal belt, up and down on the
+      // vertical orbit (a drag up brings the next card up from below)
+      const d = L.vertical ? self.deltaY : self.deltaX;
+      dragDx += d;
+      target -= d / pxPerItem();
       dirty = 4;
     },
     onDragEnd: (self) => {
       if (!dragging) return;
       dragging = false;
+      const v = L.vertical ? self.velocityY : self.velocityX;
       if (L.phone) {
         // a swipe ignores how far it went: exactly one step from where it began
-        snap(swipeTarget(dragStart, dragDx, self.velocityX));
+        snap(swipeTarget(dragStart, dragDx, v));
       } else {
-        snap(clamp(Math.round(target - self.velocityX / pxPerItem() / 6), dragStart - 3, dragStart + 3));
+        snap(clamp(Math.round(target - v / pxPerItem() / 6), dragStart - 3, dragStart + 3));
       }
       if (pending) {
         const next = pending;
@@ -825,10 +846,12 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     vRight.crossVectors(vUp, vFace);
     basis.makeBasis(vRight, vUp, vFace);
     const q = new THREE.Quaternion().setFromRotationMatrix(basis);
-    const at = cardPlacement(theta, L.phone);
+    if (L.vertical) q.premultiply(turnQ).multiply(unturnQ);
+    const at = cardPlacement(theta, hideBack());
+    const w = toWorld(L, f.p);
     return {
-      x: L.cx + f.p.x * L.S,
-      y: L.cy + f.p.y * L.S,
+      x: w.x,
+      y: w.y,
       z: f.p.z * L.S,
       size: L.card * L.S * at.scale,
       q,
@@ -851,7 +874,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     // both follow where the card is in time, so a crossing is seen; under
     // reduced motion (alpha only) they follow at once
     const instant = reduced();
-    card.zoneTarget = dissolveAt(card.theta, L.phone);
+    card.zoneTarget = dissolveAt(card.theta, hideBack());
     card.rimTarget = rimPulse(rimU(card.theta, L), card.theta, browsing, rimU(card.prevTheta, L));
     card.shownZone = easeDissolve(card.shownZone, card.zoneTarget, dt, instant);
     card.shownRim = easeDissolve(card.shownRim, card.rimTarget, dt, instant || !browsing);
@@ -886,22 +909,26 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
   function discPoseFor(hp: Pose | null): Pose {
     let dp: Pose = { x: L.disc.x, y: L.disc.y, z: 0, size: L.disc.r, q: L.disc.q.clone(), fade: 1, tone: 1 };
     if (hp && c.tuck > 0) {
-      // half out of the sleeve on the side it will slide toward (a phone's
-      // stays wholly inside, and fades)
-      const out = L.phone ? 0 : Math.sign(L.discDetail.x - L.hero.x || -1) * TUCK_OUT * hp.size;
-      const tucked: Pose = { x: hp.x + out, y: hp.y, z: hp.z - 0.05, size: hp.size * 0.46, q: hp.q.clone(), fade: 1, tone: 1 };
+      // half out of the sleeve on the side it will slide toward: to the left
+      // beside it, or up in the stacked layout (2026-10-27), where the HTML
+      // record rests above the sleeve
+      const D = L.discDetail;
+      const axis = L.vertical ? "y" : "x";
+      const side = axis === "y" ? Math.sign(D.y - L.hero.y || 1) : Math.sign(D.x - L.hero.x || -1);
+      const out = side * TUCK_OUT * hp.size;
+      const tucked: Pose = { x: hp.x + (axis === "x" ? out : 0), y: hp.y + (axis === "y" ? out : 0), z: hp.z - 0.05, size: hp.size * 0.46, q: hp.q.clone(), fade: 1, tone: 1 };
       dp = blend(dp, tucked, c.tuck);
       if (c.slide > 0) {
         // out past the sleeve's edge behind it, then in front of it and back
         // over the edge to the HTML disc frame (record-timeline.ts discSlide)
-        const D = L.discDetail;
         const restInFront = D.z >= L.hero.z;
         const sp = discSlide(c.slide, {
           tucked: { x: tucked.x, y: tucked.y, r: tucked.size },
           rest: { x: D.x, y: D.y, r: D.size },
           sleeve: { x: hp.x, y: hp.y, half: (hp.size * FRAME_PLATE) / 2 },
           restInFront,
-          screenEdge: Math.sign(D.x - hp.x || -1) * ((L.w * L.k) / 2),
+          axis,
+          screenEdge: side * (axis === "y" ? CAMERA_HALF : (L.w * L.k) / 2),
         });
         // in front: past the sleeve's front face and paper frame, so the
         // depth test agrees with the draw order
@@ -1031,7 +1058,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       // shows it only in front of the zone's peak: a record that changed at
       // the back first shows its image while it gathers in the arriving zone
       const art = artFor({ id: item.id, url: item.image_url });
-      const visibleArt = imageShown(bc.theta, L.phone) || card.framed;
+      const visibleArt = imageShown(bc.theta, hideBack()) || card.framed;
       const tex = visibleArt ? art : null;
       if (tex !== card.image.tex) {
         // an image that decoded late, while the card is plainly on screen,
@@ -1137,8 +1164,9 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       Object.assign(spinClock, advanceSpin(spinClock, dt, { idle, phaseVelocity, gain: idleRate ? SPIN_GAIN : 0, response: SPIN_RESPONSE }));
     }
     spin.rotation.z = spinClock.angle + (1 - entry) * 0.8;
-    // the phone's opened record is the art alone; the record goes into it
-    const discFade = smooth(0.15, 0.6, entry) * (L.phone ? 1 - smooth(0.35, 0.95, c.tuck) : 1);
+    // (2026-10-27: every layout's record stays in sight and slides out; the
+    // phone no longer hides it in the sleeve)
+    const discFade = smooth(0.15, 0.6, entry);
     for (const m of discMats) m.opacity = discFade;
     disc.visible = discFade > 0.01;
     if (disc.visible) sheen.update(spin, camera, sunDir, idle + spinClock.boost);
@@ -1214,7 +1242,14 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
   }
   watchDpr();
   const coarse = window.matchMedia?.("(pointer: coarse)");
-  const onCoarse = () => measure();
+  // again a frame later: a resize can switch the page's orientation class
+  // (beltVertical), and the HTML frames the scene lands on move with it
+  let remeasure = 0;
+  const onCoarse = () => {
+    measure();
+    cancelAnimationFrame(remeasure);
+    remeasure = requestAnimationFrame(() => measure());
+  };
   coarse?.addEventListener?.("change", onCoarse);
   window.addEventListener("resize", onCoarse);
   const onLost = (e: Event) => {
@@ -1367,6 +1402,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       dprQuery?.removeEventListener?.("change", onDpr);
       coarse?.removeEventListener?.("change", onCoarse);
       window.removeEventListener("resize", onCoarse);
+      cancelAnimationFrame(remeasure);
       still?.removeEventListener?.("change", onStill);
       host.removeEventListener("pointerdown", onDown);
       host.removeEventListener("pointerup", onUp);

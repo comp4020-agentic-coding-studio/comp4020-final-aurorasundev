@@ -771,15 +771,7 @@
     font-size: 16px;
   }
 
-  /* phone listening state: the full art stacked above its text */
-  .record-frame {
-    /* a short phone still gets a sleeve worth looking at; the text below
-       it scrolls instead */
-    --art: min(calc(100vw - 40px), 440px, max(calc(100dvh - 330px), 220px));
-    --disc: var(--art);
-    padding-bottom: 40px;
-  }
-
+  /* the phone's opened record is the stacked layout (.is-vertical, below) */
   .record-header-copy {
     padding: 30px 0 16px;
   }
@@ -790,59 +782,10 @@
     font-size: 15px;
   }
 
-  .record-art {
-    top: calc(128px + var(--drop));
-    left: calc(50% - var(--art) / 2);
-  }
-
-  .record-disc {
-    top: calc(128px + var(--drop));
-    left: calc(50% - var(--art) / 2);
-  }
-
-  .record-dialog .record-disc {
-    visibility: hidden;
-  }
-
-  /* here the dialog scrolls; once the HTML record has taken over, the
-     opened record's mineral surface stands behind it (the same ground the
-     scene faded in), so the scene's fixed sleeve never shows through the
-     text as it scrolls past */
-  .record-dialog::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    background: var(--bg) url("/textures/gallery/mineral-surface.jpg") center / cover no-repeat;
-    opacity: 1;
-    transition: opacity 240ms ease;
-  }
-
-  .record-dialog.is-arriving::before {
-    opacity: 0;
-    transition: none;
-  }
-
-  .record-text {
-    position: relative;
-    top: auto;
-    left: auto;
-    width: auto;
-    max-height: none;
-    margin-left: 0;
-    padding: calc(128px + var(--drop) + var(--art) + 24px) 20px 0;
-    overflow: visible;
-  }
-
   .record-title,
   .record-report-title {
     margin-bottom: 12px;
     font-size: 28px;
-  }
-
-  /* the steps sit at the title's right */
-  .record-title {
-    padding-right: 96px;
   }
 
   .record-lede {
@@ -862,14 +805,195 @@
     width: 52px;
     height: 52px;
   }
+}
 
-  .record-steps {
-    position: absolute;
-    top: calc(128px + var(--drop) + var(--art) + 24px);
-    right: 20px;
-    bottom: auto;
-    left: auto;
-    gap: 4px;
+/* --- the vertical orbit and the stacked opened record (design §7d) -------
+   .is-vertical comes from belt-layout.ts beltVertical(w, h), the same rule
+   the scene's fit uses: phones, and any window too narrow for the
+   horizontal belt. Browsing: the belt runs top to bottom (in the scene);
+   the arrows point up and down. Opened: the record rests above its sleeve,
+   overlapping the sleeve's top edge in front (as the desktop's overlaps its
+   left edge), and the text follows below; the dialog scrolls. The ghost
+   copy uses the same rules, so the scene lands exactly on them. */
+.orbit-arrow .arrow-v {
+  display: none;
+}
+
+.is-vertical .orbit-arrow .chevron,
+.is-vertical .orbit-arrow .arrow {
+  display: none;
+}
+
+.is-vertical .orbit-arrow .arrow-v {
+  display: inline;
+}
+
+/* a vertical swipe turns the belt here, so the stage keeps it from the page */
+.is-vertical .gl-stage {
+  touch-action: pinch-zoom;
+}
+
+/* the caption, the controls and the hint stack centred under the orbit at
+   every vertical width (a phone already has this from its own block) */
+.is-vertical .orbit-foot {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: 0;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  text-align: center;
+}
+
+.is-vertical .orbit-caption {
+  order: 1;
+}
+
+.is-vertical .orbit-controls {
+  order: 2;
+  justify-content: center;
+  gap: 18px;
+  margin: 18px 0 0;
+}
+
+.is-vertical .orbit-hint {
+  order: 3;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.is-vertical .orbit-open {
+  display: inline-flex;
+  min-width: 160px;
+  height: 44px;
+  font-size: 16px;
+}
+
+.is-vertical .orbit-arrow {
+  width: 44px;
+  height: 44px;
+  background: rgb(150 162 160 / 0.35);
+}
+
+.is-vertical .orbit-arrow svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* a mouse still reads the wide hint; the stacked foot keeps it on one line */
+.is-vertical .orbit-hint .wide-only {
+  white-space: nowrap;
+}
+
+.is-vertical .records-links .header-link {
+  white-space: nowrap;
+}
+
+/* a narrow window above phone width (a portrait tablet or a slim desktop
+   window) uses the phone's short links, so the Gallery's name fits beside
+   them */
+.is-vertical .records-header .wide-only {
+  display: none;
+}
+
+.is-vertical .records-header .narrow-only {
+  display: inline;
+}
+
+.is-vertical .records-links {
+  gap: 28px;
+}
+
+/* the bottom resting neighbour keeps clear of the record's title */
+.is-vertical .orbit-band {
+  margin-bottom: 12px;
+}
+
+.is-vertical .record-frame {
+  /* where the record's top sits: under the back row */
+  --top: 172px;
+  /* the record's diameter against the sleeve's edge, and how far the
+     record overlaps the sleeve's top edge (of the sleeve) */
+  --disc-of-art: 0.78;
+  --overlap: 0.22;
+  /* the record and the sleeve fit above the fold with room for the
+     title; a short screen keeps a sleeve worth looking at, the text below
+     it scrolls instead */
+  --art: min(calc(100vw - 2 * var(--gutter)), 440px, max(calc((100dvh - var(--top) - 150px) / 1.56), 200px));
+  --disc: calc(var(--art) * var(--disc-of-art));
+  --art-top: calc(var(--top) + var(--drop) + var(--disc) - var(--art) * var(--overlap));
+  --text-top: calc(var(--art-top) + var(--art) + 24px);
+  padding-bottom: 40px;
+}
+
+/* the text column starts at the top (its padding clears the record), so the
+   back row stays above it */
+.is-vertical .record-back {
+  z-index: 2;
+}
+
+.is-vertical .record-disc {
+  /* in front of the sleeve, as it lands */
+  z-index: 1;
+  top: calc(var(--top) + var(--drop));
+  left: calc(50% - var(--disc) / 2);
+}
+
+.is-vertical .record-art {
+  z-index: 0;
+  top: var(--art-top);
+  left: calc(50% - var(--art) / 2);
+}
+
+/* here the dialog scrolls; once the HTML record has taken over, the opened
+   record's mineral surface stands behind it (the same ground the scene
+   faded in), so the scene's fixed sleeve never shows through the text as
+   it scrolls past */
+.is-vertical .record-dialog::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg) url("/textures/gallery/mineral-surface.jpg") center / cover no-repeat;
+  opacity: 1;
+  transition: opacity 240ms ease;
+}
+
+.is-vertical .record-dialog.is-arriving::before {
+  opacity: 0;
+  transition: none;
+}
+
+.is-vertical .record-text {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  width: auto;
+  max-width: 560px;
+  max-height: none;
+  margin: 0 auto;
+  padding: var(--text-top) var(--gutter) 0;
+  overflow: visible;
+}
+
+/* the steps sit at the title's right */
+.is-vertical .record-title {
+  padding-right: 96px;
+}
+
+.is-vertical .record-steps {
+  position: absolute;
+  top: var(--text-top);
+  right: max(var(--gutter), calc(50% - 280px + var(--gutter)));
+  bottom: auto;
+  left: auto;
+  gap: 4px;
+  transform: none;
+}
+
+@media (max-width: 600px) {
+  .is-vertical .record-frame {
+    --top: 128px;
   }
 }
 
@@ -1247,6 +1371,15 @@
 @media (max-width: 380px) {
   .records-links {
     gap: 16px;
+  }
+
+  /* and the name a touch smaller, so "Space" never touches it at 360 px */
+  .records-header .gallery-wordmark {
+    font-size: 17px;
+  }
+
+  .records-header {
+    gap: 12px;
   }
 }
 
