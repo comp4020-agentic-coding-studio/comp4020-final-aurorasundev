@@ -166,10 +166,15 @@ regenerating it on application startup.
   browsers (`pkill -f ms-playwright/chromium`), Docker Desktop and
   containers, and file watchers. Keep only what the owner is actively
   using, such as a preview they asked for, and say what is still running.
-- Headless Chromium renders WebGL in software and can pin every CPU core:
-  keep browser runs short, few and small, close each browser in the same
-  script, and prefer unit tests over rendered checks. Run one subagent at a
-  time unless the owner asks for parallel work.
+- Headless Chromium falls back to SwiftShader (software WebGL), which can
+  pin every CPU core. On the owner's Apple Silicon Mac launch it on the GPU
+  instead: `args: ["--use-gl=angle", "--use-angle=metal",
+  "--ignore-gpu-blocklist"]`, and check the WebGL `UNMASKED_RENDERER_WEBGL`
+  string reads "ANGLE Metal Renderer" (verified 2026-10-27: Apple M4 Pro).
+  Use SwiftShader flags only in GPU-less CI. Either way keep browser runs
+  short, few and small, close each browser in the same script, and prefer
+  unit tests over rendered checks. Run one subagent at a time unless the
+  owner asks for parallel work.
 
 ## Moderation release — 2026-10-10
 
