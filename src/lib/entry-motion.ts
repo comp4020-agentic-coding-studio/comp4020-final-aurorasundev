@@ -121,7 +121,19 @@ export function entryTransition(t: TransitionTargets, h: TransitionHooks): gsap.
   const scene = { entry: 0 };
   tl.fromTo(scene, { entry: 0 }, { entry: 1, duration: 0.8, ease: "power2.out", onUpdate: () => h.scene?.(scene.entry) }, HOLD_AT + 0.05);
   tl.fromTo(t.exhibition, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.45, ease: "power1.out" }, HOLD_AT + 0.6);
+  tl.data = { scene } satisfies EntryData;
   return tl;
+}
+
+// The transition's own copy of the scene's entrance. A seek with events
+// suppressed (a resize re-measuring the flight) can leave the scene hook's
+// last call behind this value: a freshly built timeline seeked to its end
+// reports entry 0 from its first render while its value is already 1. The
+// caller pushes this value to the scene after any silent seek (syncScene).
+export type EntryData = { scene: { entry: number } };
+export function syncScene(tl: gsap.core.Timeline | null, scene: ((entry: number) => void) | undefined): void {
+  const v = (tl?.data as EntryData | undefined)?.scene?.entry;
+  if (typeof v === "number") scene?.(v);
 }
 
 // The exhibition's HTML at rest, with no transition (fallbacks, skipped entry)

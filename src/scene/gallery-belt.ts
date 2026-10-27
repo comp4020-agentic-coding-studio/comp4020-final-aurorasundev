@@ -1199,6 +1199,24 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
   resize.observe(band);
   resize.observe(frames.art);
   resize.observe(frames.disc);
+  // A DPR change (a window dragged to another screen, browser zoom) or an
+  // input-capability change (DevTools' device toolbar turning touch on) may
+  // not resize any observed box: re-measure and redraw on those too.
+  let dprQuery: MediaQueryList | null = null;
+  const onDpr = () => {
+    measure();
+    watchDpr();
+  };
+  function watchDpr() {
+    dprQuery?.removeEventListener?.("change", onDpr);
+    dprQuery = window.matchMedia?.(`(resolution: ${window.devicePixelRatio || 1}dppx)`) ?? null;
+    dprQuery?.addEventListener?.("change", onDpr);
+  }
+  watchDpr();
+  const coarse = window.matchMedia?.("(pointer: coarse)");
+  const onCoarse = () => measure();
+  coarse?.addEventListener?.("change", onCoarse);
+  window.addEventListener("resize", onCoarse);
   const onLost = (e: Event) => {
     e.preventDefault();
     cb.onLost();
@@ -1279,6 +1297,9 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
         play(next);
       } else {
         if (inputOn) observer.enable();
+        // anything measured while the record was open (a resize, a rotation)
+        // is taken again before the close plays
+        measure();
         startClose();
       }
       dirty = 4;
@@ -1343,6 +1364,9 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
       clearTimeout(wheelTimer);
       observer.kill();
       resize.disconnect();
+      dprQuery?.removeEventListener?.("change", onDpr);
+      coarse?.removeEventListener?.("change", onCoarse);
+      window.removeEventListener("resize", onCoarse);
       still?.removeEventListener?.("change", onStill);
       host.removeEventListener("pointerdown", onDown);
       host.removeEventListener("pointerup", onUp);
