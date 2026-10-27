@@ -40,6 +40,8 @@ const CLAIM_BATCH = 20;
 export type ArtifactWorkerOptions = {
   artifactDir: string;
   enabled: boolean;
+  // GALLERY_MUSIC_ENABLED: a fresh publication also saves a score
+  musicEnabled?: boolean;
   onChange: (change: GalleryChange) => void;
   // a burn's extraction has settled, so its fire may end (paper id only)
   onSettled?: (paperId: string) => void;
@@ -223,10 +225,19 @@ export function createArtifactWorker(db: DB, provider: ArtifactProvider | null, 
         return true;
       }
       const brief = parseBrief(JSON.parse(job.brief!));
-      const change = publishArtifact(db, job.id, lease, now(), { title: artifactTitle(brief), alt: artifactAlt(brief) });
+      const music = options.musicEnabled ?? false;
+      const change = publishArtifact(db, job.id, lease, now(), { title: artifactTitle(brief), alt: artifactAlt(brief) }, { enabled: music, brief });
       if (change) {
         options.onChange(change);
-        log("artifact", { job: job.id, artifact: change.type === "artifact:published" ? change.artifact.id : undefined, outcome: "published", revision: change.revision });
+        const artifact = change.type === "artifact:published" ? change.artifact : undefined;
+        // whether a score was saved, never the score itself
+        log("artifact", {
+          job: job.id,
+          artifact: artifact?.id,
+          outcome: "published",
+          revision: change.revision,
+          music: music ? (artifact?.music?.status === "ready" ? "score_saved" : "score_invalid") : "off",
+        });
       }
     } catch (err) {
       const e = err instanceof ArtifactError ? err : new ArtifactError("worker_error", "transient");

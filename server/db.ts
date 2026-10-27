@@ -261,6 +261,12 @@ const MIGRATIONS: ((db: DB) => void)[] = [
         done_at INTEGER
       );
     `),
+
+  // 10: a record's score (ADR 006). Composed once, from the job's stored
+  // brief and a random seed, in the same transaction that publishes an
+  // inspected image; never from a paper. Null for every record published
+  // before this, which stays image-only: there is no backfill.
+  (db) => db.exec("ALTER TABLE artifacts ADD COLUMN music_score TEXT"),
 ];
 
 export const serverSecret = (db: DB, name: string): Buffer =>

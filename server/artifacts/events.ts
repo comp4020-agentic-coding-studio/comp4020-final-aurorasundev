@@ -31,7 +31,7 @@ function close(sub: Subscriber): void {
 
 // Joins and sends the snapshot in the same synchronous tick, so no committed
 // change can fall between the snapshot and the first live event.
-export function subscribeGallery(db: DB, res: Response): () => void {
+export function subscribeGallery(db: DB, res: Response, musicEnabled = false): () => void {
   res.status(200).set({
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-store, no-transform",
@@ -42,7 +42,7 @@ export function subscribeGallery(db: DB, res: Response): () => void {
   res.socket?.setNoDelay(true);
   const sub: Subscriber = { res, heartbeat: setInterval(() => res.write(": ping\n\n"), HEARTBEAT_MS) };
   subscribers.add(sub);
-  write(sub, "gallery:snapshot", galleryPage(db, SNAPSHOT_SIZE, null));
+  write(sub, "gallery:snapshot", galleryPage(db, SNAPSHOT_SIZE, null, musicEnabled));
   return () => {
     clearInterval(sub.heartbeat);
     subscribers.delete(sub);

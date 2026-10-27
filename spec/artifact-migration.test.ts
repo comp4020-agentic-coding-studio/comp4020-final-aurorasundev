@@ -31,7 +31,7 @@ const quiet = <T>(run: () => T): T => {
   }
 };
 
-describe("migration 9 on a shipped version-8 database", () => {
+describe("migrations 9 and later on a shipped version-8 database", () => {
   it("keeps every paper, identity and exact request digest", () => {
     const path = freshCopy();
     const v8 = new Database(path, { readonly: true });
@@ -39,7 +39,7 @@ describe("migration 9 on a shipped version-8 database", () => {
     const before = papers(v8);
     v8.close();
     const raw = quiet(() => openDb(path));
-    expect(raw.pragma("user_version", { simple: true })).toBe(9);
+    expect(raw.pragma("user_version", { simple: true })).toBe(10);
     const rows = papers(raw);
     expect(rows).toEqual(before);
     expect(rows).toHaveLength(6);
@@ -57,7 +57,7 @@ describe("migration 9 on a shipped version-8 database", () => {
     const tables = first.prepare("SELECT name FROM sqlite_master ORDER BY name").all();
     first.close();
     const second = quiet(() => openDb(path));
-    expect(second.pragma("user_version", { simple: true })).toBe(9);
+    expect(second.pragma("user_version", { simple: true })).toBe(10);
     expect(JSON.stringify(papers(second))).toBe(snapshot);
     expect(second.prepare("SELECT name FROM sqlite_master ORDER BY name").all()).toEqual(tables);
     second.close();
