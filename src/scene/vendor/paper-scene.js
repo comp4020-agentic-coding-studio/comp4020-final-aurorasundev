@@ -21,6 +21,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { createPaper, updatePaperFrame } from "./paper.js";
 import { loadVATData } from "./paper-vat.js";
 import { createRoomPlate } from "../room-plate.js";
+import { clampDropTarget, FURNACE_HEIGHT } from "../furnace-drop.ts";
 
 const BACKGROUND = "#c6cdcc";
 // Cool mineral plaster and a lighter stone floor frame the warm ivory paper.
@@ -222,7 +223,8 @@ export function createPaperScene(container, buttonLayer, options) {
   applyCamera();
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, compact ? 1.25 : 1.5));
+  const pixelRatio = () => Math.min(window.devicePixelRatio || 1, compact ? 1.25 : 1.5);
+  renderer.setPixelRatio(pixelRatio());
   renderer.setSize(size().w, size().h);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   // ACES rolls off the directional light's highlights instead of clipping
@@ -879,11 +881,21 @@ export function createPaperScene(container, buttonLayer, options) {
 
   const isGrabbable = (paper) => paper.state === "closed" || paper.state === "rolling";
 
+  // A press is over once its pointer has no capture left. A press whose
+  // release never reached the canvas (let go over DevTools or outside the
+  // window, an emulated mouse that turned into touch mid-press, a release
+  // carrying another pointerId) used to leave its state behind, and every
+  // later press was then ignored: the papers could no longer be dragged
+  // while the HTML buttons still worked. Any input type is handled alike.
+  const stalePress = (pointerId, e) =>
+    e.pointerId === pointerId || !canvas.hasPointerCapture?.(pointerId);
+
   function onPointerDown(e) {
     if (ritual) {
       ritualPointerDown(e);
       return;
     }
+    if (pointerState && stalePress(pointerState.pointerId, e)) endPress(false);
     if (!animData || pointerState || activePaper) return;
     const p = pickPaper(e);
     pointerState = { paper: p, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, grabbing: false };
@@ -937,8 +949,32 @@ export function createPaperScene(container, buttonLayer, options) {
       return;
     }
     if (!pointerState || e.pointerId !== pointerState.pointerId) return;
-    if (pointerState.grabbing && pointerState.paper) releaseGrab(pointerState.paper, false);
+    endPress(false);
+  }
+
+  // Drops whatever press is under way; a held paper is let go where it is.
+  function endPress(withThrow) {
+    if (!pointerState) return;
+    const held = pointerState.grabbing ? pointerState.paper : null;
+    const id = pointerState.pointerId;
     pointerState = null;
+    if (held && held.state === "grabbed") releaseGrab(held, withThrow);
+    try {
+      if (canvas.hasPointerCapture?.(id)) canvas.releasePointerCapture(id);
+    } catch {
+      // already released
+    }
+    canvas.style.cursor = "";
+  }
+
+  // Capture is lost after an ordinary release too (by then the press is
+  // already over), and also when the release never comes: then it ends here.
+  function onLostPointerCapture(e) {
+    if (ritual) {
+      ritualPointerCancel(e);
+      return;
+    }
+    if (pointerState && e.pointerId === pointerState.pointerId) endPress(false);
   }
 
   function updateHoverCursor(e) {
@@ -951,7 +987,7 @@ export function createPaperScene(container, buttonLayer, options) {
   canvas.addEventListener("pointermove", onPointerMove);
   canvas.addEventListener("pointerup", onPointerUp);
   canvas.addEventListener("pointercancel", onPointerCancel);
-  canvas.addEventListener("lostpointercapture", ritualPointerCancel);
+  canvas.addEventListener("lostpointercapture", onLostPointerCapture);
 
   function beginGrab(paper, e) {
     pointerState.grabbing = true;
@@ -1039,8 +1075,18 @@ export function createPaperScene(container, buttonLayer, options) {
   const _edge = new THREE.Vector3();
   const _camUp = new THREE.Vector3();
 
+  let lastDpr = window.devicePixelRatio;
   function tick() {
     const now = performance.now() / 1000;
+    // a new pixel ratio with no new size (DevTools' device toolbar, another
+    // screen) fires no ResizeObserver: refit the drawing buffer here
+    if (window.devicePixelRatio !== lastDpr) {
+      lastDpr = window.devicePixelRatio;
+      renderer.setPixelRatio(pixelRatio());
+      composer.setPixelRatio(pixelRatio());
+      renderer.setSize(size().w, size().h);
+      composer.setSize(size().w, size().h);
+    }
     // A stalled tab or a slow device can produce one huge dt; without a cap
     // that single step would jump the open/close/throw timers straight past
     // their animation, so it would look like it had snapped instead of moved.
@@ -1255,9 +1301,7 @@ export function createPaperScene(container, buttonLayer, options) {
   const RITUAL_FRAME = compact
     ? { furnaceWidth: 0.56, furnaceFoot: 0.76, paperY: 0.33 }
     : { furnaceWidth: 0.30, furnaceFoot: 0.91, paperY: 0.32 };
-  // The furnace's height and inner radius as fire/furnace.js builds them.
-  const FURNACE_HEIGHT = 0.64;
-  const FURNACE_INNER = 1 - 0.10;
+  // The furnace's height (FURNACE_HEIGHT) and opening come from furnace-drop.ts.
   const CRUMPLE_SECONDS = 0.75;
   // the phone's camera is close: the held paper is drawn smaller (B05)
   const RITUAL_SCALE = compact ? CLOSED_SCALE * 0.66 : CLOSED_SCALE;
@@ -1588,23 +1632,29 @@ export function createPaperScene(container, buttonLayer, options) {
   }
 
   // On a vertical plane through the furnace's centre facing the camera: the
-  // paper moves left, right, up and down, and straight down is into the
-  // furnace. Over the furnace it rides on the rim rather than through it.
+  // paper moves up and down freely, but sideways only within the furnace's
+  // opening (world units from the current rim radius, furnace-drop.ts), so
+  // it can never be pulled through the iron; straight down is into the
+  // furnace, and it rides just above the rim rather than through it.
   function ritualDragTarget(e) {
     const r = ritual;
     updatePointer(e);
     raycaster.setFromCamera(pointer, camera);
     if (!raycaster.ray.intersectPlane(r.place.plane, grabHitPoint)) return;
     const { anchor, radius } = r.place;
-    const top = FLOOR_VISUAL_Y + radius * FURNACE_HEIGHT;
-    const overFurnace = Math.abs(grabHitPoint.x - anchor.x) < radius + collisionRadius * 0.6;
-    const floor = overFurnace ? top + collisionRadius * 0.3 : FLOOR_VISUAL_Y + collisionRadius;
-    const halfWidth = Math.max(radius * 2, halfWidthAt(anchor.z) + collisionRadius);
-    r.target.set(clampAbs(grabHitPoint.x, halfWidth), Math.max(grabHitPoint.y, floor), anchor.z);
+    const ball = collisionRadius * (RITUAL_SCALE / CLOSED_SCALE);
+    const t = clampDropTarget(
+      grabHitPoint,
+      { anchorX: anchor.x, anchorZ: anchor.z, rimY: FLOOR_VISUAL_Y + radius * FURNACE_HEIGHT, radius },
+      ball,
+    );
+    r.target.set(t.x, t.y, t.z);
   }
 
   function ritualPointerDown(e) {
     const r = ritual;
+    // a drag whose release never arrived floats back, like a cancelled one
+    if (r && r.pointerId !== null && stalePress(r.pointerId, e)) ritualPointerCancel({ pointerId: r.pointerId });
     if (!r || !r.paper || (r.phase !== "hovering" && r.phase !== "returning") || r.pointerId !== null) return;
     if (!hitsRitualPaper(e)) return;
     r.pointerId = e.pointerId;
@@ -1756,6 +1806,9 @@ export function createPaperScene(container, buttonLayer, options) {
   function onResize() {
     const { w, h } = size();
     cameraMove = null;
+    renderer.setPixelRatio(pixelRatio());
+    composer.setPixelRatio(pixelRatio());
+    lastDpr = window.devicePixelRatio;
     applyCamera();
     if (ritual && ["burning", "ashes"].includes(ritual.phase)) {
       const view = burnCamera(ritual);
@@ -2068,7 +2121,7 @@ export function createPaperScene(container, buttonLayer, options) {
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointercancel", onPointerCancel);
-      canvas.removeEventListener("lostpointercapture", ritualPointerCancel);
+      canvas.removeEventListener("lostpointercapture", onLostPointerCapture);
       if (ritual) {
         ritual.effect?.dispose();
         ritual.furnace?.dispose();
