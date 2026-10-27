@@ -269,7 +269,7 @@ describe("a phone swipe", () => {
 });
 
 describe("fitting the viewport", () => {
-  // The vertical orbit (design §7d, 2026-10-27) replaces the horizontal phone
+  // The vertical orbit (design §7e, 2026-10-27) replaces the horizontal phone
   // composition. The trigger is a pure rule of the viewport.
   it("turns vertical when the horizontal belt does not fit the width", () => {
     expect(beltVertical(390, 844)).toBe(true);

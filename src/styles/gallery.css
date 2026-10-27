@@ -807,7 +807,7 @@
   }
 }
 
-/* --- the vertical orbit and the stacked opened record (design §7d) -------
+/* --- the vertical orbit and the stacked opened record (design §7e) -------
    .is-vertical comes from belt-layout.ts beltVertical(w, h), the same rule
    the scene's fit uses: phones, and any window too narrow for the
    horizontal belt. Browsing: the belt runs top to bottom (in the scene);
@@ -963,16 +963,18 @@
   transition: none;
 }
 
+/* absolute at --text-top (as the steps are), so the header copy's height in
+   the flow never pushes the title below its steps; the dialog still scrolls
+   over it (absolute descendants count toward its scrollable overflow) */
 .is-vertical .record-text {
-  position: relative;
-  top: auto;
-  left: auto;
-  right: auto;
+  position: absolute;
+  top: var(--text-top);
+  left: max(0px, calc(50% - 280px));
+  right: max(0px, calc(50% - 280px));
   width: auto;
-  max-width: 560px;
   max-height: none;
-  margin: 0 auto;
-  padding: var(--text-top) var(--gutter) 0;
+  margin: 0;
+  padding: 0 var(--gutter) 40px;
   overflow: visible;
 }
 

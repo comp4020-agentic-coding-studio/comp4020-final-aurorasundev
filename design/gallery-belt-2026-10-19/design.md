@@ -309,3 +309,67 @@ These replace the earlier text where they differ.
   already present, so adding a light wash at that instant brightens the
   live canvas before the HTML disc has covered it. The plain fallback
   retains its own background and backdrop.
+
+## 7e. Vertical exhibition and stacked opened record (2026-10-27)
+
+(Asked for as "§7d"; numbered 7e because §7d already holds the 2026-10-20
+follow-up.) These replace the horizontal phone composition and the phone's
+tucked record (§7a, §7b) where they differ.
+
+- **Trigger** (`belt-layout.ts` `beltVertical(w, h)`, one pure rule of the
+  viewport, shared by the scene's fit and the page's `.is-vertical` class):
+  vertical when `w ≤ 600`, or when `horizontalFit(w, h)` < `VERTICAL_SHRINK`
+  0.6. `horizontalFit` estimates the horizontal belt at the size its height
+  gives it (band = 0.72 of the height, 0.69 when compact; globe fills
+  GLOBE_FILL of that) and divides the width less two 48 px gutters by its
+  width, card half-widths included. Results: 390×844 vertical (0.27),
+  700×1000 vertical (0.47), 768×1024 vertical; 844×390 (1.37), 1366×768
+  (1.27), 1920×1080 (1.30), 1024×768 (0.93) and 1000×1000 (0.70)
+  horizontal. No size ≤ 540 px high above phone width turns vertical, so the
+  compact layout is untouched. `fit.phone` (six-card ring, phone particle
+  budget, one-step swipe) is now always equal to `fit.vertical`.
+- **Vertical orbit:** the horizontal composition turned a quarter turn
+  clockwise about the view axis (`toWorld`: (x, y) → (y, −x)), so azimuth 0
+  sits on the record, the next card waits below and leaves through the top.
+  The globe (`globeRoot.rotation.z = −π/2`) and its counter-rotation turn
+  with it, the S-curve latitude shows across the band, the drift tangents
+  turn the same way, and each card's orientation is conjugated by the turn
+  so its image stays upright. The far half shows faded behind, and the
+  desktop's dissolve zones (76°–104°) sit at the globe's top and bottom
+  silhouettes, where replaced records gather. The rim pulse measures along
+  the band in the record's radii foreshortened by its tilt
+  (`r·cos(tilt)`). Fit, in px of the browsing band: the front card
+  min(0.44 W, 0.30 band), the record radius min(0.30 W, 0.21 band), tilt
+  0.32; S is the smaller of 0.98 of the band's half-length over BELT_AX and
+  what keeps a resting neighbour inside 0.94 of it; the whole shrinks if
+  the globe, card or record would cross 0.98 of the width. Resting
+  neighbours sit outside the rim band. Vertical drag and wheel turn it (a
+  drag up brings the next card), one step per swipe; Up/Down keys too;
+  arrows point up and down with their names ("Previous record", "Next
+  record") unchanged; the caption, Open record and the arrows stack centred
+  below the band. The entry transition is unchanged.
+- **Stacked opened record** (`.is-vertical .record-frame`): the record
+  (0.78 of the art's width) rests above the sleeve, overlapping its top edge
+  by 0.22 of the art, in front of it; the text follows 24 px below the
+  sleeve and scrolls with the dialog. `--top` is 172 px (128 px on a phone),
+  plus the 15 px drop. The art is min(100vw − 2 gutters, 440 px,
+  max((100dvh − top − 150 px) / 1.56, 200 px)).
+- **Stacked open timeline:** the same calm open as the desktop's, the same
+  duration. The sleeve comes forward to the HTML art frame while the record
+  tucks half out of its top (0.44 of the sleeve's size up); it turns once
+  there, behind; then `discSlide` with `axis: "y"` (the desktop path with x
+  and y exchanged) slides it up behind the sleeve until its rim clears the
+  sleeve's top edge (55 % of the slide); only there does it step in front,
+  and it comes back down over the edge onto the HTML disc frame. The screen
+  edge for the clear point is the top of the view. Measured at 390×844: the
+  ghost and dialog frames agree to the pixel (disc 59,158 ⌀273; art 20,354
+  ⌀350).
+- **Resize/rotate:** the page's class follows `resize` and
+  `orientationchange`; the scene re-measures on resize and once more a frame
+  later, after React has applied the new class, so the landing frames move
+  with it.
+- **DevTools blank belt** (6940be0): a resize re-measured the entry
+  transition by rebuilding it and seeking silently to its end; the rebuilt
+  scene tween reported entry 0 at its first render, so the globe, record and
+  cards all faded to nothing while the belt still turned. The real value is
+  now pushed to the scene after any silent seek.

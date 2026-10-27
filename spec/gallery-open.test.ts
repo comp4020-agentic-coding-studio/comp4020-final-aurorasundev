@@ -272,7 +272,7 @@ describe("the record's slide out of the sleeve (revision two)", () => {
     });
   }
 
-  // The stacked layout (design §7d): gallery.css's .is-vertical frames. The
+  // The stacked layout (design §7e): gallery.css's .is-vertical frames. The
   // record (0.78 of the art) rests above the sleeve, overlapping the sleeve's
   // top edge by 0.22 of the art, in front; the sleeve below it.
   const stacked = (w: number, h: number, gutter: number, top: number) => {

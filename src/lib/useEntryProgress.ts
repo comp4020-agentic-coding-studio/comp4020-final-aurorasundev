@@ -240,7 +240,7 @@ export function useEntryProgress(o: Options) {
         if (at === 1) tl.current?.pause();
         // The silent seek leaves the scene hook's last report at 0 (the new
         // timeline's first render), not at where it now stands, and the scene
-        // would draw nothing (the DevTools bug, design §7d): push the real value.
+        // would draw nothing (the DevTools bug, design §7e): push the real value.
         syncScene(tl.current, opts.current.sceneEntry);
       });
     };

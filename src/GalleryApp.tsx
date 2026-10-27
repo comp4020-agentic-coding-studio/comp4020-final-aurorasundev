@@ -22,7 +22,7 @@ function prefersStill(): boolean {
   return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-// The vertical orbit and the stacked opened record (design §7d, 2026-10-27):
+// The vertical orbit and the stacked opened record (design §7e, 2026-10-27):
 // one rule from the viewport, the same one the scene's fit uses, so the HTML
 // frames and the scene always agree on the orientation.
 const viewportVertical = () => typeof window !== "undefined" && beltVertical(window.innerWidth, window.innerHeight);
