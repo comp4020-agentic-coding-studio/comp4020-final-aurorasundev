@@ -567,6 +567,75 @@
   font-size: 15px;
 }
 
+/* A record with a published score (ADR 006): a real Play/Pause, the time
+   from the audio clock and a volume slider. No waveform or fake activity. */
+.player-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.player-button:not(:disabled) {
+  cursor: pointer;
+}
+
+.player-button:focus-visible,
+.player-volume input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.record-player[data-state="rendering"] .player-button:disabled {
+  cursor: progress;
+}
+
+.player-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+}
+
+.player-time {
+  color: var(--ink);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-volume {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.player-volume input {
+  width: 112px;
+  accent-color: var(--ink);
+}
+
+/* the opened disc's label turns slowly (about six turns a minute) only while
+   sound actually plays, and holds its angle when paused */
+.record-dialog:has(.record-player[data-state="playing"]) .vinyl-label,
+.record-dialog:has(.record-player[data-state="paused"]) .vinyl-label {
+  animation: player-turn 10s linear infinite;
+}
+
+.record-dialog:has(.record-player[data-state="paused"]) .vinyl-label {
+  animation-play-state: paused;
+}
+
+@keyframes player-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .record-dialog:has(.record-player) .vinyl-label {
+    animation: none;
+  }
+}
+
 .record-report-link {
   padding: 0 0 3px;
   border: 0;
