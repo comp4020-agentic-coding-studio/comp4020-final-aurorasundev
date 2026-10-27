@@ -1,6 +1,6 @@
 # 006 — AI-directed scores, performed locally with Web Audio
 
-Date: 2026-10-19. Status: **implemented 2026-10-27, flag off**
+Date: 2026-10-19. Status: **implemented 2026-10-27; enabled in production by the owner on 2026-10-27**
 (`GALLERY_MUSIC_ENABLED` unset in production; enabling it is the owner's
 decision, after real-browser listening that has not yet been done).
 Extends

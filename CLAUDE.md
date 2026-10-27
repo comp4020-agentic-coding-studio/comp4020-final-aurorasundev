@@ -57,8 +57,9 @@ readable centre. Keep phone controls and captions clear of the paper.
   its completion. Pure rules live in `src/scene/belt-layout.ts`,
   `particles-plan.ts`, `record-timeline.ts` and `gallery-motion.ts`, with
   specs; reduced motion or no WebGL gets the grid. Sound is
-  **implemented behind `GALLERY_MUSIC_ENABLED`, off in production** until
-  the owner decides (after real-browser listening). Its design is
+  **implemented behind `GALLERY_MUSIC_ENABLED`, which the owner turned on
+  in production on 2026-10-27** (a Fly secret; unset it to switch off).
+  Records published before then have no score. Its design is
   `design/gallery-records-2026-10-18/music-design.md` (ADR 006): the
   existing AI musical directions plus a random seed go through the frozen
   composer in `shared/music-score.ts`; the score is saved once, in the
@@ -70,8 +71,9 @@ readable centre. Keep phone controls and captions clear of the paper.
   The flag is independent from image generation; a changed composer or
   renderer is a new version, never a silent change to stored scores.
   Preserve the current fire/extraction protocol.
-  `ARTIFACTS_ENABLED` stays off
-  until the owner decides; the fixture provider is refused on Fly.
+  `ARTIFACTS_ENABLED` is the owner's switch for image generation (a Fly
+  secret, on since the owner enabled it); the fixture provider is refused
+  on Fly.
 - Real-time is SSE (`GET /api/events`) + HTTP. The database is the source of
   truth; events carry a shared `revision` and are merged by version; every
   reconnect reconciles from a snapshot, never by replaying history.
