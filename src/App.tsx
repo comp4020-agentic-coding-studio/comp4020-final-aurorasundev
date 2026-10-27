@@ -13,6 +13,7 @@ import { ReturnKeyDialog } from "./components/ReturnKeyDialog.tsx";
 import { RitualOverlay, type RitualOutcome, type RitualStage } from "./components/RitualOverlay.tsx";
 import { SpaceFooter } from "./components/SpaceFooter.tsx";
 import { WriteDialog } from "./components/WriteDialog.tsx";
+import { visibleLimit } from "./lib/space-window.ts";
 import { ApiError, burnPaper, getPaper, getSafetyConfig, samplePapers, type Created, type SafetyConfig } from "./lib/api.ts";
 import { useLiveSpace, type Ending } from "./lib/useLiveSpace.ts";
 
@@ -46,9 +47,9 @@ const reducedMotion = (): boolean => window.matchMedia("(prefers-reduced-motion:
 
 // The references show generously spaced papers rather than the demo's crowded
 // 40-paper stage; the window stays small enough to keep that negative space.
-// It is a rendering budget, not the whole space: exploring moves it.
-const NARROW = "(max-width: 600px)";
-const visibleLimit = (): number => (window.matchMedia(NARROW).matches ? 5 : 8);
+// It is a rendering budget, not the whole space: exploring moves it. It
+// follows the viewport's CSS area only (src/lib/space-window.ts).
+const viewportLimit = (): number => visibleLimit(window.innerWidth, window.innerHeight);
 
 // After a throw lands, the return-key offer waits this long, and only while
 // nothing else is open.
@@ -64,7 +65,7 @@ export function App() {
   // A first Keep earns a key offer. It waits for an idle space rather than a
   // timer that a new draft could swallow; the header can still reach it.
   const [keyOffer, setKeyOffer] = useState(false);
-  const [limit, setLimit] = useState(visibleLimit);
+  const [limit, setLimit] = useState(viewportLimit);
   const [exploring, setExploring] = useState(false);
   const field = useRef<PaperFieldHandle>(null);
 
@@ -500,12 +501,20 @@ export function App() {
   );
 
   // The window follows the viewport: fewer papers on a phone, more on a wide
-  // screen, without a reload or touching what is open.
+  // screen, without a reload or touching what is open. A resize only sets
+  // state when the whole number changes, and a burst of resize events (a
+  // window being dragged) settles first, so nothing is re-sampled per frame.
   useEffect(() => {
-    const media = window.matchMedia(NARROW);
-    const update = () => setLimit(visibleLimit());
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const update = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => setLimit(viewportLimit()), 200);
+    };
+    window.addEventListener("resize", update);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", update);
+    };
   }, []);
   const shownLimit = useRef(limit);
   useEffect(() => {
