@@ -32,13 +32,15 @@ type Props = {
   held?: boolean;
   // textures decoded, programs compiled, warm-up frames drawn
   onReady?: () => void;
+  // a turn began (true) or came to rest (false) on a record
+  onTurning?: (turning: boolean, restsOn: string | null) => void;
 };
 
-export const GalleryOrbit = forwardRef<OrbitHandle, Props>(function GalleryOrbit({ items, open, frames, onFocus, onOpen, onLost, onArrive, onHandBack, reveal, held, onReady }, ref) {
+export const GalleryOrbit = forwardRef<OrbitHandle, Props>(function GalleryOrbit({ items, open, frames, onFocus, onOpen, onLost, onArrive, onHandBack, reveal, held, onReady, onTurning }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<Scene | null>(null);
-  const handlers = useRef({ onFocus, onOpen, onLost, onArrive, onHandBack, reveal, onReady });
-  handlers.current = { onFocus, onOpen, onLost, onArrive, onHandBack, reveal, onReady };
+  const handlers = useRef({ onFocus, onOpen, onLost, onArrive, onHandBack, reveal, onReady, onTurning });
+  handlers.current = { onFocus, onOpen, onLost, onArrive, onHandBack, reveal, onReady, onTurning };
 
   useEffect(() => {
     const f = frames();
@@ -56,6 +58,7 @@ export const GalleryOrbit = forwardRef<OrbitHandle, Props>(function GalleryOrbit
           onHandBack: () => handlers.current.onHandBack(),
           reveal: () => handlers.current.reveal(),
           onReady: () => handlers.current.onReady?.(),
+          onTurning: (t, id) => handlers.current.onTurning?.(t, id),
         },
         { held },
       );

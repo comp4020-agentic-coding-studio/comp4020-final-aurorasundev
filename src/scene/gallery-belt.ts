@@ -69,6 +69,10 @@ export type OrbitCallbacks = {
   reveal?: () => gsap.core.Timeline | null;
   // the scene has decoded its textures, compiled and drawn its warm-up frames
   onReady?: () => void;
+  // a turn has begun (true) or come to rest (false, with the record it rests
+  // on), once per change: the caption fades out as a turn leaves and back in
+  // when it rests
+  onTurning?: (turning: boolean, restsOn: string | null) => void;
 };
 export type OrbitOptions = {
   // the page's entry is showing: the scene starts unseen and without input,
@@ -479,6 +483,7 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
   let phase = 0;
   let target = 0;
   let reported: string | null = null;
+  let turnReported = false;
   let dragging = false;
   let dragStart = 0;
   let dragDx = 0;
@@ -979,6 +984,13 @@ export function createGalleryBelt(host: HTMLElement, frames: OrbitFrame, cb: Orb
     phase = dampPhase(phase, target, dt);
     const moving = phase !== prev;
     settle();
+    // a turn: the belt is well away from where it is heading, or heading for
+    // a record other than the one reported (a click alone is not a turn)
+    const nowTurning = count() > 0 && (Math.abs(target - phase) > 0.1 || items[focusIndex()].id !== reported);
+    if (nowTurning !== turnReported) {
+      turnReported = nowTurning;
+      cb.onTurning?.(nowTurning, nowTurning ? null : reported);
+    }
     if (arriveDue && open && phase === target) {
       arriveDue = false;
       cb.onArrive();

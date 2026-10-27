@@ -9,6 +9,7 @@ import { recordReveal } from "./lib/record-reveal.ts";
 import { useEntryProgress, type EntryRefs } from "./lib/useEntryProgress.ts";
 import { useGallery } from "./lib/useGallery.ts";
 import { useGalleryAudio } from "./lib/useGalleryAudio.ts";
+import { useCaptionFade } from "./lib/useCaptionFade.ts";
 import { useRecordMarks } from "./lib/useRecordMarks.ts";
 import { beltVertical } from "./scene/belt-layout.ts";
 import { canDrawOrbit } from "./scene/gallery-belt.ts";
@@ -88,6 +89,9 @@ export function GalleryApp() {
   const focused = useMemo(() => g.items.find((a) => a.id === focusedId) ?? g.items[0] ?? null, [g.items, focusedId]);
   const isOpen = g.selected !== null;
   const vertical = useVertical();
+  // the caption fades out as the belt turns and back in when it rests
+  const caption = useRef<HTMLDivElement>(null);
+  const onTurning = useCaptionFade(caption, focused?.id ?? null, still);
 
   const showOrbit = orbit && g.items.length > 0;
 
@@ -251,6 +255,7 @@ export function GalleryApp() {
           open={isOpen}
           frames={frames}
           onFocus={onFocus}
+          onTurning={onTurning}
           onOpen={openRecord}
           onLost={() => setOrbit(false)}
           onArrive={onArrive}
@@ -326,7 +331,7 @@ export function GalleryApp() {
           <>
             <div ref={band} className="orbit-band" />
             <div className="orbit-foot">
-              <div className="orbit-caption" aria-live="polite">
+              <div ref={caption} className="orbit-caption" aria-live="polite">
                 {marks.tagFor(focused) && <p className="record-tag">{marks.tagFor(focused)}</p>}
                 <h2 className="orbit-title">
                   <button type="button" className="orbit-title-button" onClick={() => focused && openRecord(focused.id)}>
