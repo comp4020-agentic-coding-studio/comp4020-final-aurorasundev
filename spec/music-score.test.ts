@@ -161,7 +161,8 @@ describe("bounds", () => {
       }
     }
     expect(n).toBe(38_880);
-  });
+    // 38,880 scores: about 2 s locally, slower on a shared CI runner
+  }, 60_000);
 });
 
 describe("validation", () => {
