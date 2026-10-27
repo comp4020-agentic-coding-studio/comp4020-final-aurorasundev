@@ -48,8 +48,10 @@ export const BELT_AZ = GLOBE_R * BELT_LIFT;
 // ring, so no record is ever shown twice at once.
 export const RING_DESKTOP = 10;
 export const RING_PHONE = 6;
+// at or below this width the layout is always vertical (the HTML caption and
+// the opened record's side-by-side columns do not fit either); above it the
+// belt's own fit decides (beltVertical)
 export const PHONE_MAX_W = 600;
-export const isPhone = (w: number) => w <= PHONE_MAX_W;
 export const ringSize = (phone: boolean, n: number) => Math.max(0, Math.min(phone ? RING_PHONE : RING_DESKTOP, n));
 export const tileStep = (ring: number) => TAU / Math.max(1, ring);
 
@@ -223,7 +225,13 @@ export const CAMERA_HALF = 3;
 
 export type FitInput = { w: number; h: number; bandTop: number; bandH: number };
 export type Fit = {
+  // the narrow composition: the six-card ring, the phone's particle budget,
+  // a swipe of one step. Since 2026-10-27 always together with `vertical`.
   phone: boolean;
+  // the belt circles the record vertically (beltVertical): the horizontal
+  // composition turned a quarter turn clockwise about the view axis, so a
+  // card comes in from the bottom and leaves at the top (toWorld)
+  vertical: boolean;
   compact: boolean;
   // world units per CSS pixel
   k: number;
@@ -272,26 +280,77 @@ export const CARD = 1.65;
 // the globe's share of the stage's height, leaving a margin above and below
 export const GLOBE_FILL = 0.8;
 export const GLOBE_FILL_COMPACT = 0.9;
-// Phone: the globe's silhouette on the screen's edges; the record's radius
-// PHONE_DISC_W of the screen's width (larger against the globe than on a
-// desktop, since the phone's globe is much wider than tall); the front card
-// PHONE_CARD_W of the width. Owner, 2026-10-20: about 1.5× the earlier 0.32,
-// clamped to 0.44 (1.375×): at 0.48 the six-card front arc's neighbours (at
-// 60°) touched the front card on a 390 px screen and a short phone's stage
-// overflowed upward
+// Phone (the horizontal phone layout, retired 2026-10-27 for the vertical
+// orbit): the front card was PHONE_CARD_W of the width, about 1.5× the
+// earlier 0.32 clamped to 0.44 (owner, 2026-10-20). The vertical orbit keeps
+// those proportions against the width (VERT_CARD_W, VERT_DISC_W).
 export const PHONE_CARD_W_BEFORE = 0.32;
 export const PHONE_DISC_W = 0.3;
 export const PHONE_CARD_W = 0.44;
 export const PHONE_TILT = 0.32;
-// the stage's share the phone composition may use
-const PHONE_FILL = 0.94;
-// where the phone composition's centre sits in the stage, from its top (0.5
-// would centre it): a little above centre, so the record sits closer under
-// the header and the title block below keeps clear (owner, 2026-10-19)
-export const PHONE_CENTRE = 0.4;
+
+// --- the vertical orbit (owner, 2026-10-27) ---------------------------------
+// When the horizontal belt does not fit the screen's width, the exhibition
+// turns a quarter turn: the band runs top to bottom through the record, the
+// globe's poles lie left and right, and the opened record stacks (the record
+// above its sleeve, the text below). One pure rule decides it, from the
+// viewport alone (never from a measured box, so the layout it switches cannot
+// feed back into it):
+//
+//   vertical when w ≤ PHONE_MAX_W, or when the horizontal belt at the size
+//   its height would give it (the band's estimated share of the height, the
+//   globe filling GLOBE_FILL of that) is wider, card half-widths included,
+//   than the width less two gutters by more than 1 / VERTICAL_SHRINK.
+//
+// A belt that only has to shrink a little to fit stays horizontal (1024×768,
+// 1000×1000 squares); a portrait window or tablet whose belt would drop below
+// VERTICAL_SHRINK of its natural size turns (700×1000, 768×1024).
+export const VERTICAL_SHRINK = 0.6;
+// the browsing band's share of the viewport's height in gallery.css (header
+// and caption above and below it), and the page gutter
+export const BAND_SHARE = 0.72;
+export const BAND_SHARE_COMPACT = 0.69;
+export const GUTTER_PX = 48;
+export function horizontalFit(w: number, h: number): number {
+  const compact = h <= COMPACT_H;
+  const bandH = h * (compact ? BAND_SHARE_COMPACT : BAND_SHARE);
+  const S = (bandH * (compact ? GLOBE_FILL_COMPACT : GLOBE_FILL)) / (2 * BELT_AY);
+  const width = 2 * (BELT_AX + CARD / 2) * S;
+  return Math.max(0, w - 2 * GUTTER_PX) / width;
+}
+export const beltVertical = (w: number, h: number): boolean => w <= PHONE_MAX_W || horizontalFit(w, h) < VERTICAL_SHRINK;
+
+// The vertical composition, in px of the browsing band: the band's length
+// runs along the stage's height (the globe's silhouettes at its ends, the
+// resting neighbours wholly inside it), the record and the front card are
+// sized by the width and capped by the stage's height, and the whole shrinks
+// together if the globe, the card or the record would cross the width.
+export const VERT_FILL = 0.98;
+// the resting neighbours stay inside this share of the band's half-length,
+// a margin from the header's line above and the title below
+export const VERT_INNER = 0.94;
+export const VERT_CARD_W = 0.44;
+export const VERT_CARD_H = 0.3;
+export const VERT_DISC_W = 0.3;
+export const VERT_DISC_H = 0.21;
+export const VERT_TILT = PHONE_TILT;
+// the sleeve's paper frame beyond its edge (sleeve-kit.ts FRAME_PLATE)
+const VERT_FRAME = 1.076;
+// the share of the width the composition may span across the band
+const VERT_ACROSS = 0.98;
+
+// Belt space to the scene (world units): horizontal, x along the band; the
+// vertical orbit turns it a quarter turn clockwise ((x, y) → (y, −x)), so a
+// card at positive azimuth sits below the record.
+export function toWorld(f: Pick<Fit, "vertical" | "cx" | "cy" | "S">, p: { x: number; y: number }): { x: number; y: number } {
+  return f.vertical ? { x: f.cx + p.y * f.S, y: f.cy - p.x * f.S } : { x: f.cx + p.x * f.S, y: f.cy + p.y * f.S };
+}
+// a direction in belt space, turned the same way
+export const turnDir = (vertical: boolean, v: { x: number; y: number }) => (vertical ? { x: v.y, y: -v.x } : { x: v.x, y: v.y });
 
 export function fitBelt(i: FitInput): Fit {
-  const phone = isPhone(i.w);
+  const vertical = beltVertical(i.w, i.h);
+  const phone = vertical;
   const compact = !phone && i.h <= COMPACT_H;
   const k = (CAMERA_HALF * 2) / i.h;
   const W = i.w * k;
@@ -300,33 +359,25 @@ export function fitBelt(i: FitInput): Fit {
   const bandBottom = toY(i.bandTop + i.bandH);
   const bandHeight = Math.max(bandTop - bandBottom, 0.5);
   const bandMid = (bandTop + bandBottom) / 2;
-  if (phone) {
-    // The phone's globe is far wider than tall. The band's centre line runs
-    // through the record's middle (as on a desktop), the front card over its
-    // centre, so the globe is centred on the record; the whole is placed a
-    // little above the stage's centre and shrinks together if the stage is
-    // too short.
-    const tilt = PHONE_TILT;
-    const S0 = W / 2 / BELT_AX;
-    const card = (PHONE_CARD_W * W) / S0;
-    const parts = (f: number) => {
-      const S = S0 * f;
-      const r = PHONE_DISC_W * W * f;
-      // relative to the record's centre: the band (front card's centre) on it
-      const band = 0;
-      const globeC = band - beltPoint(0).y * S;
-      const top = Math.max(r * Math.cos(tilt), globeC + BELT_AY * S, band + (card / 2) * S);
-      const bottom = Math.min(-r * Math.cos(tilt), band - (card / 2) * S, globeC - BELT_AY * S);
-      return { S, r, globeC, top, bottom };
-    };
-    const one = parts(1);
-    const p = parts(Math.min(1, (bandHeight * PHONE_FILL) / (one.top - one.bottom)));
-    // the composition's centre PHONE_CENTRE down the stage, kept inside it
-    const span = p.top - p.bottom;
-    const want = bandTop - PHONE_CENTRE * bandHeight;
-    const centre = Math.min(bandTop - span / 2, Math.max(bandBottom + span / 2, want));
-    const discY = (span <= bandHeight ? centre : bandMid) - (p.top + p.bottom) / 2;
-    return { phone, compact, k, cx: 0, cy: discY + p.globeC, S: p.S, card, disc: { x: 0, y: discY, r: p.r, tilt } };
+  if (vertical) {
+    const tilt = VERT_TILT;
+    const half = bandHeight / 2;
+    let cardW = Math.min(VERT_CARD_W * W, VERT_CARD_H * bandHeight);
+    let r = Math.min(VERT_DISC_W * W, VERT_DISC_H * bandHeight);
+    // a resting neighbour's extent along the band: smaller with depth,
+    // foreshortened as it turns to face out along the flattened sphere and
+    // tilted a little by the S-curve (its paper frame included)
+    const step = tileStep(RING_PHONE);
+    const fr = cardFrame(step);
+    const nAlong = (cardW / 2) * VERT_FRAME * depthScale(step) * (Math.abs(fr.right.x) + Math.abs(fr.up.x));
+    let S = Math.min((half * VERT_FILL) / BELT_AX, (half * VERT_INNER - nAlong) / beltPoint(step).x);
+    // across the band: the globe, the front card and the record inside the width
+    const across = Math.max(BELT_AY * S, cardW / 2, r);
+    const f = Math.min(1, ((W / 2) * VERT_ACROSS) / across);
+    S *= f;
+    cardW *= f;
+    r *= f;
+    return { phone, vertical, compact, k, cx: 0, cy: bandMid, S, card: cardW / S, disc: { x: 0, y: bandMid, r, tilt } };
   }
   const tilt = compact ? DISC_TILT_COMPACT : DISC_TILT;
   const card = CARD;
@@ -334,5 +385,5 @@ export function fitBelt(i: FitInput): Fit {
   const fill = compact ? GLOBE_FILL_COMPACT : GLOBE_FILL;
   const S = Math.min(((W / 2) * 0.96) / halfX, (bandHeight * fill) / (2 * BELT_AY));
   const cy = bandMid;
-  return { phone, compact, k, cx: 0, cy, S, card, disc: { x: 0, y: cy, r: (DISC_OF_GLOBE * GLOBE_H * S) / 2, tilt } };
+  return { phone, vertical, compact, k, cx: 0, cy, S, card, disc: { x: 0, y: cy, r: (DISC_OF_GLOBE * GLOBE_H * S) / 2, tilt } };
 }

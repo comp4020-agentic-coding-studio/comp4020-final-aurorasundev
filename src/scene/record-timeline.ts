@@ -70,7 +70,7 @@ export const TURN_AT = HERO_AT + HERO_SECONDS - 0.05;
 export const TURN_SECONDS = 1.3;
 // then slides out of the sleeve past its edge and back in front of it to its
 // resting place, on a soft ease (owner, 2026-10-20, revision two: the
-// out-and-back added 0.7 s; a phone keeps the record tucked)
+// out-and-back added 0.7 s; 2026-10-27: the stacked layout slides up too)
 export const SLIDE_AT = TURN_AT + TURN_SECONDS;
 export const SLIDE_SECONDS = 2.2;
 // linear: discSlide eases each leg itself (out, a rest at the sleeve's edge,
@@ -85,7 +85,6 @@ export const SPIN_TURNS = 0.5;
 // where the HTML reveal (title letters, then caption, report link, arrows)
 // begins: as the record settles
 export const LAND_AT = SLIDE_AT + SLIDE_SECONDS * 0.65;
-export const LAND_AT_PHONE = HERO_AT + HERO_SECONDS - 0.1;
 // the mineral surface comes up behind the sleeve as it walks forward
 export const BACKDROP_AT = HERO_AT;
 export const BACKDROP_SECONDS = HERO_SECONDS + 0.4;
@@ -139,11 +138,24 @@ export type Disc = { x: number; y: number; r: number };
 // screenLeft (optional): the viewport's edge on the side the record goes, so
 // at the turn it stays on screen (it may be up to CLEAR_SHRINK smaller there,
 // and grows to its rest size as it comes forward over the sleeve)
-export type SlideGeometry = { tucked: Disc; rest: Disc; sleeve: { x: number; y: number; half: number }; restInFront: boolean; screenEdge?: number };
+// axis (optional): the direction the record leaves the sleeve in. "x" (the
+// default) is the side-by-side layout; "y" the stacked one (owner,
+// 2026-10-27), where the record slides up out of the sleeve to rest above it
+// and screenEdge is the edge on that side in y.
+export type SlideGeometry = { tucked: Disc; rest: Disc; sleeve: { x: number; y: number; half: number }; restInFront: boolean; screenEdge?: number; axis?: "x" | "y" };
 export const CLEAR_SHRINK = 0.15;
 export const SCREEN_MARGIN = 0.02;
 export type SlidePose = Disc & { inFront: boolean; turn: number; settle: number };
+const swapXY = <T extends { x: number; y: number }>(p: T): T => ({ ...p, x: p.y, y: p.x });
 export function discSlide(slide: number, g: SlideGeometry): SlidePose {
+  if (g.axis === "y") {
+    // the same path with the two axes exchanged
+    const p = slideAlongX(slide, { ...g, axis: "x", tucked: swapXY(g.tucked), rest: swapXY(g.rest), sleeve: swapXY(g.sleeve) });
+    return swapXY(p);
+  }
+  return slideAlongX(slide, g);
+}
+function slideAlongX(slide: number, g: SlideGeometry): SlidePose {
   const t = clamp01(slide);
   if (!g.restInFront) {
     const k = inOut(t);
@@ -250,11 +262,13 @@ function settleSwap(tl: gsap.core.Timeline, swap: Swap, outAt: number, inAt: num
   if (swap.incoming.v > 0) tl.to(swap.incoming, { v: 0, duration: inSeconds, ease: "power2.out" }, inAt);
 }
 
-type Opts = { phone: boolean };
+// (the layout no longer changes the timelines: every layout's record slides
+// out of its sleeve; kept as an options bag for callers)
+type Opts = { phone?: boolean };
 
 // --- the scene's halves of the choreography -------------------------------
 
-export function openTimeline(c: Choreo, spin: SpinClock, o: Opts, swap: Swap = newSwap()): gsap.core.Timeline {
+export function openTimeline(c: Choreo, spin: SpinClock, _o: Opts, swap: Swap = newSwap()): gsap.core.Timeline {
   const tl = gsap.timeline({ defaults: { ease: "power2.inOut" } });
   // an interrupted close keeps its order, so no card jumps
   if (c.exit <= 0.001) c.order = 1;
@@ -268,17 +282,14 @@ export function openTimeline(c: Choreo, spin: SpinClock, o: Opts, swap: Swap = n
     .to(c, { tumble: 0, duration: TUCK_SECONDS, ease: "power2.inOut" }, "aside")
     .to(c, { backdrop: 1, duration: BACKDROP_SECONDS, ease: "power1.inOut" }, BACKDROP_AT);
   settleSwap(tl, swap, 0, HERO_AT, HERO_SECONDS);
-  if (o.phone) {
-    // the phone's opened record is the sleeve alone: the disc stays tucked
-    tl.addLabel("land", LAND_AT_PHONE);
-  } else {
-    // part-way out of the sleeve the record turns once, in plain sight;
-    // then it slides slowly out, lands, spins up gently and settles upright
-    tl.addLabel("turn", TURN_AT);
-    tl.to(spin, { angle: () => spin.angle - Math.PI * 2, boost: 0, duration: TURN_SECONDS, ease: "sine.inOut" }, "turn");
-    tl.to(c, { slide: 1, duration: SLIDE_SECONDS, ease: SLIDE_EASE }, SLIDE_AT).addLabel("land", LAND_AT);
-    tl.to(spin, { angle: () => landing(spin.angle, SPIN_TURNS), boost: 0, duration: SPIN_SECONDS, ease: "sine.inOut" }, SPIN_AT);
-  }
+  // part-way out of the sleeve the record turns once, in plain sight; then it
+  // slides slowly out, lands, spins up gently and settles upright. Every
+  // layout (2026-10-27: the stacked layout's record slides up out of the
+  // sleeve to rest above it, replacing the phone's tucked record)
+  tl.addLabel("turn", TURN_AT);
+  tl.to(spin, { angle: () => spin.angle - Math.PI * 2, boost: 0, duration: TURN_SECONDS, ease: "sine.inOut" }, "turn");
+  tl.to(c, { slide: 1, duration: SLIDE_SECONDS, ease: SLIDE_EASE }, SLIDE_AT).addLabel("land", LAND_AT);
+  tl.to(spin, { angle: () => landing(spin.angle, SPIN_TURNS), boost: 0, duration: SPIN_SECONDS, ease: "sine.inOut" }, SPIN_AT);
   return tl;
 }
 
@@ -311,16 +322,14 @@ export function closeTimeline(c: Choreo, swap: Swap = newSwap(), onHandBack?: ()
 // Stepping inside an open record (after retarget()): finish any open still
 // under way, swap the sleeves in the hero frame, and turn the record once to
 // its next upright while the belt carries the next card round behind.
-export function stepTimeline(c: Choreo, spin: SpinClock, o: Opts, swap: Swap = newSwap()): gsap.core.Timeline {
+export function stepTimeline(c: Choreo, spin: SpinClock, _o: Opts, swap: Swap = newSwap()): gsap.core.Timeline {
   const tl = gsap.timeline({ defaults: { ease: "power2.inOut", duration: STEP_SECONDS } });
   // a finished exit has no stagger left to keep; a partial one keeps its order
   if (c.exit >= 0.999 || c.exit <= 0.001) c.order = 1;
   tl.to(c, { exit: 1, duration: EXIT_SPAN * (1 - c.exit) + 0.001, ease: "none" }, 0);
   tl.to(c, { hero: 1, tuck: 1, idle: 0, tumble: 0, backdrop: 1 }, 0);
   settleSwap(tl, swap, 0, STEP_IN_AT, STEP_IN_SECONDS);
-  if (!o.phone) {
-    tl.to(c, { slide: 1 }, 0);
-    tl.to(spin, { angle: () => landing(spin.angle, 1), boost: 0, duration: STEP_SPIN_SECONDS, ease: "power2.inOut" }, 0);
-  }
+  tl.to(c, { slide: 1 }, 0);
+  tl.to(spin, { angle: () => landing(spin.angle, 1), boost: 0, duration: STEP_SPIN_SECONDS, ease: "power2.inOut" }, 0);
   return tl;
 }
