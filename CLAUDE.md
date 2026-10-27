@@ -150,6 +150,16 @@ regenerating it on application startup.
 - Small commits that grow with the work; PROCESS.md cites them.
 - Don't write the user's reflections or claim experiences they didn't report.
 - Never move a `crit-<n>` tag after its cutoff.
+- Leave the owner's machine as you found it. When a task or subagent
+  finishes (or is stopped), shut down every background process it started
+  that is no longer needed: local servers, `--watch` runners, headless
+  browsers (`pkill -f ms-playwright/chromium`), Docker Desktop and
+  containers, and file watchers. Keep only what the owner is actively
+  using, such as a preview they asked for, and say what is still running.
+- Headless Chromium renders WebGL in software and can pin every CPU core:
+  keep browser runs short, few and small, close each browser in the same
+  script, and prefer unit tests over rendered checks. Run one subagent at a
+  time unless the owner asks for parallel work.
 
 ## Moderation release — 2026-10-10
 
