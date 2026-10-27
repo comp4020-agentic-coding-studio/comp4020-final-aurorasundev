@@ -69,10 +69,11 @@ no record appears, and the original paper is still gone. Records have no
 link back to their paper. Keep papers never become records. Records can be
 reported; reports go to an operator and do not hide a record by themselves.
 
-A planned music extension will use the same AI directions to shape a short
+A music extension uses the same AI directions to shape a short
 instrumental, performed in your browser only when you choose to listen.
-It will not read the original note again or start sound automatically.
-Music is not available in the current implementation.
+It does not read the original note again or start sound automatically.
+It is built but switched off on the live site until it has been listened
+to; until then every record says it has no sound.
 
 ## Who is who
 
