@@ -16,7 +16,7 @@ export { parseMusicScore } from "../../shared/music-score.ts";
 export const SAMPLE_RATE = 44_100;
 export const PEAK_LIMIT = 0.7;
 const FADE_FROM_S = 22;
-const VOICE_GAIN = 0.22;
+const VOICE_GAIN = 0.4;
 const IMPULSE_S = 2.4;
 
 export type Partial = { ratio: number; gain: number; type: OscillatorType; detuneCents?: number };
