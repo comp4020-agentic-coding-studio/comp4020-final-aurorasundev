@@ -374,6 +374,32 @@ describe("the entry page", () => {
     expect(stage()).toBe("entry");
   });
 
+  it("a resize while a record is open (DevTools docking) leaves the scene fully entered after the close", async () => {
+    await mount();
+    await act(async () => control.scene.cb!.onReady?.());
+    await key("ArrowDown");
+    await play(2.4);
+    expect(stage()).toBe("exhibition");
+    expect(control.scene.entry).toBe(1);
+    await act(async () => host.querySelector<HTMLButtonElement>(".orbit-open")!.click());
+    // the viewport changes under the open record: the entry's flight is re-measured
+    await act(async () => {
+      window.dispatchEvent(new Event("resize"));
+      await new Promise((r) => setTimeout(r, 5));
+    });
+    // the rebuilt transition must not tell the scene its entrance is back at 0
+    expect(control.scene.entry).toBe(1);
+    await act(async () => host.querySelector<HTMLButtonElement>(".record-dialog .record-back")!.click());
+    await play(2.4);
+    expect(stage()).toBe("exhibition");
+    expect(control.scene.entry).toBe(1);
+    // and the way back to the entry still plays the rebuilt timeline
+    await key("Escape");
+    await play(2.4);
+    expect(stage()).toBe("entry");
+    expect(control.scene.entry).toBe(0);
+  });
+
   it("an exhibition not ready holds the transition's first beat, then arrives once ready", async () => {
     await mount();
     await key("ArrowDown");

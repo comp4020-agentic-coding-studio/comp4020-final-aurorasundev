@@ -1,7 +1,7 @@
 import { gsap } from "gsap";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { MIST_BEHIND, MIST_ENTRY, type Mist } from "../scene/mist.ts";
-import { entryReveal, entryTransition } from "./entry-motion.ts";
+import { entryReveal, entryTransition, syncScene } from "./entry-motion.ts";
 import { isAdvanceKey, progress, swipeDirection, wheelDirection, type Gate, type ProgressEvent, type Stage } from "./gallery-progress.ts";
 
 // The Gallery's entry and its virtual progress p (design 2026-10-19 §1–§3),
@@ -238,6 +238,10 @@ export function useEntryProgress(o: Options) {
         tl.current = build();
         tl.current?.progress(at, true);
         if (at === 1) tl.current?.pause();
+        // The silent seek leaves the scene hook's last report at 0 (the new
+        // timeline's first render), not at where it now stands, and the scene
+        // would draw nothing (the DevTools bug, design §7e): push the real value.
+        syncScene(tl.current, opts.current.sceneEntry);
       });
     };
 

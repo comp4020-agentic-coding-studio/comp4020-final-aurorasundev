@@ -34,7 +34,15 @@ import {
   shownAt,
   swipeTarget,
   tileStep,
+  toWorld,
+  turnDir,
+  beltVertical,
+  horizontalFit,
+  PHONE_MAX_W,
+  VERTICAL_SHRINK,
+  VERT_CARD_W,
 } from "../src/scene/belt-layout.ts";
+import { RIM_BAND } from "../src/scene/particles-plan.ts";
 
 // The record belt's geometry without WebGL (design 2026-10-19 §4, §7): the
 // latitude curve, the globe's snapped counter-rotation, front/back halves,
@@ -261,45 +269,87 @@ describe("a phone swipe", () => {
 });
 
 describe("fitting the viewport", () => {
-  it("phone: the band spans the width, the front card about 0.44 of it, the record large and in the stage", () => {
-    const v = { w: 390, h: 844, bandTop: 88, bandH: 560 };
-    const f = fitBelt(v);
-    expect(f.phone).toBe(true);
-    const W = 390 * f.k;
-    // the belt's silhouette reaches the screen's edges
-    expect(Math.abs(beltPoint(Math.PI / 2).x * f.S - W / 2)).toBeLessThan(W * 0.01);
-    const cardW = (f.card * f.S) / W;
-    expect(cardW).toBeGreaterThanOrEqual(0.42);
-    expect(cardW).toBeLessThanOrEqual(0.48);
-    // the record still shows round the front card that covers its centre
-    expect(2 * f.disc.r).toBeGreaterThan(1.1 * f.card * f.S);
-    // the record and the front card stay inside the stage (above the title)
-    const css = (y: number) => v.h / 2 - y / f.k;
-    expect(css(f.disc.y + f.disc.r * Math.cos(f.disc.tilt))).toBeGreaterThanOrEqual(v.bandTop - 1);
-    const frontY = f.cy + beltPoint(0).y * f.S;
-    expect(css(frontY - (f.card / 2) * f.S)).toBeLessThanOrEqual(v.bandTop + v.bandH + 1);
-    // the front card sits over the record's centre
-    expect(Math.abs(frontY - f.disc.y)).toBeLessThan(f.disc.r * 0.05);
+  // The vertical orbit (design §7e, 2026-10-27) replaces the horizontal phone
+  // composition. The trigger is a pure rule of the viewport.
+  it("turns vertical when the horizontal belt does not fit the width", () => {
+    expect(beltVertical(390, 844)).toBe(true);
+    expect(beltVertical(360, 740)).toBe(true);
+    // a portrait tablet or slim window: the belt would shrink below 0.6
+    expect(beltVertical(700, 1000)).toBe(true);
+    expect(beltVertical(768, 1024)).toBe(true);
+    // landscape phone, laptops, desktops, and squares that only shrink a little
+    expect(beltVertical(844, 390)).toBe(false);
+    expect(beltVertical(1366, 768)).toBe(false);
+    expect(beltVertical(1920, 1080)).toBe(false);
+    expect(beltVertical(1024, 768)).toBe(false);
+    expect(beltVertical(1000, 1000)).toBe(false);
+    // every phone width is vertical, whatever its height
+    expect(beltVertical(PHONE_MAX_W, 400)).toBe(true);
+    expect(horizontalFit(700, 1000)).toBeLessThan(VERTICAL_SHRINK);
+    expect(horizontalFit(1000, 1000)).toBeGreaterThan(VERTICAL_SHRINK);
   });
 
-  it("phone: the composition sits a little above the stage's centre, inside it", () => {
-    for (const v of [
-      { w: 390, h: 844, bandTop: 88, bandH: 560 },
-      { w: 390, h: 480, bandTop: 88, bandH: 220 },
-      { w: 360, h: 740, bandTop: 88, bandH: 470 },
-    ]) {
-      const f = fitBelt(v);
-      const css = (y: number) => v.h / 2 - y / f.k;
-      const top = css(f.disc.y + f.disc.r * Math.cos(f.disc.tilt));
-      const frontY = f.cy + beltPoint(0).y * f.S;
-      // the lower of the front card's bottom and the globe's bottom
-      const bottom = Math.max(css(frontY - (f.card / 2) * f.S), css(f.cy - BELT_AY * f.S));
-      expect(top).toBeGreaterThanOrEqual(v.bandTop - 1);
-      expect(bottom).toBeLessThanOrEqual(v.bandTop + v.bandH + 1);
-      // above the stage's centre where there is room to spare
-      if (v.bandH > 400) expect((top + bottom) / 2).toBeLessThan(v.bandTop + v.bandH / 2 - 20);
+  it("fitBelt follows the same rule, the narrow composition always with it", () => {
+    for (const [w, h] of [[390, 844], [700, 1000], [844, 390], [1366, 768]] as const) {
+      const f = fitBelt({ w, h, bandTop: 100, bandH: h * 0.7 });
+      expect(f.vertical).toBe(beltVertical(w, h));
+      expect(f.phone).toBe(f.vertical);
+      if (f.vertical) expect(f.compact).toBe(false);
     }
   });
+
+  it("toWorld turns belt space a quarter turn clockwise: azimuth 0 on the record, the next card below it", () => {
+    const f = fitBelt({ w: 390, h: 844, bandTop: 88, bandH: 560 });
+    const front = toWorld(f, beltPoint(0));
+    expect(front.x).toBeCloseTo(f.cx, 9);
+    expect(Math.abs(front.y - f.disc.y)).toBeLessThan(f.disc.r * 0.05);
+    const next = toWorld(f, beltPoint(tileStep(RING_PHONE)));
+    const prev = toWorld(f, beltPoint(-tileStep(RING_PHONE)));
+    expect(next.y).toBeLessThan(front.y);
+    expect(prev.y).toBeGreaterThan(front.y);
+    // the S-curve's latitude now shows across the band, mirrored left/right
+    expect(Math.sign(next.x - f.cx)).toBe(-Math.sign(prev.x - f.cx));
+    // horizontal is unchanged
+    const d = fitBelt({ w: 1366, h: 768, bandTop: 104, bandH: 540 });
+    const p = beltPoint(0.7);
+    expect(toWorld(d, p)).toEqual({ x: d.cx + p.x * d.S, y: d.cy + p.y * d.S });
+    expect(turnDir(true, { x: 1, y: 0 })).toEqual({ x: 0, y: -1 });
+  });
+
+  for (const v of [
+    { w: 390, h: 844, bandTop: 88, bandH: 560 },
+    { w: 360, h: 740, bandTop: 88, bandH: 470 },
+    { w: 390, h: 480, bandTop: 88, bandH: 220 },
+    { w: 700, h: 1000, bandTop: 104, bandH: 700 },
+  ]) {
+    it(`vertical ${v.w}x${v.h}: the band runs along the stage, the globe, record and front card inside the width, neighbours inside the band`, () => {
+      const f = fitBelt(v);
+      expect(f.vertical).toBe(true);
+      const W = v.w * f.k;
+      const css = (y: number) => v.h / 2 - y / f.k;
+      const half = (v.bandH * f.k) / 2;
+      // the globe's silhouettes (dissolve zones) sit inside the band, top and bottom
+      const along = beltPoint(Math.PI / 2).x * f.S;
+      expect(along).toBeLessThanOrEqual(half + 1e-9);
+      expect(css(f.cy + along)).toBeGreaterThanOrEqual(v.bandTop - 1);
+      expect(css(f.cy - along)).toBeLessThanOrEqual(v.bandTop + v.bandH + 1);
+      // across: the globe, the front card and the record inside the width
+      expect(BELT_AY * f.S).toBeLessThanOrEqual(W / 2);
+      expect((f.card * f.S) / 2).toBeLessThanOrEqual(W / 2);
+      expect(f.disc.r).toBeLessThanOrEqual(W / 2);
+      // the front card is at most 0.44 of the width, and the record shows round it
+      expect((f.card * f.S) / W).toBeLessThanOrEqual(VERT_CARD_W + 1e-9);
+      expect(2 * f.disc.r).toBeGreaterThan(1.1 * f.card * f.S);
+      // the resting neighbours' centres stay inside the band
+      const n = beltPoint(tileStep(RING_PHONE)).x * f.S;
+      expect(n).toBeLessThan(half * 0.94);
+      // and outside the record's rim pulse (u in record radii along the band)
+      expect(n / (f.disc.r * Math.cos(f.disc.tilt))).toBeGreaterThan(1 + RIM_BAND);
+      // the front card is centred on the record
+      expect(f.disc.x).toBe(f.cx);
+      expect(f.disc.y).toBe(f.cy);
+    });
+  }
 
   it("desktop and short landscape fit inside the band", () => {
     for (const v of [

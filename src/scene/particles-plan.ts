@@ -204,9 +204,11 @@ export const RIM_BAND = 0.4;
 // a card's centre from the record's centre, in the record's on-screen
 // horizontal radii (the record turned DISC_YAW on a desktop is a little
 // narrower; its slow tumble is ignored)
-export function rimU(theta: number, fit: Pick<Fit, "phone" | "cx" | "S" | "disc">): number {
+// (the vertical orbit measures in belt space too, along the band: there the
+// record's radius along the band is foreshortened by its tilt back)
+export function rimU(theta: number, fit: Pick<Fit, "phone" | "cx" | "S" | "disc"> & { vertical?: boolean }): number {
   const x = fit.cx + beltPoint(theta).x * fit.S;
-  const half = fit.disc.r * (fit.phone ? 1 : Math.cos(DISC_YAW));
+  const half = fit.disc.r * (fit.vertical ? Math.cos(fit.disc.tilt) : fit.phone ? 1 : Math.cos(DISC_YAW));
   return Math.abs(x - fit.disc.x) / Math.max(half, 1e-6);
 }
 // the pulse at u (0 outside the band, RIM_PEAK on the rim, a smooth bump),

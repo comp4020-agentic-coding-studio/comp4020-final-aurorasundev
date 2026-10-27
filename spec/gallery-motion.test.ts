@@ -121,11 +121,11 @@ describe("open and close choreography", () => {
     tl.kill();
   });
 
-  it("on a phone the record stays tucked into the sleeve", () => {
+  it("on a phone the record slides out of the sleeve too (the stacked layout, 2026-10-27)", () => {
     const c = newChoreo();
     const tl = openTimeline(c, { angle: 0, boost: 0 }, { phone: true });
     tl.progress(1);
-    expect(c.slide).toBe(0);
+    expect(c.slide).toBe(1);
     expect(c.tuck).toBe(1);
     tl.kill();
   });

@@ -197,15 +197,17 @@ describe("the open's exit order", () => {
     step.kill();
   });
 
-  it("the phone's open is calmer as well, its record staying tucked", () => {
+  it("the stacked (phone) open is the same calm open: the record turns in the sleeve and slides out (2026-10-27)", () => {
     const c = newChoreo();
-    const tl = openTimeline(c, { angle: 0, boost: 0 }, { phone: true });
-    expect(tl.duration()).toBeGreaterThanOrEqual(1.5);
-    tl.progress(1);
-    expect(c).toMatchObject({ tuck: 1, slide: 0, backdrop: 1, tumble: 0 });
+    const phone = openTimeline(c, { angle: 0, boost: 0 }, { phone: true });
+    const desk = openTimeline(newChoreo(), { angle: 0, boost: 0 }, { phone: false });
+    expect(phone.duration()).toBeCloseTo(desk.duration(), 6);
+    phone.progress(1);
+    expect(c).toMatchObject({ tuck: 1, slide: 1, backdrop: 1, tumble: 0 });
     const close = closeTimeline(c);
-    expect(close.duration()).toBeLessThanOrEqual(tl.duration() * 1.3);
-    tl.kill();
+    expect(close.duration()).toBeLessThanOrEqual(phone.duration() * 0.7);
+    phone.kill();
+    desk.kill();
     close.kill();
   });
 });
@@ -267,6 +269,60 @@ describe("the record's slide out of the sleeve (revision two)", () => {
       expect(overlapsSleeve(turn, l.sleeve)).toBe(false);
       expect(turn.x - turn.r).toBeGreaterThan(l.edge - 0.15 * turn.r);
       expect(turn.r).toBeGreaterThanOrEqual(l.rest.r * 0.85 - 1e-9);
+    });
+  }
+
+  // The stacked layout (design §7e): gallery.css's .is-vertical frames. The
+  // record (0.78 of the art) rests above the sleeve, overlapping the sleeve's
+  // top edge by 0.22 of the art, in front; the sleeve below it.
+  const stacked = (w: number, h: number, gutter: number, top: number) => {
+    const k = 6 / h;
+    const art = Math.min(w - 2 * gutter, 440, Math.max((h - top - 150) / 1.56, 200));
+    const disc = art * 0.78;
+    const discTop = top + 15;
+    const artTop = discTop + disc - art * 0.22;
+    return {
+      sleeve: { x: 0, y: (h / 2 - (artTop + art / 2)) * k, half: (art * k * 1.076) / 2 },
+      rest: { x: 0, y: (h / 2 - (discTop + disc / 2)) * k, r: (disc / 2) * k },
+      size: art * k,
+      edge: 3,
+    };
+  };
+  for (const [name, l] of Object.entries({ "390x844": stacked(390, 844, 20, 128), "360x740": stacked(360, 740, 20, 128), "700x1000": stacked(700, 1000, 48, 172) })) {
+    it(`stacked ${name}: the record slides UP behind the sleeve, steps in front only once clear of its top edge, and lands on the HTML disc above it`, () => {
+      // gallery-belt.ts: half out of the sleeve upward, 0.46 of its size
+      const tucked = { x: 0, y: l.sleeve.y + 0.44 * l.size, r: l.size * 0.46 };
+      const g = { tucked, rest: l.rest, sleeve: l.sleeve, restInFront: true, screenEdge: l.edge, axis: "y" as const };
+      let cleared = false;
+      let prev = discSlide(0, g);
+      expect(prev.inFront).toBe(false);
+      for (let t = 0; t <= 1.0000001; t += 1 / 600) {
+        const p = discSlide(t, g);
+        // it travels up (or holds), never sideways
+        expect(p.x).toBeCloseTo(0, 9);
+        if (p.inFront !== prev.inFront) {
+          expect(overlapsSleeve(p, l.sleeve)).toBe(false);
+          expect(overlapsSleeve(prev, l.sleeve)).toBe(false);
+          cleared = true;
+        }
+        if (!cleared) expect(p.inFront).toBe(false);
+        expect(Math.abs(p.y - prev.y)).toBeLessThan(0.05);
+        expect(Math.abs(p.r - prev.r)).toBeLessThan(0.05);
+        prev = p;
+      }
+      expect(cleared).toBe(true);
+      const turn = discSlide(SLIDE_CLEAR, g);
+      // at the turn it is above the sleeve, clear of its top edge, and below
+      // the top of the screen by no more than a sliver
+      expect(turn.y).toBeGreaterThan(l.sleeve.y + l.sleeve.half);
+      expect(turn.y + turn.r).toBeLessThan(l.edge + 0.15 * turn.r);
+      const end = discSlide(1, g);
+      expect(end).toMatchObject({ inFront: true });
+      expect(end.y).toBeCloseTo(l.rest.y, 9);
+      expect(end.r).toBeCloseTo(l.rest.r, 9);
+      // resting above the sleeve, over its top edge
+      expect(end.y).toBeGreaterThan(l.sleeve.y);
+      expect(overlapsSleeve(end, l.sleeve)).toBe(true);
     });
   }
 

@@ -8,6 +8,7 @@ import { createGate, takesInput } from "./lib/gallery-progress.ts";
 import { recordReveal } from "./lib/record-reveal.ts";
 import { useEntryProgress, type EntryRefs } from "./lib/useEntryProgress.ts";
 import { useGallery } from "./lib/useGallery.ts";
+import { beltVertical } from "./scene/belt-layout.ts";
 import { canDrawOrbit } from "./scene/gallery-belt.ts";
 import type { Mist } from "./scene/mist.ts";
 import "./styles/gallery.css";
@@ -19,6 +20,24 @@ import "./styles/gallery.css";
 
 function prefersStill(): boolean {
   return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+// The vertical orbit and the stacked opened record (design §7e, 2026-10-27):
+// one rule from the viewport, the same one the scene's fit uses, so the HTML
+// frames and the scene always agree on the orientation.
+const viewportVertical = () => typeof window !== "undefined" && beltVertical(window.innerWidth, window.innerHeight);
+function useVertical(): boolean {
+  const [v, setV] = useState(viewportVertical);
+  useEffect(() => {
+    const on = () => setV(viewportVertical());
+    window.addEventListener("resize", on);
+    window.addEventListener("orientationchange", on);
+    return () => {
+      window.removeEventListener("resize", on);
+      window.removeEventListener("orientationchange", on);
+    };
+  }, []);
+  return v;
 }
 
 const TITLE = "The Throwaway Gallery";
@@ -54,6 +73,7 @@ export function GalleryApp() {
 
   const focused = useMemo(() => g.items.find((a) => a.id === focusedId) ?? g.items[0] ?? null, [g.items, focusedId]);
   const isOpen = g.selected !== null;
+  const vertical = useVertical();
 
   const showOrbit = orbit && g.items.length > 0;
 
@@ -162,14 +182,16 @@ export function GalleryApp() {
       if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      if (e.key === "ArrowLeft") orbitRef.current?.step(-1);
-      else if (e.key === "ArrowRight") orbitRef.current?.step(1);
+      // the vertical orbit also turns with Up and Down (the next record comes
+      // up from below)
+      if (e.key === "ArrowLeft" || (vertical && e.key === "ArrowUp")) orbitRef.current?.step(-1);
+      else if (e.key === "ArrowRight" || (vertical && e.key === "ArrowDown")) orbitRef.current?.step(1);
       else return;
       e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [orbit, isOpen, live]);
+  }, [orbit, isOpen, live, vertical]);
 
   // the window never retires the record in front
   const { hasMore, loadMore, loadingMore, focus: setWindowFocus } = g;
@@ -200,7 +222,7 @@ export function GalleryApp() {
     <div
       ref={page}
       data-stage={stage}
-      className={`records-page${showOrbit ? " has-orbit" : ""}${entry && orbit ? " has-entry" : " is-plain"}${isOpen ? " is-open" : ""}${returning && showOrbit && !isOpen ? " is-returning" : ""}`}
+      className={`records-page${showOrbit ? " has-orbit" : ""}${entry && orbit ? " has-entry" : " is-plain"}${vertical ? " is-vertical" : ""}${isOpen ? " is-open" : ""}${returning && showOrbit && !isOpen ? " is-returning" : ""}`}
     >
       <div className="records-surface" aria-hidden="true" />
       {/* behind the scene, above the stage plate: the opened record's ground */}
@@ -299,8 +321,8 @@ export function GalleryApp() {
                 <p className="orbit-sub">The original note is gone.</p>
               </div>
               <p className="orbit-hint">
-                <span className="wide-only">{many ? "Scroll to turn · Click to open" : "Click to open"}</span>
-                <span className="narrow-only">{many ? "Swipe to turn" : ""}</span>
+                <span className="wide-only">{many ? (vertical ? "Scroll to turn" : "Scroll to turn · Click to open") : "Click to open"}</span>
+                <span className="narrow-only">{many ? (vertical ? "Swipe up or down" : "Swipe to turn") : ""}</span>
               </p>
               <div className="orbit-controls">
                 {many && (
@@ -308,6 +330,8 @@ export function GalleryApp() {
                     <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
                       <path className="chevron" d="M15 4l-8 8 8 8" />
                       <path className="arrow" d="M20 12H4M10 6l-6 6 6 6" />
+                      {/* the vertical orbit: the previous record comes back down from above */}
+                      <path className="arrow-v" d="M12 20V4M6 10l6-6 6 6" />
                     </svg>
                   </button>
                 )}
@@ -319,6 +343,7 @@ export function GalleryApp() {
                     <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
                       <path className="chevron" d="M9 4l8 8-8 8" />
                       <path className="arrow" d="M4 12h16M14 6l6 6-6 6" />
+                      <path className="arrow-v" d="M12 4v16M6 14l6 6 6-6" />
                     </svg>
                   </button>
                 )}
