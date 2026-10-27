@@ -133,8 +133,7 @@ export function RecordView({ artifact, report, frozenReason, arriving, canStep, 
               <p className="record-lede">The original note is gone.</p>
               <p className="record-credit">AI-generated image</p>
 
-              {notHeard && <p className="record-tag record-tag-player">Not heard yet</p>}
-              <RecordPlayer sound={sound} />
+              <RecordPlayer sound={sound} notHeard={notHeard} />
 
               {report.kind === "received" ? (
                 <p className="record-note" role="status">

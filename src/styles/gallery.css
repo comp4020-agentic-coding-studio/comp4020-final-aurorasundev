@@ -153,6 +153,7 @@
 }
 
 .orbit-caption {
+  position: relative;
   min-width: 0;
 }
 
@@ -182,11 +183,16 @@
 }
 
 /* The paper tag (owner, 2026-10-27): a small pale strip, like the sleeve's
-   paper, above a record's name. HTML only; never on the cards themselves. */
+   paper, above a record's name. HTML only; never on the cards themselves.
+   It never takes space (owner, 2026-10-28): wherever it sits it is laid
+   over the layout, so its coming and going moves nothing, above all not
+   the orbit, which fits itself to the band the caption leaves. */
 .record-tag {
-  display: inline-block;
-  align-self: flex-start;
-  margin: 0 0 10px 2px;
+  position: absolute;
+  z-index: 1;
+  display: block;
+  width: max-content;
+  margin: 0;
   padding: 4px 9px;
   border: 1px solid rgb(41 41 39 / 0.12);
   border-radius: 2px;
@@ -200,13 +206,31 @@
   white-space: nowrap;
 }
 
-/* above the Listen button, in the player's own space */
-.record-tag-player {
-  margin: 44px 0 0;
+/* above the name, in the air over the caption */
+.orbit-caption .record-tag {
+  bottom: 100%;
+  left: 2px;
+  margin-bottom: 10px;
 }
 
-.record-tag-player + .record-player {
-  margin-top: 14px;
+/* centred over a centred caption: by margins, since GSAP owns transform */
+.is-vertical .orbit-caption .record-tag {
+  right: 0;
+  left: 0;
+  margin-inline: auto;
+}
+
+/* pinned on the player's hairline, at its right end */
+.record-player .record-tag {
+  top: 0;
+  right: 0;
+  translate: 0 -50%;
+}
+
+/* on the sleeve's top-left corner in the grid */
+.records-tile .record-tag {
+  top: 10px;
+  left: 10px;
 }
 
 .orbit-hint {
@@ -313,6 +337,7 @@
 }
 
 .records-tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -562,6 +587,7 @@
 /* The player slot: a real control lives here once a record has sound.
    Disabled and silent until then, with no waveform or time. */
 .record-player {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 20px;
@@ -820,16 +846,13 @@
   }
 
   .record-tag {
-    margin: 0 0 6px;
     font-size: 11px;
   }
 
-  .record-tag-player {
-    margin-top: 18px;
-  }
-
-  .record-tag-player + .record-player {
-    margin-top: 10px;
+  .orbit-caption .record-tag {
+    right: 0;
+    left: 0;
+    margin: 0 auto 6px;
   }
 
   .orbit-controls {

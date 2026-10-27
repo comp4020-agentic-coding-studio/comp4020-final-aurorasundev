@@ -42,7 +42,8 @@ function PauseIcon() {
   );
 }
 
-export function RecordPlayer({ sound }: { sound?: GallerySound }) {
+// notHeard: this browser has not played it yet; a paper tag on the hairline
+export function RecordPlayer({ sound, notHeard = false }: { sound?: GallerySound; notHeard?: boolean }) {
   const state: SoundState = sound?.state ?? { kind: "none" };
   const time = useRef<HTMLSpanElement>(null);
   const kind = state.kind;
@@ -71,6 +72,7 @@ export function RecordPlayer({ sound }: { sound?: GallerySound }) {
 
   return (
     <div className="record-player" role="group" aria-label="Sound" data-state={kind}>
+      {notHeard && <p className="record-tag">Not heard yet</p>}
       <button
         type="button"
         className="player-button"
