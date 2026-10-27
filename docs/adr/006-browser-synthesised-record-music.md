@@ -1,6 +1,9 @@
 # 006 — AI-directed scores, performed locally with Web Audio
 
-Date: 2026-10-19. Status: **selected design; not implemented**. Extends
+Date: 2026-10-19. Status: **implemented 2026-10-27, flag off**
+(`GALLERY_MUSIC_ENABLED` unset in production; enabling it is the owner's
+decision, after real-browser listening that has not yet been done).
+Extends
 [ADR 005](005-release-keepsakes.md) without changing its source deletion,
 burn permissions, extraction deadline or image publication policy.
 
@@ -57,4 +60,23 @@ historical backfill is included.
 The complete contract, synthesis limits, UI states, implementation boundaries
 and acceptance checks are in the
 [music design](../../design/gallery-records-2026-10-18/music-design.md).
-This record documents a decision, not completion or release evidence.
+
+## Implementation (2026-10-27)
+
+- `shared/music-score.ts`: `MusicScoreV1`, the strict validator and the
+  frozen `throwaway-score-v1` composer (Mulberry32), shared by server and
+  browser.
+- Migration 10: nullable `artifacts.music_score`; no backfill.
+- `publishArtifact` composes and saves the score in its own transaction when
+  the flag is on; `GET /api/gallery/:id/score` is the gated read;
+  `/api/gallery/config` adds `music_enabled`.
+- `src/lib/gallery-audio.ts` (one player), `src/lib/gallery-synth.ts`
+  (`throwaway-synth-v1`, lazy-loaded), `src/lib/useGalleryAudio.ts`,
+  `src/components/RecordPlayer.tsx`.
+- Specs: `music-score`, `music-publication` (including a schema-9 fixture),
+  `gallery-synth`, `gallery-sound-ui` (Web Audio mocked).
+
+Not verified: real-browser rendering and listening, iOS Safari's audio
+unlock, first-render latency and memory on a real phone, and the Release
+disclosure copy (unchanged until the owner enables music). Operating notes
+are in [the runbook](../artifacts-runbook.md).

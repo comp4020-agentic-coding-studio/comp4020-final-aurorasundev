@@ -21,5 +21,5 @@
     "allowJs": true,
     "checkJs": false
   },
-  "include": ["*.ts", "spec", "scripts", "server", "src"]
+  "include": ["*.ts", "spec", "scripts", "server", "shared", "src"]
 }

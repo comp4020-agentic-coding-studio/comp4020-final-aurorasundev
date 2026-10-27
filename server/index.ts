@@ -35,9 +35,15 @@ const worker = createReviewWorker(db, provider, provider?.name === "fixture" ? {
 // apply. The fixture provider is refused on Fly, as moderation's is.
 const artifactDir = process.env.ARTIFACT_DIR ?? resolve(dirname(dbPath), "artifacts");
 const artifactProvider = artifactProviderFromEnv();
+// Record music (ADR 006): off unless GALLERY_MUSIC_ENABLED=1, independent of
+// ARTIFACTS_ENABLED. On, a fresh publication also saves a locally composed
+// score and published scores are served; off, none are made or served and
+// stored ones are kept. No provider, key or request of its own.
+const musicEnabled = process.env.GALLERY_MUSIC_ENABLED === "1";
 const artifactWorker = createArtifactWorker(db, artifactProvider, {
   artifactDir,
   enabled: process.env.ARTIFACTS_ENABLED === "1",
+  musicEnabled,
   onChange: broadcastGallery,
   // the burn's fire may end: the paper's id only, never its record
   onSettled: (paperId) => broadcast("paper:extraction_settled", { id: paperId }),
@@ -62,7 +68,7 @@ app.use(
   "/api",
   papersRouter(db, (payload) => check(provider, payload), artifactWorker.enabled ? (ignition) => void artifactWorker.extract(ignition) : null),
 );
-app.use("/api", galleryRouter(db, artifactDir, () => artifactWorker.enabled, () => void artifactWorker.wake()));
+app.use("/api", galleryRouter(db, artifactDir, () => artifactWorker.enabled, () => void artifactWorker.wake(), () => musicEnabled));
 app.use("/api", reportsRouter(db, () => void worker.wake()));
 app.use("/api", eventsRouter(db));
 app.use("/api", identityRouter(db));

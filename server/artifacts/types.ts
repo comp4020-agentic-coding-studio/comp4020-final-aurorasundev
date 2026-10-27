@@ -2,6 +2,8 @@
 // brief derived from its own burned note, never the note's words or drawing;
 // the public object is an allowlisted view of the generated image.
 
+import type { PublicMusic } from "../../shared/music-score.ts";
+
 export const METAPHORS = ["thread", "vessel", "threshold", "path", "seed", "stone"] as const;
 export const RELATIONS = ["separated", "connected", "under_pressure", "opening", "receding"] as const;
 export const MOTIONS = ["still", "unfolding", "drifting", "settling"] as const;
@@ -48,7 +50,8 @@ export const JOB_STATES = [
 ] as const;
 export type JobState = (typeof JOB_STATES)[number];
 
-// image only for now; `audio` arrives with the music extension
+// `music` is absent for an image-only record (published before scores, or
+// whose score could not be made); never a score, seed or brief
 export type PublicArtifact = {
   id: string;
   version: number;
@@ -57,6 +60,7 @@ export type PublicArtifact = {
   height: 1024;
   title: string;
   alt: string;
+  music?: PublicMusic;
 };
 
 export type GalleryPage = {

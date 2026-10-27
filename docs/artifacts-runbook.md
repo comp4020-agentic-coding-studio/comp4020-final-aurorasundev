@@ -14,9 +14,10 @@ Decisions and costs are in [ADR 005](adr/005-release-keepsakes.md).
 | `ARTIFACT_BRIEF_MODEL` | `gpt-4.1-mini-2025-04-14` | Responses model for the creative brief and the visual-policy check |
 | `ARTIFACT_DIR` | `artifacts/` beside the database (`/data/artifacts` on Fly) | private image files; never served statically |
 
-`GET /api/gallery/config` answers `{ generation_enabled }`: true only when
-enabled **and** a provider is configured. It reports processing, not
-eligibility.
+`GET /api/gallery/config` answers `{ generation_enabled, music_enabled }`:
+`generation_enabled` is true only when enabled **and** a provider is
+configured. It reports processing, not eligibility. `music_enabled` is
+below (record music).
 
 ## What the worker does
 
@@ -124,44 +125,76 @@ stop and new burns read nothing, everything else continues, and jobs that
 already have a brief wait. Hiding objects works
 while paused.
 
-## Planned Web Audio music extension — not implemented
+## Record music (Web Audio) — implemented, off by default
 
-The selected [music design](../design/gallery-records-2026-10-18/music-design.md)
-and [ADR 006](adr/006-browser-synthesised-record-music.md) replace the old
-separate music-service/MP3 proposal. Do not configure a music-service key,
-audio endpoint or music quota for this design.
+The [music design](../design/gallery-records-2026-10-18/music-design.md) and
+[ADR 006](adr/006-browser-synthesised-record-music.md) are implemented behind
+`GALLERY_MUSIC_ENABLED`, which is **off** unless set to `1`. There is no
+music-service key, audio endpoint, audio file, music quota or extra model
+request: the score is composed locally on the server, and the sound is
+synthesized in the visitor's browser only after they press Play.
 
-The future implementation reuses the existing `CreativeBriefV2` from the
-ignition request. A bounded local composer saves one score and fixed seed
-atomically with accepted-image publication; browser Web Audio renders it
-only after a visitor clicks Play. Playback/Resume/Replay make no AI request.
-Existing image budgets, source deletion, unknown-outcome handling and the
-4.8–15-second fire stay unchanged.
-
-Proposed configuration, **not supported by the current application yet**:
-
-| Variable | Default | Planned effect |
+| Variable | Default | Effect |
 | --- | --- | --- |
-| `GALLERY_MUSIC_ENABLED` | `0` | `1` permits score creation for fresh published images and gated serving of valid stored scores; independent of `ARTIFACTS_ENABLED` |
+| `GALLERY_MUSIC_ENABLED` | unset (off) | `1`: a freshly published image also saves a score, and published valid scores are served. Anything else: no new scores, `/score` answers 404 for every record, descriptors read `unavailable`, stored scores are kept. Independent of `ARTIFACTS_ENABLED` |
 
-A later implementation appends the next migration after v9 for nullable
-`artifacts.music_score`; legacy objects remain image-only and there is no
-automatic backfill. Include the database in the existing consistent backup;
-there are no new audio files to back up. `GET /api/gallery/:id/score` will be
-publication-gated/no-store, and the existing hide event will stop playback.
-Already downloaded data cannot be recalled.
+`GET /api/gallery/config` answers `{ generation_enabled, music_enabled }`;
+the Gallery reads it again on every reconnect and shows the no-sound copy
+when music is off.
 
-Before enabling music in a later release: verify strict score validation,
-repeatable composition, all three timbres/endings with real-browser
-listening, explicit-start/pause/resume/replay/volume, A→B and hide-during-render
-races, reconnect/background stop, no-WebGL/reduced-motion access and real
-phone render cost. Existing image Gallery tests must still pass. No
-additional paid music smoke test or account permission is required for
-local synthesis; any real OpenAI image/brief evaluation remains a separate
-authorized check.
+### What is stored, and when
 
-Planned rollback is `GALLERY_MUSIC_ENABLED=0` followed by the normal restart:
-stored scores/images remain, new snapshots/config show no sound, and
-reconnecting clients stop local playback. Pausing AI generation alone does
-not revoke stored music. This documentation pass performs none of these
-configuration, migration or release actions.
+- Migration 10 adds the nullable `artifacts.music_score` (JSON text, at most
+  16 KiB). Records published before it, or while music is off, keep `NULL`
+  and stay image-only. There is **no backfill**.
+- In the same transaction that publishes an inspected image, with music on,
+  `shared/music-score.ts` composes a `MusicScoreV1` from the job's already
+  stored `CreativeBriefV2` (its `music`, `relation`, `motion`, `metaphor` and
+  `space` choices) and a fresh four-byte random seed. The note itself is gone
+  by then and is never read again. A score that fails validation is stored as
+  `NULL`; the image still publishes, and no substitute sound is made.
+- The stored score holds only versions, the seed, tempo, timbre, ending,
+  reverb mix and up to 96 note events (time, length, MIDI pitch, velocity).
+  No words, drawing, brief, prompt, URL or code.
+- Keep, quarantined, cancelled, failed-extraction, blocked and duplicate
+  paths never get a score; a repeat publication can't replace one.
+- The worker log adds `music=score_saved | score_invalid | off` to its
+  `published` line. Scores and seeds are never logged.
+
+### What is public
+
+- Each record carries an optional `music` descriptor: absent (image-only),
+  `{ status: "unavailable" }`, or `{ status: "ready", score_version: 1,
+  duration_ms: 24000 }`. It travels in pages, the snapshot and the existing
+  `artifact:published` event; the score itself never does.
+- `GET /api/gallery/:id/score` (no-store) answers
+  `{ artifact_id, artifact_version, score }` only for a currently published
+  record with a valid stored score while music is on; otherwise the generic
+  404. A hide stops it at once, along with the image. A score already
+  downloaded can't be recalled.
+
+### In the browser
+
+One player for the page (`src/lib/gallery-audio.ts`): on Play it creates and
+resumes the `AudioContext` inside the click, fetches the score, validates it
+again, lazy-loads the synth (`src/lib/gallery-synth.ts`), renders a mono
+44.1 kHz, 24-second buffer with `OfflineAudioContext`, and plays it at
+master volume 0.35. Pause/Resume/Play again reuse that buffer; nothing loops
+or advances. Stepping, closing, opening the report form, a hide, a lost
+connection, hiding the tab or leaving stop it, and nothing resumes on its
+own. No audio is cached beyond the one in-memory buffer.
+
+### Enabling and rolling back (an owner decision)
+
+1. Back up the live database consistently before the first deploy that runs
+   migration 10 (it only adds a nullable column).
+2. Listen first: in a real desktop browser and a real phone (including iOS
+   Safari), check all three timbres and endings for clicks, harshness and
+   level, and time the first render. None of this has been verified yet.
+3. Set `GALLERY_MUSIC_ENABLED=1` as a Fly secret and restart. Only images
+   published from then on get scores.
+
+To roll back, unset it (or set `0`) and restart: stored scores and images
+stay, `/score` answers 404, open pages see `music_enabled: false` on their
+next reconnect and stop. Pausing image generation alone does not silence
+published scores. There are no audio files to back up or delete.

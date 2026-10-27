@@ -29,10 +29,10 @@ function assertNoPrivate(body: unknown, seeds: { paperId: string; jobId: string;
 describe("reading the Gallery", () => {
   it("reports whether generation is running, and nothing else", async () => {
     h = await gallery({ enabled: false });
-    expect(await (await get("/api/gallery/config")).json()).toEqual({ generation_enabled: false });
+    expect(await (await get("/api/gallery/config")).json()).toEqual({ generation_enabled: false, music_enabled: false });
     await h.close();
     h = await gallery({ enabled: true });
-    expect(await (await get("/api/gallery/config")).json()).toEqual({ generation_enabled: true });
+    expect(await (await get("/api/gallery/config")).json()).toEqual({ generation_enabled: true, music_enabled: false });
   });
 
   it("lists only published objects through the allowlisted shape", async () => {

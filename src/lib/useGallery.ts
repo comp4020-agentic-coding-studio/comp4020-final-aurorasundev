@@ -28,7 +28,12 @@ export function useGallery() {
   const [error, setError] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [generationEnabled, setGenerationEnabled] = useState<boolean | null>(null);
+  // whether this server serves record music; missing (an older server) is no
+  const [musicEnabled, setMusicEnabled] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // the config is read again on every reconnect, so a server whose music was
+  // switched off (or on) is believed, without resetting focus or reports
+  const [configRead, setConfigRead] = useState(0);
   const openIdRef = useRef<string | null>(null);
   openIdRef.current = state.openId;
   const cursorRef = useRef<{ cursor: string | null; hasMore: boolean }>({ cursor: null, hasMore: false });
@@ -40,10 +45,13 @@ export function useGallery() {
   useEffect(() => {
     const controller = new AbortController();
     getGalleryConfig(controller.signal)
-      .then((c) => setGenerationEnabled(c.generation_enabled))
+      .then((c) => {
+        setGenerationEnabled(c.generation_enabled);
+        setMusicEnabled(c.music_enabled === true);
+      })
       .catch(() => {});
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, configRead]);
 
   useEffect(() => {
     let live = true;
@@ -65,6 +73,7 @@ export function useGallery() {
             if (live && err instanceof ApiError && err.status === 404) dispatch({ type: "revalidated", id: open, artifact: null });
           });
       }
+      if (connectedOnce) setConfigRead((n) => n + 1);
       connectedOnce = true;
     });
     for (const type of ["artifact:published", "artifact:hidden"] as const) {
@@ -172,6 +181,7 @@ export function useGallery() {
     error,
     reconnecting,
     generationEnabled,
+    musicEnabled,
     // more pages, including the orbit's wrap back to the first one
     hasMore: state.hasMore,
     // more pages after the ones shown, for the grid's "See more"

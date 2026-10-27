@@ -5,7 +5,7 @@ import { log, person } from "../log.ts";
 import { identityFor } from "../session.ts";
 import { subscribeGallery } from "./events.ts";
 import { readArtifactFile } from "./storage.ts";
-import { ARTIFACT_REPORTS_PER_ADDRESS_HOUR, galleryPage, publishedArtifact, reportArtifact } from "./store.ts";
+import { ARTIFACT_REPORTS_PER_ADDRESS_HOUR, galleryPage, publishedArtifact, publishedScore, reportArtifact } from "./store.ts";
 import { ARTIFACT_REPORT_REASONS } from "./types.ts";
 
 // The public Gallery: config, pages, one object, its image, live changes and
@@ -17,16 +17,24 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const OP_KEY = /^[A-Za-z0-9_-]{8,64}$/;
 const HOUR_MS = 60 * 60 * 1000;
 
-export function galleryRouter(db: DB, artifactDir: string, generationEnabled: () => boolean, wake: () => void = () => {}): Router {
+export function galleryRouter(
+  db: DB,
+  artifactDir: string,
+  generationEnabled: () => boolean,
+  wake: () => void = () => {},
+  // GALLERY_MUSIC_ENABLED, independent of generation: pausing image work
+  // does not silence published scores, and turning music off serves none
+  musicEnabled: () => boolean = () => false,
+): Router {
   const router = Router();
   const perAddress = windowCounter(HOUR_MS, ARTIFACT_REPORTS_PER_ADDRESS_HOUR);
 
   router.get("/gallery/config", (_req, res) => {
-    res.set("Cache-Control", "no-store").json({ generation_enabled: generationEnabled() });
+    res.set("Cache-Control", "no-store").json({ generation_enabled: generationEnabled(), music_enabled: musicEnabled() });
   });
 
   router.get("/gallery/events", (req, res) => {
-    const leave = subscribeGallery(db, res);
+    const leave = subscribeGallery(db, res, musicEnabled());
     req.on("close", leave);
   });
 
@@ -38,18 +46,33 @@ export function galleryRouter(db: DB, artifactDir: string, generationEnabled: ()
       res.status(400).json({ code: "invalid_input", error: "That isn't a request this Gallery understands." });
       return;
     }
-    res.json(galleryPage(db, limit, (after as string | undefined) ?? null));
+    res.json(galleryPage(db, limit, (after as string | undefined) ?? null, musicEnabled()));
   });
 
   router.get("/gallery/:id", (req, res) => {
     res.set("Cache-Control", "no-store");
-    const found = UUID.test(req.params.id) ? publishedArtifact(db, req.params.id) : null;
+    const found = UUID.test(req.params.id) ? publishedArtifact(db, req.params.id, musicEnabled()) : null;
     if (!found) {
       res.status(404).json({ code: "artifact_gone", error: "This object is no longer here." });
       return;
     }
     const { file_key: _, ...artifact } = found;
     res.json(artifact);
+  });
+
+  // A published record's stored score, checked on every request: a hidden
+  // record, a record without a valid score, or music switched off all answer
+  // the same generic 404. Read-only; it never composes or starts anything.
+  // (A score a visitor already downloaded can't be recalled.)
+  router.get("/gallery/:id/score", (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const found = UUID.test(req.params.id) ? publishedScore(db, req.params.id, musicEnabled()) : null;
+    if (!found) {
+      res.status(404).json({ code: "artifact_gone", error: "This object is no longer here." });
+      return;
+    }
+    // built field by field: the score's own allowlist, nothing else
+    res.json({ artifact_id: found.artifact_id, artifact_version: found.artifact_version, score: found.score });
   });
 
   // Checked on every request: a hidden object's image stops being served at

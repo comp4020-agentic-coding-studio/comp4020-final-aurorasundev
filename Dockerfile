@@ -12,6 +12,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY index.html vite.config.ts tsconfig.json ./
 COPY src ./src
+# pure modules both halves import (the record score composer and validator)
+COPY shared ./shared
 COPY public ./public
 RUN pnpm build && pnpm prune --prod
 
@@ -22,6 +24,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json README.md ./
 COPY server ./server
+COPY shared ./shared
 # the private moderation CLI, run over `fly ssh console`
 COPY scripts/moderation.ts ./scripts/moderation.ts
 COPY scripts/artifacts.ts ./scripts/artifacts.ts

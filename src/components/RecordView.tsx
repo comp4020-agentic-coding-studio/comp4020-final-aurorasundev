@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { ArtifactReportReason, PublicArtifact } from "../lib/gallery-api.ts";
 import type { ReportState } from "../lib/useGallery.ts";
+import type { GallerySound } from "../lib/useGalleryAudio.ts";
 import { GalleryWordmark } from "./GalleryWordmark.tsx";
+import { RecordPlayer } from "./RecordPlayer.tsx";
 
 // One record, opened (G02): the complete square image in its sleeve beside
 // the record, the generic title and a way to report it, in a native modal
@@ -31,9 +33,11 @@ type Props = {
   onClose: () => void;
   // the header copy's wordmark: back to the Gallery's entry (closing first)
   onHome?: () => boolean;
+  // the page's one player; without it the record is image-only
+  sound?: GallerySound;
 };
 
-export function RecordView({ artifact, report, frozenReason, arriving, canStep, onStep, onReport, onClose, onHome }: Props) {
+export function RecordView({ artifact, report, frozenReason, arriving, canStep, onStep, onReport, onClose, onHome, sound }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [view, setView] = useState<"look" | "report">(report.kind === "unsettled" ? "report" : "look");
   const [reason, setReason] = useState<ArtifactReportReason | null>(frozenReason);
@@ -127,17 +131,7 @@ export function RecordView({ artifact, report, frozenReason, arriving, canStep, 
               <p className="record-lede">The original note is gone.</p>
               <p className="record-credit">AI-generated image</p>
 
-              <div className="record-player" role="group" aria-label="Sound">
-                <button type="button" className="player-button" disabled aria-describedby="player-note">
-                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                    <path d="M8 5.5v13l10.5-6.5z" fill="currentColor" />
-                  </svg>
-                  <span className="visually-hidden">Listen</span>
-                </button>
-                <p className="player-note" id="player-note">
-                  There is no sound for this record yet.
-                </p>
-              </div>
+              <RecordPlayer sound={sound} />
 
               {report.kind === "received" ? (
                 <p className="record-note" role="status">

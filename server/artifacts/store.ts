@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import { composeMusicScore, parseMusicScore, type MusicScoreV1, type PublicMusic } from "../../shared/music-score.ts";
 import type { DB } from "../db.ts";
 import type { CreativeBriefV2, GalleryChange, GalleryPage, PublicArtifact } from "./types.ts";
 
@@ -100,29 +101,53 @@ const bumpGalleryRevision = (db: DB): number =>
 export const galleryTotal = (db: DB): number =>
   (db.prepare("SELECT COUNT(*) AS n FROM artifacts WHERE status = 'PUBLISHED'").get() as { n: number }).n;
 
-type ArtifactRow = { id: string; version: number; title: string; alt: string };
+type ArtifactRow = { id: string; version: number; title: string; alt: string; music_score: string | null };
+const ROW = "id, version, title, alt, music_score";
+
+// A stored score, read strictly; anything unreadable or unsupported is null.
+export function storedScore(raw: string | null): MusicScoreV1 | null {
+  if (raw === null) return null;
+  try {
+    return parseMusicScore(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+// What a visitor may know about a record's sound: no stored score means an
+// image-only record (no field at all); a stored score is ready only while
+// music is enabled and the score is valid, otherwise it is unavailable.
+function publicMusic(raw: string | null, musicEnabled: boolean): PublicMusic | undefined {
+  if (raw === null) return undefined;
+  return musicEnabled && storedScore(raw) ? { status: "ready", score_version: 1, duration_ms: 24000 } : { status: "unavailable" };
+}
 
 // The only shape a public object ever has: an allowlist, built field by field.
-export const publicArtifact = (row: ArtifactRow): PublicArtifact => ({
-  id: row.id,
-  version: row.version,
-  image_url: `/api/gallery/${row.id}/image`,
-  width: 1024,
-  height: 1024,
-  title: row.title,
-  alt: row.alt,
-});
+export const publicArtifact = (row: ArtifactRow, musicEnabled = false): PublicArtifact => {
+  const artifact: PublicArtifact = {
+    id: row.id,
+    version: row.version,
+    image_url: `/api/gallery/${row.id}/image`,
+    width: 1024,
+    height: 1024,
+    title: row.title,
+    alt: row.alt,
+  };
+  const music = publicMusic(row.music_score, musicEnabled);
+  if (music) artifact.music = music;
+  return artifact;
+};
 
 // One page in random-UUID order (an unordered collection, not a feed).
-export function galleryPage(db: DB, limit: number, after: string | null): GalleryPage {
+export function galleryPage(db: DB, limit: number, after: string | null, musicEnabled = false): GalleryPage {
   const read = db.transaction((): GalleryPage => {
     const rows = db
       .prepare(
-        `SELECT id, version, title, alt FROM artifacts
+        `SELECT ${ROW} FROM artifacts
          WHERE status = 'PUBLISHED' AND id > ? ORDER BY id LIMIT ?`,
       )
       .all(after ?? "", limit + 1) as ArtifactRow[];
-    const items = rows.slice(0, limit).map(publicArtifact);
+    const items = rows.slice(0, limit).map((row) => publicArtifact(row, musicEnabled));
     return {
       revision: galleryRevision(db),
       items,
@@ -133,17 +158,51 @@ export function galleryPage(db: DB, limit: number, after: string | null): Galler
   return read();
 }
 
-export function publishedArtifact(db: DB, id: string): (PublicArtifact & { file_key: string }) | null {
-  const row = db.prepare("SELECT id, version, title, alt, file_key FROM artifacts WHERE id = ? AND status = 'PUBLISHED'").get(id) as
+export function publishedArtifact(db: DB, id: string, musicEnabled = false): (PublicArtifact & { file_key: string }) | null {
+  const row = db.prepare(`SELECT ${ROW}, file_key FROM artifacts WHERE id = ? AND status = 'PUBLISHED'`).get(id) as
     | (ArtifactRow & { file_key: string })
     | undefined;
-  return row ? { ...publicArtifact(row), file_key: row.file_key } : null;
+  return row ? { ...publicArtifact(row, musicEnabled), file_key: row.file_key } : null;
+}
+
+// A currently published record's score, only while music is enabled and the
+// stored score is valid. Never the brief, the job or the paper.
+export function publishedScore(db: DB, id: string, musicEnabled: boolean): { artifact_id: string; artifact_version: number; score: MusicScoreV1 } | null {
+  if (!musicEnabled) return null;
+  const row = db.prepare("SELECT id, version, music_score FROM artifacts WHERE id = ? AND status = 'PUBLISHED'").get(id) as
+    | { id: string; version: number; music_score: string | null }
+    | undefined;
+  const score = row ? storedScore(row.music_score) : null;
+  return row && score ? { artifact_id: row.id, artifact_version: row.version, score } : null;
+}
+
+// The score for a record about to be published: the job's validated brief
+// and four fresh random bytes as its seed (never derived from a paper, its
+// owner or a return key). Null if it can't be made; an image is never held
+// back for its music, and no replacement sound is made.
+export function composeForPublication(brief: CreativeBriefV2): string | null {
+  try {
+    const text = JSON.stringify(composeMusicScore(brief, randomBytes(4).toString("hex")));
+    return storedScore(text) ? text : null;
+  } catch {
+    return null;
+  }
 }
 
 // Publishes a job's inspected image as one public object, if the job still
 // holds this lease and is being reviewed. The object takes the job's
-// independent public id, so a repeat can never make a second one.
-export function publishArtifact(db: DB, jobId: string, leaseToken: string, nowMs: number, labels: { title: string; alt: string }): GalleryChange | null {
+// independent public id, so a repeat can never make a second one. With music
+// enabled, its score is composed from the job's brief and saved in the same
+// transaction, so image and score become visible together; a repeat can't
+// recompose it.
+export function publishArtifact(
+  db: DB,
+  jobId: string,
+  leaseToken: string,
+  nowMs: number,
+  labels: { title: string; alt: string },
+  music: { enabled: boolean; brief: CreativeBriefV2 | null } = { enabled: false, brief: null },
+): GalleryChange | null {
   return db.transaction((): GalleryChange | null => {
     const job = db
       .prepare(
@@ -151,19 +210,20 @@ export function publishArtifact(db: DB, jobId: string, leaseToken: string, nowMs
       )
       .get(jobId, leaseToken, nowMs, nowMs) as { public_id: string; file_key: string | null } | undefined;
     if (!job?.file_key) return null;
+    const score = music.enabled && music.brief ? composeForPublication(music.brief) : null;
     const inserted = db
       .prepare(
-        `INSERT INTO artifacts (id, job_id, status, version, file_key, width, height, title, alt, published_at, updated_at)
-         VALUES (?, ?, 'PUBLISHED', 1, ?, 1024, 1024, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+        `INSERT INTO artifacts (id, job_id, status, version, file_key, width, height, title, alt, music_score, published_at, updated_at)
+         VALUES (?, ?, 'PUBLISHED', 1, ?, 1024, 1024, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
       )
-      .run(job.public_id, jobId, job.file_key, labels.title, labels.alt, nowMs, nowMs).changes;
+      .run(job.public_id, jobId, job.file_key, labels.title, labels.alt, score, nowMs, nowMs).changes;
     db.prepare(
       "UPDATE artifact_jobs SET state = 'PUBLISHED', lease_token = NULL, lease_until = NULL, error_code = NULL, updated_at = ? WHERE id = ?",
     ).run(nowMs, jobId);
     if (!inserted) return null;
     const revision = bumpGalleryRevision(db);
-    const row = db.prepare("SELECT id, version, title, alt FROM artifacts WHERE id = ?").get(job.public_id) as ArtifactRow;
-    return { type: "artifact:published", revision, total: galleryTotal(db), artifact: publicArtifact(row) };
+    const row = db.prepare(`SELECT ${ROW} FROM artifacts WHERE id = ?`).get(job.public_id) as ArtifactRow;
+    return { type: "artifact:published", revision, total: galleryTotal(db), artifact: publicArtifact(row, music.enabled) };
   })();
 }
 

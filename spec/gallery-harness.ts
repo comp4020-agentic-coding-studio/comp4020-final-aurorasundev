@@ -21,11 +21,12 @@ export type Harness = {
   dir: string;
   base: string;
   close: () => Promise<void>;
-  seed: (opts?: { status?: "PUBLISHED" | "HIDDEN"; id?: string }) => { id: string; jobId: string; paperId: string; fileKey: string };
+  // `score` is the stored music_score text (null: an image-only record)
+  seed: (opts?: { status?: "PUBLISHED" | "HIDDEN"; id?: string; score?: string | null }) => { id: string; jobId: string; paperId: string; fileKey: string };
   session: () => Promise<string>;
 };
 
-export async function gallery(options: { enabled?: boolean } = {}): Promise<Harness> {
+export async function gallery(options: { enabled?: boolean; music?: boolean } = {}): Promise<Harness> {
   const log = console.log;
   console.log = () => {};
   const db = openDb(":memory:");
@@ -38,13 +39,13 @@ export async function gallery(options: { enabled?: boolean } = {}): Promise<Harn
     ensureSession(db, req, res);
     res.json({ ok: true });
   });
-  app.use("/api", galleryRouter(db, dir, () => options.enabled ?? false));
+  app.use("/api", galleryRouter(db, dir, () => options.enabled ?? false, () => {}, () => options.music ?? false));
   const server = app.listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   db.prepare("INSERT INTO identities (id, created_at) VALUES ('author', 'now')").run();
 
-  const seed: Harness["seed"] = ({ status = "PUBLISHED", id = randomUUID() } = {}) => {
+  const seed: Harness["seed"] = ({ status = "PUBLISHED", id = randomUUID(), score = null } = {}) => {
     const paperId = randomUUID();
     const jobId = randomUUID();
     const fileKey = `${id}.webp`;
@@ -59,9 +60,9 @@ export async function gallery(options: { enabled?: boolean } = {}): Promise<Harn
        VALUES (?, ?, ?, 'PUBLISHED', '{"schema_version":2,"metaphor":"thread"}', 2, ?, 0, 0, 1, 1)`,
     ).run(jobId, paperId, id, fileKey);
     db.prepare(
-      `INSERT INTO artifacts (id, job_id, status, version, file_key, width, height, title, alt, published_at, updated_at)
-       VALUES (?, ?, ?, 1, ?, 1024, 1024, 'Knot in clay', 'An abstract object: a loosely tied knot made of unglazed clay, resting as if just set down.', 1, 1)`,
-    ).run(id, jobId, status, fileKey);
+      `INSERT INTO artifacts (id, job_id, status, version, file_key, width, height, title, alt, music_score, published_at, updated_at)
+       VALUES (?, ?, ?, 1, ?, 1024, 1024, 'Knot in clay', 'An abstract object: a loosely tied knot made of unglazed clay, resting as if just set down.', ?, 1, 1)`,
+    ).run(id, jobId, status, fileKey, score);
     return { id, jobId, paperId, fileKey };
   };
 

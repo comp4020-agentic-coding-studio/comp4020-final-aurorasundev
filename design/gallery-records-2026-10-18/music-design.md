@@ -1,6 +1,6 @@
 # Gallery music — AI-directed parameters, performed with Web Audio
 
-Date: 2026-10-19. Status: **selected architecture; design only, not implemented or acoustically verified**. Baseline: `9501f73`; refreshed against `cb0d337` during this pass. The later image-palette, brief-sampling and inspection-code changes keep the same V2 music fields and are preserved. This amendment supersedes the earlier external music-provider, MP3-storage and HTMLAudioElement proposals in this design package.
+Date: 2026-10-19. Status: **implemented 2026-10-27 behind `GALLERY_MUSIC_ENABLED` (off in production); not acoustically verified in a real browser** (see ADR 006). The text below is the design as selected; where it says "future" or "proposed", read "implemented, flag off". Baseline: `9501f73`; refreshed against `cb0d337` during this pass. The later image-palette, brief-sampling and inspection-code changes keep the same V2 music fields and are preserved. This amendment supersedes the earlier external music-provider, MP3-storage and HTMLAudioElement proposals in this design package.
 
 ## 1. Intent, authority and scope
 

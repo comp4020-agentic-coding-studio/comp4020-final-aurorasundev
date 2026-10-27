@@ -8,6 +8,7 @@ import { createGate, takesInput } from "./lib/gallery-progress.ts";
 import { recordReveal } from "./lib/record-reveal.ts";
 import { useEntryProgress, type EntryRefs } from "./lib/useEntryProgress.ts";
 import { useGallery } from "./lib/useGallery.ts";
+import { useGalleryAudio } from "./lib/useGalleryAudio.ts";
 import { beltVertical } from "./scene/belt-layout.ts";
 import { canDrawOrbit } from "./scene/gallery-belt.ts";
 import type { Mist } from "./scene/mist.ts";
@@ -45,6 +46,8 @@ const LEDE = "Images shaped by released notes.";
 
 export function GalleryApp() {
   const g = useGallery();
+  // one player for the page, following the opened record (ADR 006)
+  const sound = useGalleryAudio(g.selected, g.musicEnabled, !g.reconnecting);
   const [still] = useState(prefersStill);
   const [webgl] = useState(canDrawOrbit);
   const [orbit, setOrbit] = useState(() => !still && webgl);
@@ -377,6 +380,7 @@ export function GalleryApp() {
           onReport={(reason) => void g.sendReport(g.selected!.id, reason)}
           onHome={goHome}
           onClose={close}
+          sound={sound}
         />
       )}
     </div>

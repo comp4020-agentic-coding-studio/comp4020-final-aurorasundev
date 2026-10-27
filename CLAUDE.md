@@ -53,15 +53,20 @@ readable centre. Keep phone controls and captions clear of the paper.
   sleeve, slides out, title letter by letter); the HTML takes over only on
   its completion. Pure rules live in `src/scene/belt-layout.ts`,
   `particles-plan.ts`, `record-timeline.ts` and `gallery-motion.ts`, with
-  specs; reduced motion or no WebGL gets the grid. Sound is **not
-  implemented**. Its selected
-  design is `design/gallery-records-2026-10-18/music-design.md` (ADR 006):
-  reuse the existing AI musical directions, compose/store one versioned
-  score and fixed seed at image publication, then perform it with native
-  Web Audio only after Play. No second model request, external music
-  service/key, MP3, audio job or autoplay. A future `GALLERY_MUSIC_ENABLED`
-  flag is independent from image generation; do not treat this design as
-  permission to enable it. Preserve the current fire/extraction protocol.
+  specs; reduced motion or no WebGL gets the grid. Sound is
+  **implemented behind `GALLERY_MUSIC_ENABLED`, off in production** until
+  the owner decides (after real-browser listening). Its design is
+  `design/gallery-records-2026-10-18/music-design.md` (ADR 006): the
+  existing AI musical directions plus a random seed go through the frozen
+  composer in `shared/music-score.ts`; the score is saved once, in the
+  image's publication transaction (migration 10, `artifacts.music_score`,
+  no backfill), served only by the published-gated
+  `/api/gallery/:id/score`, and performed with native Web Audio
+  (`src/lib/gallery-audio.ts`, one player) only after Play. No second
+  model request, external music service/key, MP3, audio job or autoplay.
+  The flag is independent from image generation; a changed composer or
+  renderer is a new version, never a silent change to stored scores.
+  Preserve the current fire/extraction protocol.
   `ARTIFACTS_ENABLED` stays off
   until the owner decides; the fixture provider is refused on Fly.
 - Real-time is SSE (`GET /api/events`) + HTTP. The database is the source of
