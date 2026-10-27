@@ -45,7 +45,10 @@ readable centre. Keep phone controls and captions clear of the paper.
   exhibition on the stage plate: a deep-charcoal vinyl idle-spinning and
   slowly tumbling at the centre, a counter-rotating graphite globe behind
   it and a belt of 10 cards (6 on phone) in front of it on Goodgrowth's
-  latitude-curved band, under an orthographic camera. Cards break into
+  latitude-curved band, under an orthographic camera. When that band can't
+  fit the width (`beltVertical()` in `belt-layout.ts`: phones and narrow
+  windows) the orbit turns a quarter turn to run vertically, and an opened
+  record stacks the disc above its sleeve (design §7e). Cards break into
   and gather from particles only in the dissolve zones at the globe's
   sides, where replaced records arrive; operator hides dissolve in place.
   Opening a record is one slow timeline of about 5 s (neighbours dissolve,
