@@ -69,19 +69,28 @@ describe("papers on screen", () => {
     expect(visibleLimit(1920, 1080)).toBeGreaterThan(visibleLimit(1280, 800));
   });
 
-  it("keeps a laptop at the familiar eight and a phone at five", () => {
-    expect(visibleLimit(1280, 800)).toBe(8);
+  it("keeps a phone at five and a narrow window near the references", () => {
     expect(visibleLimit(390, 844)).toBe(5);
     expect(visibleLimit(600, 900)).toBe(5);
+    expect(visibleLimit(800, 600)).toBeLessThanOrEqual(12);
   });
 
-  it("stays within the server's sample bound and the references' negative space", () => {
+  it("fills a wide screen: 25 from 1920×1080 up, more than a dozen on any window over 800px", () => {
+    expect(visibleLimit(1920, 1080)).toBe(MAX_WINDOW);
+    expect(MAX_WINDOW).toBe(25);
+    expect(visibleLimit(2560, 1440)).toBe(MAX_WINDOW);
+    expect(visibleLimit(1280, 800)).toBeGreaterThan(12);
+    expect(visibleLimit(801, 600)).toBeGreaterThanOrEqual(12);
+  });
+
+  it("stays within the server's sample bound", () => {
     for (const [w, h] of [[0, 0], [320, 480], [7680, 4320], [601, 200]]) {
       const n = visibleLimit(w, h);
       expect(n).toBeGreaterThanOrEqual(MIN_WINDOW);
       expect(n).toBeLessThanOrEqual(MAX_WINDOW);
     }
-    expect(MAX_WINDOW).toBeLessThanOrEqual(24);
+    // server/papers.ts MAX_SAMPLE and server/events.ts MAX_WINDOW are 32
+    expect(MAX_WINDOW).toBeLessThanOrEqual(32);
   });
 
   it("depends only on CSS size: the same viewport gives the same count", () => {

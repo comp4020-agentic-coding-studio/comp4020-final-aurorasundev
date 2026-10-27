@@ -186,7 +186,7 @@ describe("the space", () => {
 
   it("refuses an unbounded or malformed sample request", async () => {
     const many = Array.from({ length: 33 }, () => randomUUID()).join(",");
-    for (const query of [`exclude=${many}`, "exclude=not-an-id", "limit=0", "limit=25", "limit=abc", "exclude=a&exclude=b"]) {
+    for (const query of [`exclude=${many}`, "exclude=not-an-id", "limit=0", "limit=33", "limit=abc", "exclude=a&exclude=b"]) {
       expect((await fetch(url(`/api/papers?${query}`))).status, query).toBe(400);
     }
     expect((await fetch(url(`/api/papers?exclude=${Array.from({ length: 32 }, () => randomUUID()).join(",")}`))).status).toBe(200);

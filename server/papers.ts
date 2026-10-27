@@ -17,7 +17,8 @@ export const DRAWING_HEIGHT = 500;
 const MAX_DRAWING_BYTES = 300_000;
 const PNG_PREFIX = "data:image/png;base64,";
 export const WINDOW_SIZE = 12;
-const MAX_SAMPLE = 24;
+// the client window reaches 25 on a wide screen (src/lib/space-window.ts)
+const MAX_SAMPLE = 32;
 const MAX_EXCLUDE = 32;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 

@@ -8,8 +8,9 @@ const HEARTBEAT_MS = 20_000;
 // A client that stops reading gets dropped rather than buffered without bound;
 // it reconnects and catches up from a fresh snapshot.
 const MAX_BUFFERED_BYTES = 256 * 1024;
-const MAX_KNOWN_IDS = 32;
-const MAX_WINDOW = 24;
+const MAX_KNOWN_IDS = 48;
+// the client window reaches 25 on a wide screen (src/lib/space-window.ts)
+const MAX_WINDOW = 32;
 
 type Subscriber = { id: string; res: Response };
 const subscribers = new Set<Subscriber>();
