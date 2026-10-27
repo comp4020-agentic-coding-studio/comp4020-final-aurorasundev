@@ -28,6 +28,21 @@ a way back to a paper.
 | Who removes an object? | report count thresholds; automated review of reports; operator | **An operator**, through a private CLI. Reports only queue for review | removal depends on someone reading the queue; no response time is promised |
 | What does a restart do to in-flight work? | trust leases; wait for them to expire | **Revised 2026-10-19: startup owns everything.** One process runs on Fly, so any job found mid-request at startup is orphaned regardless of its lease and is settled at once (see the runbook). Operator actions run on a separate tick so a hide never waits behind a slow image request | a second concurrent process would need a real ownership scheme; none is run |
 
+### Revision 2026-10-27: paper tags
+
+The owner asked for a small hint so someone who just released a note can
+find what it left. A public object may now carry `recent: true` when it
+was published in the last 24 hours (absent otherwise). It is a yes, never a
+time, and it changes no order: pages stay in random-UUID order. The cost is
+a slightly sharper timing hint than before, for a day. In the browser, a pale
+paper tag above the record's name reads "Arrived recently" or "New to you",
+and the opened record reads "Not heard yet" above its player. Both come from
+that one flag and from this browser's own `localStorage` list of records it
+has opened and played, which is never sent anywhere. A first visit marks
+everything already in view as known, so it doesn't tag everything. Tags live
+only in HTML, never on the WebGL cards. There are no counts, no badges and no
+"latest" view.
+
 ## What is stored
 
 New tables (migration 9): `artifact_jobs` (a private job per Release paper:

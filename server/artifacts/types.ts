@@ -61,6 +61,8 @@ export type PublicArtifact = {
   title: string;
   alt: string;
   music?: PublicMusic;
+  // published within RECENT_MS; absent otherwise. Never a timestamp.
+  recent?: true;
 };
 
 export type GalleryPage = {

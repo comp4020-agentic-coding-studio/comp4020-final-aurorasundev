@@ -91,6 +91,26 @@ describe("reading the Gallery", () => {
   });
 });
 
+describe("arrived recently", () => {
+  it("says yes for a record from the last day, and never a time", async () => {
+    h = await gallery();
+    const fresh = h.seed();
+    const old = h.seed();
+    h.db.prepare("UPDATE artifacts SET published_at = ? WHERE id = ?").run(Date.now() - 60_000, fresh.id);
+    h.db.prepare("UPDATE artifacts SET published_at = ? WHERE id = ?").run(Date.now() - 25 * 60 * 60 * 1000, old.id);
+    const page = (await (await get("/api/gallery")).json()) as { items: Record<string, unknown>[] };
+    const byId = new Map(page.items.map((i) => [i.id, i]));
+    expect(byId.get(fresh.id)!.recent).toBe(true);
+    expect(Object.keys(byId.get(fresh.id)!).sort()).toEqual([...PUBLIC_KEYS, "recent"].sort());
+    expect(Object.keys(byId.get(old.id)!).sort()).toEqual(PUBLIC_KEYS);
+    expect(JSON.stringify(page)).not.toMatch(/published|_at"|time|date/);
+    // the order is the same unordered one either way
+    expect(page.items.map((i) => i.id)).toEqual([fresh.id, old.id].sort());
+    const one = await (await get(`/api/gallery/${fresh.id}`)).json();
+    expect(one.recent).toBe(true);
+  });
+});
+
 describe("serving images", () => {
   it("serves a published object's WebP, uncached, and nothing else", async () => {
     h = await gallery();

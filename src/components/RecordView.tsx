@@ -35,9 +35,11 @@ type Props = {
   onHome?: () => boolean;
   // the page's one player; without it the record is image-only
   sound?: GallerySound;
+  // this browser has not played this record's sound yet (a paper tag)
+  notHeard?: boolean;
 };
 
-export function RecordView({ artifact, report, frozenReason, arriving, canStep, onStep, onReport, onClose, onHome, sound }: Props) {
+export function RecordView({ artifact, report, frozenReason, arriving, canStep, onStep, onReport, onClose, onHome, sound, notHeard = false }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [view, setView] = useState<"look" | "report">(report.kind === "unsettled" ? "report" : "look");
   const [reason, setReason] = useState<ArtifactReportReason | null>(frozenReason);
@@ -131,6 +133,7 @@ export function RecordView({ artifact, report, frozenReason, arriving, canStep, 
               <p className="record-lede">The original note is gone.</p>
               <p className="record-credit">AI-generated image</p>
 
+              {notHeard && <p className="record-tag record-tag-player">Not heard yet</p>}
               <RecordPlayer sound={sound} />
 
               {report.kind === "received" ? (

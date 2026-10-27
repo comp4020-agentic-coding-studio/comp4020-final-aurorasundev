@@ -14,6 +14,8 @@ export type PublicArtifact = {
   title: string;
   alt: string;
   music?: PublicMusic;
+  // arrived in the last day (a yes only, never a time)
+  recent?: true;
 };
 export type GalleryConfig = { generation_enabled: boolean; music_enabled?: boolean };
 export type GalleryPage = { revision: number; items: PublicArtifact[]; next_cursor: string | null; total: number };

@@ -1,4 +1,5 @@
 import type { PublicArtifact } from "../lib/gallery-api.ts";
+import type { RecordTag } from "../lib/record-marks.ts";
 
 // The plain collection, for reduced motion, no WebGL or a lost context: the
 // same live records as the orbit, each a sleeve that opens the same view.
@@ -7,6 +8,8 @@ import type { PublicArtifact } from "../lib/gallery-api.ts";
 
 type Props = {
   items: PublicArtifact[];
+  // the paper tag this browser shows on a record, if any
+  tagFor?: (a: PublicArtifact) => RecordTag;
   hasMore: boolean;
   retired: boolean;
   loadingMore: boolean;
@@ -15,7 +18,7 @@ type Props = {
   onOpen: (id: string, opener: HTMLButtonElement) => void;
 };
 
-export function GalleryGridFallback({ items, hasMore, retired, loadingMore, onLoadMore, onRestart, onOpen }: Props) {
+export function GalleryGridFallback({ items, tagFor, hasMore, retired, loadingMore, onLoadMore, onRestart, onOpen }: Props) {
   return (
     <div className="records-grid-wrap">
       <ul className="records-grid" aria-label="Records">
@@ -25,6 +28,7 @@ export function GalleryGridFallback({ items, hasMore, retired, loadingMore, onLo
               <span className="sleeve">
                 <img className="sleeve-image" src={a.image_url} alt={a.alt} width={a.width} height={a.height} loading="lazy" decoding="async" />
               </span>
+              {tagFor?.(a) && <span className="record-tag">{tagFor(a)}</span>}
               <span className="records-caption">{a.title}</span>
             </button>
           </li>

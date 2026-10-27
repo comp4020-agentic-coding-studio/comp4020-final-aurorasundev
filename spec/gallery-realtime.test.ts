@@ -59,7 +59,9 @@ describe("the Gallery stream", () => {
     expect(events.map((e) => e.event)).toEqual(["gallery:snapshot", "artifact:published"]);
     const { artifact, total, revision } = events[1].data as { artifact: Record<string, unknown>; total: number; revision: number };
     expect([total, revision]).toEqual([1, 1]);
-    expect(Object.keys(artifact).sort()).toEqual(["alt", "height", "id", "image_url", "title", "version", "width"]);
+    // just published: arrived recently, as a yes and never a time
+    expect(Object.keys(artifact).sort()).toEqual(["alt", "height", "id", "image_url", "recent", "title", "version", "width"]);
+    expect(artifact.recent).toBe(true);
     expect(JSON.stringify(events)).not.toContain(seeded.paperId);
     expect(JSON.stringify(events)).not.toContain(seeded.jobId);
   });

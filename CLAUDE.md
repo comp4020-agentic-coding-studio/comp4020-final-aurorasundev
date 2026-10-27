@@ -56,7 +56,12 @@ readable centre. Keep phone controls and captions clear of the paper.
   sleeve, slides out, title letter by letter); the HTML takes over only on
   its completion. Pure rules live in `src/scene/belt-layout.ts`,
   `particles-plan.ts`, `record-timeline.ts` and `gallery-motion.ts`, with
-  specs; reduced motion or no WebGL gets the grid. Sound is
+  specs; reduced motion or no WebGL gets the grid. A pale paper tag
+  above a record's name (HTML only, never on the cards) reads "Arrived
+  recently" (the server's coarse 24 h `recent: true`, never a time or an
+  order) or "New to you", and an opened record reads "Not heard yet". Both
+  are held only in this browser's `localStorage` (`record-marks.ts`) and are
+  never sent (owner, 2026-10-27; ADR 005 revision). Sound is
   **implemented behind `GALLERY_MUSIC_ENABLED`, which the owner turned on
   in production on 2026-10-27** (a Fly secret; unset it to switch off).
   Records published before then have no score. Its design is

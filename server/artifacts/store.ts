@@ -101,8 +101,13 @@ const bumpGalleryRevision = (db: DB): number =>
 export const galleryTotal = (db: DB): number =>
   (db.prepare("SELECT COUNT(*) AS n FROM artifacts WHERE status = 'PUBLISHED'").get() as { n: number }).n;
 
-type ArtifactRow = { id: string; version: number; title: string; alt: string; music_score: string | null };
-const ROW = "id, version, title, alt, music_score";
+type ArtifactRow = { id: string; version: number; title: string; alt: string; music_score: string | null; published_at: number };
+const ROW = "id, version, title, alt, music_score, published_at";
+
+// How long a record counts as arrived recently (owner, 2026-10-27: so someone
+// who just released a note can find what it left). Public only as a yes, never
+// as a time, and it changes no order.
+export const RECENT_MS = 24 * 60 * 60 * 1000;
 
 // A stored score, read strictly; anything unreadable or unsupported is null.
 export function storedScore(raw: string | null): MusicScoreV1 | null {
@@ -123,7 +128,7 @@ function publicMusic(raw: string | null, musicEnabled: boolean): PublicMusic | u
 }
 
 // The only shape a public object ever has: an allowlist, built field by field.
-export const publicArtifact = (row: ArtifactRow, musicEnabled = false): PublicArtifact => {
+export const publicArtifact = (row: ArtifactRow, musicEnabled = false, nowMs = Date.now()): PublicArtifact => {
   const artifact: PublicArtifact = {
     id: row.id,
     version: row.version,
@@ -135,6 +140,7 @@ export const publicArtifact = (row: ArtifactRow, musicEnabled = false): PublicAr
   };
   const music = publicMusic(row.music_score, musicEnabled);
   if (music) artifact.music = music;
+  if (nowMs - row.published_at < RECENT_MS) artifact.recent = true;
   return artifact;
 };
 

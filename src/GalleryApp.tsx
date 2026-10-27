@@ -9,6 +9,7 @@ import { recordReveal } from "./lib/record-reveal.ts";
 import { useEntryProgress, type EntryRefs } from "./lib/useEntryProgress.ts";
 import { useGallery } from "./lib/useGallery.ts";
 import { useGalleryAudio } from "./lib/useGalleryAudio.ts";
+import { useRecordMarks } from "./lib/useRecordMarks.ts";
 import { beltVertical } from "./scene/belt-layout.ts";
 import { canDrawOrbit } from "./scene/gallery-belt.ts";
 import type { Mist } from "./scene/mist.ts";
@@ -48,6 +49,16 @@ export function GalleryApp() {
   const g = useGallery();
   // one player for the page, following the opened record (ADR 006)
   const sound = useGalleryAudio(g.selected, g.musicEnabled, !g.reconnecting);
+  // the paper tags: this browser's own memory of records met (never sent)
+  const marks = useRecordMarks(g.items, !g.loading);
+  const selectedId = g.selected?.id ?? null;
+  const { opened: markOpened, heard: markHeard } = marks;
+  useEffect(() => {
+    if (selectedId) markOpened(selectedId);
+  }, [selectedId, markOpened]);
+  useEffect(() => {
+    if (selectedId && sound.state.kind === "playing") markHeard(selectedId);
+  }, [selectedId, sound.state.kind, markHeard]);
   const [still] = useState(prefersStill);
   const [webgl] = useState(canDrawOrbit);
   const [orbit, setOrbit] = useState(() => !still && webgl);
@@ -316,6 +327,7 @@ export function GalleryApp() {
             <div ref={band} className="orbit-band" />
             <div className="orbit-foot">
               <div className="orbit-caption" aria-live="polite">
+                {marks.tagFor(focused) && <p className="record-tag">{marks.tagFor(focused)}</p>}
                 <h2 className="orbit-title">
                   <button type="button" className="orbit-title-button" onClick={() => focused && openRecord(focused.id)}>
                     {focused?.title}
@@ -356,6 +368,7 @@ export function GalleryApp() {
         ) : (
           <GalleryGridFallback
             items={g.items}
+            tagFor={marks.tagFor}
             hasMore={g.moreAhead}
             retired={g.retired}
             loadingMore={g.loadingMore}
@@ -381,6 +394,7 @@ export function GalleryApp() {
           onHome={goHome}
           onClose={close}
           sound={sound}
+          notHeard={marks.notHeard(g.selected, g.musicEnabled && g.selected.music?.status === "ready")}
         />
       )}
     </div>
