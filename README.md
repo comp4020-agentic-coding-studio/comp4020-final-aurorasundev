@@ -4,68 +4,64 @@ A shared anonymous space for things you are ready to put down.
 
 ## What does good mean here?
 
-Throwaway gives the act of letting go a physical form. I want a thought to
-have somewhere to go: onto a sheet, into a crumpled ball, across a room,
-and eventually into a fire. Good means giving people control over what
-they leave, time to attend to a stranger's thought, and a deliberate ending
-to a paper. The weight of those small actions is the point of the project.
+Throwaway began with something I recognise: keeping a thought or feeling
+bottled up for too long and wanting somewhere to leave it. I built this room
+for someone carrying an unfinished conversation, regret, anger, or a thought
+they cannot yet explain. They may visit once, or come back to leave another
+paper and read what others have left. They can write without attaching their
+name to the feeling. Good means giving that feeling a way out, and giving
+someone else a chance to recognise themselves in it.
 
 The [Paper Crumple demo](https://github.com/item-develop/paper-crumple-demo)
-gave that idea a concrete starting point. Its folding and falling made
-paper feel like something a person could handle. I adapted that physical
-interaction into a shared room: words stay folded away until someone
-chooses to open a sheet. Its creased edges should suggest handling while
-the centre stays clear enough to read.
+showed me how folding and throwing could feel physical. In Throwaway, a paper
+enters the shared room closed. A visitor chooses to open it, then can press “I
+saw it” after reading. That small action means someone has stopped to pay
+attention. I left out rankings, comments, profiles, search and personal
+histories because I want people to leave a thought without having to perform
+for an audience. A return key restores a person's rights, but finding a paper
+still means encountering it in the room.
 
-Reading is an encounter. “I saw it” makes witnessing an intentional act:
-someone has paused with what another person left. Its count belongs inside
-the opened paper, where it can mean acknowledgement. I left out rankings,
-comments and profiles because they would encourage performance and
-comparison. I also chose to omit search and personal histories. Even with
-a return key, a person finds their papers by encountering them again in
-the shared space. Leaving something here involves letting it out of view.
+I do not filter for “interesting” papers either. A short, awkward sentence may
+be exactly what someone needed to put down. Safety checks address harm; they
+do not grade a person's feelings. Papers appear through chance encounters.
+Weiser and Brown's
+[The Coming Age of Calm Technology](https://calmtech.com/papers/coming-age-calm-technology)
+offers a way to describe the room: closed papers sit at the edge of attention,
+and opening one brings it into focus.
 
-Weiser and Brown's [The Coming Age of Calm Technology](https://calmtech.com/papers/coming-age-calm-technology)
-offers a useful lens for this choice: attention can move between centre
-and periphery. The room suggests other people's presence through closed
-papers; opening one brings its content into focus. The Gallery invites
-more concentrated attention through movement and deliberate listening.
+The furnace is where leaving becomes real. I did not want the room to keep
+accumulating anonymous messages; I wanted each paper to have an ending. Keep
+leaves that choice with the writer. Release hands it to someone who has
+witnessed the paper. Opening the furnace only prepares the choice: the paper
+stays suspended until someone places it inside. Then it burns from the bottom
+up, collapses and leaves ash. The pause and the fire give the decision weight.
 
-Keep and Release make control visible. Keep preserves the author's right
-to decide when a paper disappears. Release hands that decision to readers
-who witness it. The furnace gives the choice time and consequence: the
-paper waits above the opening until someone places it inside. Fire,
-collapse and ash carry it through to an ending that others can see.
-
-My revised direction for the Gallery is rebirth. Burning ends the original
-note and opens a contrasting emotional direction: sadness towards brightness,
-anger towards calm, powerlessness towards energy. Ambiguous notes can become
-mysterious works. I want image and music to carry that transformation together,
-using each note as the starting material for a new creation.
+Burning can also give a Release paper another life in the Gallery. The
+original words are gone, and the new work stands on its own. A paper may
+become an image with a short piece of music. I hope that possibility makes
+people curious enough to write, release a paper and return to see what
+discarded thoughts can become. For me, rebirth means a change in feeling:
+sadness towards brightness, anger towards calm, powerlessness towards energy.
 [Matt Stone's Goodgrowth case study](https://tympanus.net/codrops/2026/08/27/goodgrowth-boot-sequences-spinning-discs-and-the-art-of-the-portfolio/)
-provided a reference for orbital browsing and a central rotating disc.
-I translated it into paper sleeves and dark vinyl, giving each work a
-moment of focus. Visitors can interpret the resulting colour, material
-and sound for themselves.
+shaped the Gallery's orbit and central spinning disc; I used paper sleeves and
+vinyl to give each work its own moment.
 
-The room's rules are recorded in [CLAUDE.md](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/CLAUDE.md).
-The server enforces authorship rights on Keep papers and requires witnessing
-before a reader burns a Release paper. [Witness checks](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/spec/witness.test.ts)
-verify that opening adds nothing and each other reader counts once.
-[Burn checks](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/spec/burn.test.ts)
-protect a single destruction across simultaneous actions and retries;
+I can check some of these promises.
+[CLAUDE.md](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/CLAUDE.md)
+sets out the rules;
+[witness checks](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/spec/witness.test.ts),
+[burn checks](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/spec/burn.test.ts)
+and
 [real-time checks](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/spec/realtime.test.ts)
-verify delivery to connected visitors.
-
-The feel of those actions needs judgement. I compared browser views and
-transition stages with the paper and Gallery references at desktop and
-phone sizes. My criteria were a readable sheet, a burn that visibly
-progresses to ash, and movement that preserves the objects' spatial
-relationships. I rejected an abrupt disappearance and specified that the
-disc must slide completely clear of its sleeve before changing its
-front-to-back position. For rebirth, I will judge whether image and music
-share the chosen emotional contrast and feel like one coherent new work. [PROCESS.md](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/PROCESS.md)
-links those corrections to the implementation record.
+protect what happens between visitors. But I have to judge whether it feels
+like release. I compared desktop and phone views with the paper and Gallery
+references, looking for a sheet that stays readable, fire that reaches ash,
+and movement that keeps objects in place. I corrected a burn that ended
+abruptly and a record that moved in front of its sleeve too early. For the
+Gallery, I will judge whether the image and music carry one coherent emotional
+turn.
+[PROCESS.md](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/PROCESS.md)
+records those corrections.
 
 ## How to use Throwaway
 
