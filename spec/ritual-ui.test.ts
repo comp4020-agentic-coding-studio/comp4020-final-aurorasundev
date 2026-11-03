@@ -13,6 +13,7 @@ const control = vi.hoisted(() => ({
   dispatch: vi.fn(),
   cancel: vi.fn(),
   end: vi.fn(),
+  ignite: vi.fn(),
   prepare: false,
   onGone: null as null | ((id: string, why: "destroyed", ending: Ending) => void),
   onRitual: null as null | ((event: RitualEvent) => void),
@@ -50,7 +51,7 @@ vi.mock("../src/components/PaperField.tsx", async () => {
       endRitual: control.end,
       placeRitual: () => true,
       prefetchFire: () => {},
-      igniteRitual: () => {},
+      igniteRitual: control.ignite,
       burnRitualRemotely: () => {},
     }));
     return createElement("div", null, ...["first", "second"].map((id) =>
@@ -147,6 +148,18 @@ it("a fire asset failure switches to a usable drawn furnace before any deletion"
   await click("Place in furnace");
   await act(async () => vi.advanceTimersByTimeAsync(1800));
   expect(host.querySelector(".ritual.is-ashes .ritual-drawn-furnace")).toBeTruthy();
+});
+
+it("never starts the fire until the server has confirmed destruction", async () => {
+  control.prepare = true;
+  let finish!: (value: ReturnType<typeof answer>) => void;
+  control.burn.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  await prepare("first");
+  await click("Place in furnace");
+  expect(control.burn).toHaveBeenCalledOnce();
+  expect(control.ignite).not.toHaveBeenCalled();
+  await act(async () => finish(answer("first", control.burn.mock.calls[0][2])));
+  expect(control.ignite).toHaveBeenCalledOnce();
 });
 
 it("holds the ash for three seconds before enabling the return button", async () => {
