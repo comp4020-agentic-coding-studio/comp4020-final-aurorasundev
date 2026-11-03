@@ -173,7 +173,7 @@ describe("the shared style", () => {
     values.map((v) => imagePrompt({ ...brief, [key]: v }));
 
   it("is a new preset version", () => {
-    expect(STYLE_PRESET_VERSION).toBe("mineral-record-v2");
+    expect(STYLE_PRESET_VERSION).toBe("mineral-record-v3");
   });
 
   it("lets each palette and material lead: they differ before the shared style, which names neither", () => {

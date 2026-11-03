@@ -67,6 +67,19 @@ export const PRESETS: Record<Timbre, Preset> = {
     releaseS: 0.25,
     lowpassHz: 1_600,
   },
+  // a bright, struck bell-like tone: fast attack, a shimmering upper partial,
+  // and a shorter release than the pad so it reads as bold, not heavy
+  bright_bell: {
+    partials: [
+      { ratio: 1, gain: 1, type: "triangle" },
+      { ratio: 2.4, gain: 0.18, type: "sine" },
+      { ratio: 3.8, gain: 0.08, type: "sine", detuneCents: 4 },
+    ],
+    attackS: 0.006,
+    sustain: 0.18,
+    releaseS: 0.35,
+    lowpassHz: 5_200,
+  },
 };
 
 export const midiToHz = (midi: number): number => 440 * 2 ** ((midi - 69) / 12);

@@ -19,11 +19,11 @@ export const MAX_NOTES = 96;
 export const MAX_VOICES = 6;
 export const MAX_SCORE_BYTES = 16 * 1024;
 export const MIDI_RANGE = [48, 84] as const;
-export const VELOCITY_RANGE = [0.12, 0.7] as const;
+export const VELOCITY_RANGE = [0.12, 0.78] as const;
 export const NOTE_DURATION_RANGE = [120, 2_400] as const;
 
-const TEMPOS = [48, 60, 72] as const;
-const TIMBRES = ["felt_piano", "soft_glass", "warm_pad"] as const;
+const TEMPOS = [48, 60, 72, 88] as const;
+const TIMBRES = ["felt_piano", "soft_glass", "warm_pad", "bright_bell"] as const;
 const SCORE_ENDINGS = ["open", "settled", "fading"] as const;
 const REVERB_MIXES = [0.06, 0.12, 0.18] as const;
 
@@ -106,7 +106,7 @@ const MOTIFS: Record<ScoreBrief["metaphor"], readonly number[]> = {
 };
 const TEMPO_FOR: Record<ScoreBrief["motion"], MusicScoreV1["tempo_bpm"]> = {
   still: 48,
-  unfolding: 72,
+  unfolding: 88,
   drifting: 60,
   settling: 60,
 };
@@ -117,7 +117,7 @@ const REVERB_FOR: Record<ScoreBrief["space"], MusicScoreV1["reverb_mix"]> = {
 };
 const ROOTS = [48, 50, 53, 55] as const;
 // how long one melodic voice sounds, release included, in beats (capped)
-const NOTE_BEATS: Record<Timbre, number> = { felt_piano: 1.6, soft_glass: 2.4, warm_pad: 2.2 };
+const NOTE_BEATS: Record<Timbre, number> = { felt_piano: 1.6, soft_glass: 2.4, warm_pad: 2.2, bright_bell: 1.8 };
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const round2 = (v: number) => Math.round(v * 100) / 100;

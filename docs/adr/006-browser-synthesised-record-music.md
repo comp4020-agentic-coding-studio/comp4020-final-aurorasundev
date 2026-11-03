@@ -80,3 +80,14 @@ Not verified: real-browser rendering and listening, iOS Safari's audio
 unlock, first-render latency and memory on a real phone, and the Release
 disclosure copy (unchanged until the owner enables music). Operating notes
 are in [the runbook](../artifacts-runbook.md).
+
+### Revision 2026-10-30: rebirth reversal
+
+The ignition brief's musical/visual instruction now answers a note's
+emotional weight with a contrasting mood ([ADR 008](008-rebirth-reversal.md))
+rather than matching it; image and music continue to stay coherent with
+each other under whichever direction the instruction currently selects. A
+fourth timbre (`bright_bell`) and a fourth tempo tier (88 BPM) were added,
+and the velocity ceiling moved from 0.70 to 0.78, all within the existing
+`throwaway-score-v1`/`throwaway-synth-v1` versions — the score schema,
+composer/renderer version strings and stored contract here are unchanged.

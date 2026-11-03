@@ -9,11 +9,12 @@ import { envelope, impulse, limitPeak, midiToHz, PEAK_LIMIT, PRESETS } from "../
 
 describe("throwaway-synth-v1", () => {
   it("has exactly the three server-owned timbres, with the designed filters and attacks", () => {
-    expect(Object.keys(PRESETS).sort()).toEqual(["felt_piano", "soft_glass", "warm_pad"]);
+    expect(Object.keys(PRESETS).sort()).toEqual(["bright_bell", "felt_piano", "soft_glass", "warm_pad"]);
     expect(PRESETS.felt_piano).toMatchObject({ attackS: 0.01, lowpassHz: 1800 });
     expect(PRESETS.soft_glass).toMatchObject({ attackS: 0.02, lowpassHz: 3500 });
     expect(PRESETS.warm_pad).toMatchObject({ attackS: 0.25, releaseS: 0.25, lowpassHz: 1600 });
     expect(PRESETS.warm_pad.partials).toHaveLength(2);
+    expect(PRESETS.bright_bell).toMatchObject({ attackS: 0.006, lowpassHz: 5200 });
     expect(midiToHz(69)).toBe(440);
   });
 

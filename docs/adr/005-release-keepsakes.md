@@ -85,6 +85,15 @@ after a published-state check.
   This future extension adds no external music provider, audio file/job or
   extra AI request, and does not change the existing fire or image policy.
 
+### Revision 2026-10-30: rebirth reversal
+
+The owner reframed the Gallery's emotional direction from matching a note's
+tone to answering it with its opposite (destruction → rebirth). See
+[ADR 008](008-rebirth-reversal.md). This does not change source deletion,
+extraction timing, the brief schema version or any stored record's shape;
+only the ignition instruction's guidance and the palette/timbre vocabulary
+available to new extractions change.
+
 ## Release boundary
 
 Before any of this reaches production: a consistent backup of the live

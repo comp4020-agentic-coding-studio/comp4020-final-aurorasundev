@@ -85,8 +85,8 @@ type MusicScoreV1 = {
   renderer_version: 'throwaway-synth-v1';
   seed: string; // exactly eight lowercase hexadecimal characters
   duration_ms: 24000;
-  tempo_bpm: 48 | 60 | 72;
-  timbre: 'felt_piano' | 'soft_glass' | 'warm_pad';
+  tempo_bpm: 48 | 60 | 72 | 88;
+  timbre: 'felt_piano' | 'soft_glass' | 'warm_pad' | 'bright_bell';
   ending: 'open' | 'settled' | 'fading';
   reverb_mix: 0.06 | 0.12 | 0.18;
   notes: Array<{
@@ -98,7 +98,9 @@ type MusicScoreV1 = {
 };
 ```
 
-Limits: JSON at most **16 KiB UTF-8**, 1–96 events, integer times, MIDI 48–84, velocity 0.12–0.70, event duration 120–2,400 ms. Each event ends by 22,000 ms, leaving the last two seconds for the tail/fade. At most six overlapping voice envelopes. Events are sorted by `(at_ms, midi, duration_ms)`; reject duplicate events, unknown keys/versions, NaN/infinite numbers, negative times and unsupported values. No text, code, URL, sample, arbitrary waveform or DSP graph can be supplied in a score.
+Limits: JSON at most **16 KiB UTF-8**, 1–96 events, integer times, MIDI 48–84, velocity 0.12–0.78, event duration 120–2,400 ms. Each event ends by 22,000 ms, leaving the last two seconds for the tail/fade. At most six overlapping voice envelopes. Events are sorted by `(at_ms, midi, duration_ms)`; reject duplicate events, unknown keys/versions, NaN/infinite numbers, negative times and unsupported values. No text, code, URL, sample, arbitrary waveform or DSP graph can be supplied in a score.
+
+Revision ([ADR 008](../../docs/adr/008-rebirth-reversal.md)): a fourth timbre, `bright_bell` (a bright, fast-attack struck tone), and a fourth tempo tier, 88 BPM, were added to give the Gallery's new rebirth direction enough headroom for a genuinely bold, rising mood; the velocity ceiling moved from 0.70 to 0.78 for the same reason, still well inside the renderer's absolute 0.70 sample-peak limiter. `motion: "unfolding"` now maps to 88 BPM (was 72) under the new "rising, gathering strength" reading; every other brief field's table entry is unchanged.
 
 The browser validates the score again before rendering. Its renderer accepts only the three server-owned timbres and the known renderer version. Do not execute model output, load a URL from it, or persist free-form model instructions.
 
@@ -108,12 +110,12 @@ The model chooses the existing brief; the program performs the following bounded
 
 | Brief field | v1 translation |
 | --- | --- |
-| `music.timbre` | Selects one fixed synthesis preset: soft keys, quiet glass tones or a warm pad |
+| `music.timbre` | Selects one fixed synthesis preset: soft keys, quiet glass tones, a warm pad, or a bright struck bell |
 | `music.pulse` | `none`: phrase spacing of 2/4 beats, without a beat track; `slow`: 1/2-beat spacing with gentle recurring accents. Neither adds drums |
 | `music.density` | `sparse`: one melodic line; `layered`: add quiet lower anchors, subject to the six-voice cap |
 | `music.ending` | `open`: stop away from the root; `settled`: final root near 20 s; `fading`: reduce velocity in the final third without forcing resolution |
 | `relation` | `connected`/`opening`: major pentatonic; `separated`/`under_pressure`: minor pentatonic; `receding`: suspended pentatonic. Separated phrases retain rests; pressure keeps the register narrow |
-| `motion` | `still`: 48 BPM, repeat the motif; `unfolding`: 72 BPM, gently extend its register; `drifting`: 60 BPM, alternate phrases and rests; `settling`: 60 BPM, thin the final third |
+| `motion` | `still`: 48 BPM, repeat the motif; `unfolding`: 88 BPM, gently extend its register; `drifting`: 60 BPM, alternate phrases and rests; `settling`: 60 BPM, thin the final third |
 | `metaphor` | Chooses the motif below, so sound shares the cover's symbolic direction |
 | `space` | `enclosed`: 0.06 reverb mix; `open`: 0.12; `distant`: 0.18 |
 

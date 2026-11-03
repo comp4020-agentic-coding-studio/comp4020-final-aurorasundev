@@ -189,7 +189,7 @@ own. No audio is cached beyond the one in-memory buffer.
 1. Back up the live database consistently before the first deploy that runs
    migration 10 (it only adds a nullable column).
 2. Listen first: in a real desktop browser and a real phone (including iOS
-   Safari), check all three timbres and endings for clicks, harshness and
+   Safari), check all four timbres and endings for clicks, harshness and
    level, and time the first render. None of this has been verified yet.
 3. Set `GALLERY_MUSIC_ENABLED=1` as a Fly secret and restart. Only images
    published from then on get scores.

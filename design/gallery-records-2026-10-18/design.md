@@ -106,11 +106,12 @@ Invented examples, for testing only:
 
 | Example note meaning | Visual metaphor | Related instrumental direction |
 | --- | --- | --- |
-| A conversation left unfinished | Two forms and an interrupted connecting thread, space between them | Sparse felt-piano phrases with intentional rests; quiet unresolved ending |
-| Pressure to satisfy other people's expectations | A folded vessel opening under a slackening band | Restrained low pulses slowly yielding to more spacious tones |
-| Leaving a place that mattered | A threshold and a path dissolving into paper grain | Airy sustained tones, a small recurring motif receding into silence |
+| A heavy, grieving note | A vessel opening into warm, luminous light | Bright felt-piano phrases lifting toward a settled, open ending |
+| An angry or pressured note | A band loosening around a quiet, cool form | Restrained tones easing from pressure into spaciousness |
+| A note of powerlessness | A threshold opening into bold, saturated colour | A bolder bell-like voice rising with gathering strength |
+| A note whose meaning is unclear | Forms in an ambiguous, shifting relation | A sparse, suspended, open-ended phrase |
 
-These are illustrative mappings, not hardcoded per-note templates. Do not infer a diagnosis, reproduce private details or force every sad note into a cheerful ending. Different notes can share a broad metaphor; variation should reflect validated content parameters, not unrelated filler.
+These are illustrative mappings, not hardcoded per-note templates. Do not infer a diagnosis or reproduce private details. The direction is now a deliberate contrast: answer a note's weight with a transformed, newly made feeling rather than mirroring it, per [ADR 008](../../docs/adr/008-rebirth-reversal.md). Different notes can share a broad metaphor; variation should reflect validated content parameters, not unrelated filler.
 
 ## 6. Revised timing: extraction at ignition
 

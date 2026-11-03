@@ -65,8 +65,9 @@ describe("the brief shapes the music", () => {
   it("timbre picks the preset; motion picks the tempo; space picks the reverb", () => {
     expect(composeMusicScore(withMusic({ timbre: "soft_glass" }), "00000001").timbre).toBe("soft_glass");
     expect(composeMusicScore(withMusic({ timbre: "warm_pad" }), "00000001").timbre).toBe("warm_pad");
+    expect(composeMusicScore(withMusic({ timbre: "bright_bell" }), "00000001").timbre).toBe("bright_bell");
     expect(composeMusicScore(withMusic({}, { motion: "still" }), "00000001").tempo_bpm).toBe(48);
-    expect(composeMusicScore(withMusic({}, { motion: "unfolding" }), "00000001").tempo_bpm).toBe(72);
+    expect(composeMusicScore(withMusic({}, { motion: "unfolding" }), "00000001").tempo_bpm).toBe(88);
     expect(composeMusicScore(withMusic({}, { motion: "settling" }), "00000001").tempo_bpm).toBe(60);
     expect(composeMusicScore(withMusic({}, { space: "enclosed" }), "00000001").reverb_mix).toBe(0.06);
     expect(composeMusicScore(withMusic({}, { space: "distant" }), "00000001").reverb_mix).toBe(0.18);
@@ -160,8 +161,8 @@ describe("bounds", () => {
         n++;
       }
     }
-    expect(n).toBe(38_880);
-    // 38,880 scores: about 2 s locally, slower on a shared CI runner
+    expect(n).toBe(51_840);
+    // 51,840 scores: about 2 s locally, slower on a shared CI runner
   }, 60_000);
 });
 
