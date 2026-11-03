@@ -94,6 +94,15 @@ extraction timing, the brief schema version or any stored record's shape;
 only the ignition instruction's guidance and the palette/timbre vocabulary
 available to new extractions change.
 
+### Revision 2026-11-03: your own records
+
+A signed-in person can now see the records their own released papers
+became, in a panel only they can open ([ADR 009](009-optional-accounts.md)).
+The public object is unchanged: the same allowlisted shape, an independent
+id and no link back. The panel is built from the private link the database
+already held (paper → job → record) and returns it only to that owner, in
+the same public shape. Everyone else still meets every record anonymously.
+
 ## Release boundary
 
 Before any of this reaches production: a consistent backup of the live

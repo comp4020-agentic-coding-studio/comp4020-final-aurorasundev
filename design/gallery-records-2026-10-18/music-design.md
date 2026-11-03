@@ -66,7 +66,7 @@ Reuse the current one-attempt, 15-second-bounded source extraction and `paper:ex
 Inside the existing guarded publication transaction, when music is enabled:
 
 1. Validate the job's stored `CreativeBriefV2` using the existing parser.
-2. Make one CSPRNG seed (four random bytes, stored as eight lowercase hexadecimal characters). The seed is not derived from a paper, owner or return key.
+2. Make one CSPRNG seed (four random bytes, stored as eight lowercase hexadecimal characters). The seed is not derived from a paper, owner or account.
 3. Run the pure composer, validate its output, and save the immutable score with the new public artifact. Only then commit and broadcast the existing `artifact:published` event.
 4. An invalid/unsupported music result leaves `music_score` null and a safe internal diagnostic; it must not block an otherwise accepted image or generate a replacement soundtrack. No raw brief or exception body is logged.
 

@@ -2,7 +2,10 @@
 
 Status: accepted. The rules below were already enforced on the server; the
 log names (`who=`) and the `session`, `open` and named `connect` lines were
-added on 2026-10-20 for crit 10.
+added on 2026-10-20 for crit 10. **Revised 2026-11-03:** the return key is
+replaced by optional accounts and a private panel of your own papers
+([ADR 009](009-optional-accounts.md)). The paper permissions below are
+unchanged; the return-key row and consequence are kept here as history.
 
 ## Context
 
@@ -42,25 +45,28 @@ another browser (rights, not history).
 | Report a paper | anyone who opened it, with limits per address | reports need context; abuse is bounded |
 | Edit a paper, change its mode | no one | content and mode are immutable once saved |
 | See who wrote or witnessed a paper | no one | no attribution is ever shown; counts appear only inside an opened paper |
-| Restore an identity | whoever holds its return key | the key is the only proof; wrong guesses are slowed per address |
+| Restore an identity | whoever holds its return key | the key is the only proof; wrong guesses are slowed per address (removed by ADR 009) |
+| See your own papers and records | the signed-in owner only (ADR 009) | no one else's list exists |
+| Sign in to an account | whoever knows its username and password (ADR 009) | wrong guesses are limited per name and per address |
 
 Every refusal is a 401/403/409/410 from the server, whatever the client
 shows. The spec checks the cross-person rules over HTTP (`spec/burn.test.ts`,
-`spec/witness.test.ts`, `spec/identity.test.ts`, `spec/who-did-what.test.ts`).
+`spec/witness.test.ts`, `spec/accounts.test.ts`, `spec/who-did-what.test.ts`).
 
 **How the log names a person.** Every line about a person carries
 `who=visitor-xxxxxx` and `identity=<id>`. The alias is an HMAC of the
 identity under a key derived from a server secret, so it is stable for that
 person, different for everyone else, and can't be turned back into the id or
 a cookie. `identity=` lets the operator join a line with the database.
-Lines never carry paper words, drafts, cookies, return keys or credentials.
+Lines never carry paper words, drafts, cookies, usernames, passwords or other credentials.
 
 ## Consequences
 
 - Two pod members in separate profiles appear as two `who=` values from
   their first `session outcome=new` line. A refused attempt on someone
   else's paper shows as `burn … outcome=forbidden` under the person who tried.
-- Clearing cookies makes a new person; that is intended. A saved return key
-  brings the old one back (`restore … outcome=restored`, same `who=`).
+- Clearing cookies makes a new person; that is intended. Signing in brings
+  the account's person back (`login … outcome=signed_in`, same `who=`). Until
+  ADR 009, a saved return key did this (`restore … outcome=restored`).
 - Logs live in Fly's log stream (`flyctl logs`), which keeps them for a
   limited time; see `docs/logging-runbook.md`.

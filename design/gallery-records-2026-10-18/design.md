@@ -10,7 +10,7 @@ The owner selected **A — the mineral-grey record exhibition** on 2026-10-18. G
 
 A note is something a person wants to put down. Its disappearance does not mean the experience had no value. The Gallery gives that experience another, anonymous form: **an image, and optionally a short instrumental, shaped by the content of that particular burned note**.
 
-This is an exhibition to encounter, not an archive of people's stories. There are no original notes, authors, dates, popularity metrics, comments, profiles or links back to papers. Do not turn it into a music-streaming product. A visitor can rotate the collection, open one record, and choose to listen.
+This is an exhibition to encounter, not an archive of people's stories. There are no original notes, authors, dates, popularity metrics, comments, profiles or links back to papers. (Since ADR 009, a signed-in author can see their own records in a private panel; the public Gallery is unchanged.) Do not turn it into a music-streaming product. A visitor can rotate the collection, open one record, and choose to listen.
 
 The owner's latest requirements take precedence over the earlier plan:
 

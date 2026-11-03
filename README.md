@@ -16,10 +16,11 @@ The [Paper Crumple demo](https://github.com/item-develop/paper-crumple-demo)
 showed me how folding and throwing could feel physical. In Throwaway, a paper
 enters the shared room closed. A visitor chooses to open it, then can press “I
 saw it” after reading. That small action means someone has stopped to pay
-attention. I left out rankings, comments, profiles, search and personal
-histories because I want people to leave a thought without having to perform
-for an audience. A return key restores a person's rights, but finding a paper
-still means encountering it in the room.
+attention. I left out rankings, comments, public profiles and search because
+I want people to leave a thought without having to perform for an audience.
+An optional account lets a person find their own papers again, and see what
+their released papers became, in a view no one else can open. With no
+audience, it gives no reason to perform.
 
 I do not filter for “interesting” papers either. A short, awkward sentence may
 be exactly what someone needed to put down. Safety checks address harm; they
@@ -69,7 +70,8 @@ records those corrections.
 
 [Open the room](https://comp4020-final-aurorasundev.fly.dev/). You can start
 without signing up. A cookie gives this browser an anonymous identity.
-A separate browser profile or private window is another visitor.
+A separate browser profile or private window is another visitor. To find
+your papers again from another browser, use **Sign in** at the top right.
 
 ### Leave a paper
 
@@ -113,13 +115,20 @@ it was lying. Someone already reading it can finish their reading.
 Let the paper burn down to ash, then choose **Back to the space**. The
 return button becomes available after three seconds of ash.
 
-### Keep your return key
+### Keep an account (optional)
 
-After your first Keep, save the return key offered to you; it is shown
-once. Use **Return key** in another browser to restore your identity and
-rights. You still encounter papers through the shared room: the key
-provides no list or personal history. Clearing cookies starts a new visitor
-unless you restore your saved key.
+Choose **Sign in** at the top right, then **Create an account** with a
+username and a password. You are also invited after your first Keep and
+your third paper; **Not now** closes it. Creating an account keeps
+everything you have already left and your rights to it. There is no email
+and no password recovery yet, so keep your password somewhere safe.
+
+Once signed in, your username replaces **Sign in**. Choose it to see your
+papers: those still in the space, which you can open (and let go, if you
+kept them), and the Gallery records your released papers became, which you
+can play. Only you see this. Everyone else still meets your papers and
+records anonymously. Signing in on another browser brings the same papers
+and rights there. **Sign out** returns this browser to a new guest.
 
 ### Visit the Gallery and listen
 
@@ -167,7 +176,9 @@ an operator. Reporting alone leaves the item available while it is reviewed.
 Paper text removed for safety disappears from open readings immediately.
 
 OpenAI receives the content needed for these checks and creative processing.
-Visitor identities, cookies and return keys stay out of those requests.
+Visitor identities, cookies, usernames and passwords stay out of those
+requests. An account stores a username and a salted, peppered scrypt hash of
+its password, never the password itself, and no email.
 Report notes are kept for 30 days. Processing and review details are in the
 [moderation decision](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/004-configured-safety-review.md)
 and [Gallery decision](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/005-release-keepsakes.md).
@@ -181,6 +192,7 @@ and [Gallery decision](https://github.com/comp4020-agentic-coding-studio/comp402
 - Decisions on [real-time updates](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/001-sse-snapshots.md),
   [finishing a reading](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/002-active-reader-final-read.md),
   [furnace placement](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/003-furnace-confirmation.md),
-  [record music](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/006-browser-synthesised-record-music.md)
-  and [anonymous identity](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/007-people-and-permissions.md)
+  [record music](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/006-browser-synthesised-record-music.md),
+  [anonymous identity](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/007-people-and-permissions.md)
+  and [optional accounts](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/009-optional-accounts.md)
   explain how the experience is implemented.

@@ -1,8 +1,9 @@
 # Throwaway — agent harness
 
-Throwaway is an anonymous shared space: write a thought on paper, crumple it,
-throw it into the space, come across papers other people left. This repo is the
-COMP8020 final project; crits 8, 9 and 10 run in it.
+Throwaway is a shared space where everyone else meets your papers
+anonymously: write a thought on paper, crumple it, throw it into the space,
+come across papers other people left. An account is optional (ADR 009).
+This repo is the COMP8020 final project; crits 8, 9 and 10 run in it.
 
 ## Current scope: C9 real-time, then the full Final MVP
 
@@ -20,12 +21,23 @@ restore folds and fine paper tooth without metallic highlights or noisy
 fibre relief. Writing and reading sheets have wrinkled edges and a quiet
 readable centre. Keep phone controls and captions clear of the paper.
 
-- Routes: `/` (space; writing, reading, confirming, reporting and return keys
-  are *states* of it), `/gallery/` and `/readme/`. Never add `/write`,
-  `/paper/:id`, profiles or share links.
-- Never build: a latest feed, search, ranking, profiles, My Papers / personal
-  history, comments, likes, follows, editing papers, bulk destruction, points,
+- Routes: `/` (space; writing, reading, confirming, reporting, signing in and
+  your papers are *states* of it), `/gallery/` and `/readme/`. Never add
+  `/write`, `/paper/:id`, `/me`, profiles or share links.
+- Never build: a latest feed, search, ranking, public profiles or author
+  pages, comments, likes, follows, editing papers, bulk destruction, points,
   countdowns, online lists, cursors, reader counts or per-frame broadcasts.
+- Optional accounts (ADR 009) are the one personal view, and it stays
+  private: a signed-in person's panel inside `/` lists only their own active
+  papers and the records their released papers became, with no witness
+  counts or other figures, never shown to anyone else, never in an event.
+  The username is shown only to its owner; nothing public names an author.
+  Accounts are a username and password, no email. Passwords are scrypt
+  (N=2^14, r=8, p=5, sized for the 256 MB machine, two at a time) sealed
+  with `ACCOUNT_PEPPER`, a Fly secret that must never change; on Fly without
+  it, accounts report themselves unavailable and guests carry on. Sign-in
+  and sign-up rotate the session cookie. A guest's papers move to the
+  account they sign into.
 - The Gallery (ADR 005, docs/artifacts-runbook.md) is the one requested
   exception: a burned **Release** paper automatically leaves one inspected,
   independent AI image; Keep never does. Release mode is the only
@@ -95,7 +107,7 @@ readable centre. Keep phone controls and captions clear of the paper.
   original key in the background, without pretending cancellation undid it.
 - Paper text never goes into a WebGL texture. Closed papers are a neutral
   material; text appears only in the HTML reading layer after an explicit open.
-- Never hardcode the references' sample text, counts or return key as data.
+- Never hardcode the references' sample text or counts as data.
   The plan's sample body is for local fixtures only, never the live pool.
 - Moderation must be a real configured service; never a fake pass. If it is
   unconfigured, say so and show the plan's failure copy.
@@ -116,10 +128,10 @@ readable centre. Keep phone controls and captions clear of the paper.
   existing papers and identities.
 - Logs carry time, action, the person (`who=visitor-…` alias plus internal
   identity, via `person()` in `server/log.ts`), paper id, outcome and
-  revision. Never content, drafts, cookies, return keys or credentials. Any
-  new per-person action logs through `person()` so crit-10 narration keeps
-  working; who may do what is ADR 007, reading the log is
-  `docs/logging-runbook.md`.
+  revision. Never content, drafts, cookies, usernames, passwords or other
+  credentials. Any new per-person action logs through `person()` so crit-10
+  narration keeps working; who may do what is ADR 007 as revised by ADR 009,
+  reading the log is `docs/logging-runbook.md`.
 - `src/` React 19 + Vite. `src/scene/` wraps the paper-crumple-demo (MIT,
   see `THIRD_PARTY_NOTICES.md`) as an init/dispose module. Per-frame state stays
   in the scene, never in React state.

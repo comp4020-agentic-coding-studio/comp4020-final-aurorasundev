@@ -24,7 +24,7 @@ Implementation has two levels of completion. The second remains part of the plan
 | Level | Completion criteria |
 | --- | --- |
 | C9 priority increment | Deployed changes appear across sessions within about one second; one decision about multi-user behavior is recorded in an ADR; process records and the week's reflection are grounded in actual work |
-| Complete Final MVP | Keep / Release, immutable submissions, random exploration, intentional witnessing, permission-based destruction, final reading, return keys, automated moderation, reporting and necessary logging work together end to end |
+| Complete Final MVP | Keep / Release, immutable submissions, random exploration, intentional witnessing, permission-based destruction, final reading, return keys (optional accounts since ADR 009), automated moderation, reporting and necessary logging work together end to end |
 
 Orphaned Gallery, AI symbolic artifacts and advanced spatial effects remain optional extensions. They are outside the default implementation scope. Do not build empty pages, database frameworks or placeholder entry points for them.
 
@@ -38,14 +38,14 @@ Complete core loop:
 
 1. Throwaway is a shared physical ritual for putting things down. A paper's words appear only after someone deliberately opens it.
 2. The paper pool and its lifecycle are shared; random placement and physics are rendered locally.
-3. Do not add a latest feed, search, popularity ranking, profiles, My Papers, author pages, comments, likes or follows.
+3. Do not add a latest feed, search, popularity ranking, public profiles, author pages, comments, likes or follows. (Revised 2026-11-03, ADR 009: a signed-in person may see their own papers and records in a private panel that no one else sees.)
 4. Content and the Keep / Release mode become immutable after a successful submission. Enforce this on the server.
 5. Keep preserves the author's final right to destroy the paper. Release removes the author's special destruction rights.
 6. Opening is not witnessing. Record a witness only after an intentional click on `I saw it`.
 7. Show witness counts only inside an opened paper. Do not use them for discovery or ranking or include them in unopened-paper list responses.
 8. Destruction requires an explicit user action and server permission checks. Do not add bulk destruction, points, countdowns or rewards.
 9. Normal destruction respects active readers. Moderation quarantine is a separate state and does not receive the final-reading exception.
-10. A return key restores rights and witness identity continuity, without restoring a personal history.
+10. An optional account (username and password) restores rights and witness identity continuity from any browser and lets its owner find their own papers; everyone else still meets them anonymously. (Revised 2026-11-03, ADR 009; this replaced return keys, which restored rights only.)
 
 All interface text must be English, including examples, errors, connection states, confirmations and helper text. This implementation plan is also in English.
 
@@ -83,7 +83,7 @@ Technical sources: [SSE / EventSource](https://developer.mozilla.org/en-US/docs/
 
 The images are design references, not application screenshots or evidence of completed work. Do not use a whole image as a page background or crop its text, buttons or dialogs to implement the interface. All text, input, selection and actions must remain accessible HTML.
 
-Numbers, body text and return keys shown in the images are examples. Use the exact English copy in Section 14, actual server values for numbers and genuine random generation for keys. If generated text contains a minor spelling variation, follow the plan's copy.
+Numbers, body text and the return key shown in the images are examples (the return key itself was later removed, ADR 009). Use the exact English copy in Section 14, actual server values for numbers and genuine random generation for keys. If generated text contains a minor spelling variation, follow the plan's copy.
 
 Desktop images are approximately 1672 × 941. Mobile images are approximately 853 × 1844, with the layout proportions of a 390 × 844 viewport. These are image dimensions, not CSS dimensions. Also verify the course's 1920 × 1080 and 390 × 844 viewports and a normal laptop window. Match proportions and responsive behavior rather than hardcoding image pixels.
 
@@ -119,7 +119,7 @@ For example, `![Write reference](reference-images/02-write-desktop.png)` continu
 | D02 | [02-write-desktop.png](reference-images/02-write-desktop.png) | Write layout, input, mode selection, confirmation and footer actions |
 | D03 | [03-read-desktop.png](reference-images/03-read-desktop.png) | Read spacing, witnessing, pending destruction eligibility and report entry |
 | D04 | [04-final-read-desktop.png](reference-images/04-final-read-desktop.png) | Final reading after someone else destroys the paper |
-| D05 | [05-return-key-desktop.png](reference-images/05-return-key-desktop.png) | Return-key input; the first-issuance variant uses the same paper system |
+| D05 | [05-return-key-desktop.png](reference-images/05-return-key-desktop.png) | Paper-sheet dialog material and spacing, now used for signing in and your papers (the return key itself was removed by ADR 009) |
 | D06 | [06-readme-desktop.png](reference-images/06-readme-desktop.png) | Single-column Readme article |
 | M01 | [07-space-mobile.png](reference-images/07-space-mobile.png) | Mobile shared space and reachable main action |
 | M02 | [08-write-mobile.png](reference-images/08-write-mobile.png) | Mobile Write order, controls and compact spacing |
@@ -128,7 +128,7 @@ For example, `![Write reference](reference-images/02-write-desktop.png)` continu
 | D07 | [11-burn-confirm-desktop.png](reference-images/11-burn-confirm-desktop.png) | Inline destruction confirmation for a Keep author |
 | D08 | [12-report-desktop.png](reference-images/12-report-desktop.png) | Separate report state on the same paper, without nested dialogs |
 
-For mobile final reading, combine D04's state with M03's layout. For mobile return keys, destruction confirmation and reporting, combine the controls in D05 / D07 / D08 with the width and scrolling rules in M02 / M03. Do not create another visual system.
+For mobile final reading, combine D04's state with M03's layout. For mobile sign-in and your papers, destruction confirmation and reporting, combine the controls in D05 / D07 / D08 with the width and scrolling rules in M02 / M03. Do not create another visual system.
 
 ## 5. Visual system and paper material
 
@@ -177,13 +177,13 @@ Read opening and closing may retain the demo's folding transition, but the final
 
 ## 6. Routes, pages and dialog tasks
 
-The only public page routes are `/` and `/readme/`. Write, Read, confirmation, reporting and return-key views are states within `/`. Do not add shareable `/paper/:id`, `/write` or personal pages.
+The only public page routes are `/` and `/readme/` (and, since ADR 005, `/gallery/`). Write, Read, confirmation, reporting, sign-in and your-papers views are states within `/`. Do not add shareable `/paper/:id`, `/write` or personal routes.
 
 ### 6.1 Shared space — D01 / M01
 
 Technology: React state + local Three.js / cannon-es scene + SSE.
 
-- Retain Throwaway at the top. Show Return key and About / Readme on desktop; adapt the mobile arrangement using M01 rather than squeezing everything into one row.
+- Retain Throwaway at the top. Show Gallery, About / Readme and Sign in (the username once signed in) on desktop; adapt the mobile arrangement using M01 rather than squeezing everything into one row.
 - Show the current active-paper total at the bottom, using server data. It is neither cumulative submissions nor the number of rendered objects.
 - `Leave something here` opens Write. Hide this action during reading or writing while keeping the total visible outside the sheet.
 - Insert new-paper events directly into the current window; do not discard them through random sampling. Keep content closed and do not automatically open Read.
@@ -267,21 +267,20 @@ Technology: current reading copy held in React memory + SSE / reconnect reconcil
 - A destruction event received before an opening request completes must not allow the late body response to revive an active paper. Merge by state version; if no reading copy was established, show `This paper is no longer here.`
 - Quarantine differs from destruction: clear currently displayed text and show `This paper is no longer available.`, without preserving a final-reading copy.
 
-### 6.6 Anonymous Return Key — D05
+### 6.6 Optional accounts and your papers — D05 material (revised 2026-11-03)
 
-![D05 — Claude must reference the return-key surface and explanation of restored rights](reference-images/05-return-key-desktop.png)
+![D05 — the paper-sheet dialog material, reused for signing in and your papers](reference-images/05-return-key-desktop.png)
 
-Technology: Node crypto + digest mapping in SQLite + existing anonymous session + React paper states.
+Superseded design: this section first specified an anonymous return key (one global key after the first Keep, restoring rights but not papers). The owner replaced it on 2026-11-03 because a Keep paper could only be found again by chance; see [ADR 009](docs/adr/009-optional-accounts.md).
 
-- After the first successful Keep submission, offer one global return key for the anonymous identity, rather than a password per paper.
-- Generate at least 128 bits of random entropy. `MOSS-RIVER-71-KITE` in the image is a typography example, not the real generation scheme.
-- Store a digest in the database, never the key in logs. Show the raw key only upon successful issuance, with Copy key and `I have saved it`.
-- Use D05's dimensions and material for first issuance: heading `Keep your return key`, explanation `A return key restores your rights, not your history.`, read-only key, copy action and saved confirmation. Omit the Restore identity button in this variant.
-- Make issuance recoverable after a lost response. An unconfirmed key may be reissued while invalidating the previous unconfirmed key, without storing plaintext. Do not promise indefinite retrieval of a raw key.
-- A returning visitor uses D05's input form. After verification, issue a new session cookie mapped to the restored identity.
-- Use an ordinary English error for an invalid key without disclosing identity content or other information. Apply reasonable restoration rate limits.
-- Reestablish SSE after restoration and refetch private permissions for the opened paper. Clear the previous identity's has_witnessed / can_burn caches.
-- Return no owned paper IDs, history, personal counts or lists. Migrations must preserve existing anonymous identities and saved papers.
+Technology: Node crypto (scrypt plus a pepper held in a Fly secret) + an `accounts` table on the existing identity + React paper states.
+
+- A guest starts with no account. Sign in sits in the header; a guest is also invited after a first Keep and at a third paper, at most twice.
+- An account is a username and a password, no email. Creating one turns the current guest identity into the account in place, so its papers and rights stay.
+- Signing in on another browser rotates the cookie to the account and moves that browser's guest papers to it. Reestablish SSE afterwards and refetch private permissions.
+- Signed in, the header opens a private panel inside `/`: the owner's active papers (each opens the ordinary reading sheet) and the records their released papers became. No witness counts or other figures; never public, never in an event.
+- The username is shown only to its owner. Nothing public names an author or links a record back to a paper.
+- A wrong password and an unknown username get the same ordinary English error. Limit failed attempts per username and per address. Migrations must preserve existing anonymous identities and saved papers.
 
 ### 6.7 Reporting and automated moderation — D08
 
@@ -344,7 +343,7 @@ Creation, witness and destruction responses also carry relevant versions. Merge 
 
 Refetch reading state immediately after a witness invalidation for the currently read paper. Coalesce closely spaced events into one request where appropriate and check response versions again. Measure the extra request's actual latency: normal pod use must update within about one second, rather than merely deliver a notification.
 
-Do not add online lists, typing, cursors, reader counts, per-frame physics or full-text broadcast events by default. Return-key issuance and identity restoration use private HTTP responses; never broadcast keys.
+Do not add online lists, typing, cursors, reader counts, per-frame physics or full-text broadcast events by default. Signing in, signing up and the owner's private lists use private HTTP responses; never broadcast account details.
 
 ### 7.3 Initial connection and reconnection
 
@@ -373,7 +372,7 @@ Read the existing schema before implementing repeatable, versioned migrations. V
 
 | Data | Minimal extension |
 | --- | --- |
-| identities / sessions | Preserve existing identity and cookie mappings; add a return-key digest and necessary issuance state, without public user profiles |
+| identities / sessions / accounts | Preserve existing identity and cookie mappings; an optional account (username, password hash) attaches to an identity, without public user profiles (ADR 009; return keys removed) |
 | papers | Add mode, active/destroyed/quarantined status, version and necessary lifecycle timestamps; preserve existing content and submission_key semantics |
 | witness acknowledgements | Unique paper_id + identity_id; track acknowledgement and count contribution. Authors may acknowledge without contributing |
 | reports | Paper ID, reporter identity, reason, review state and necessary timestamps; independent of witness and burn |
@@ -405,8 +404,8 @@ These are target contracts. Extend the current endpoints where possible and reta
 | GET `/api/events` | Same-origin SSE; initial / reconnect snapshot and live events; may accept a bounded list of current-window IDs for reconciliation |
 | POST `/api/papers/:id/witness` | read_receipt and a unique acknowledgement by server identity; return private state and count/version |
 | POST `/api/papers/:id/burn` | read_receipt, operation key and explicit confirmation; check rights on the server and perform at most one transition |
-| POST `/api/identity/return-key` | Issuance after the first Keep / recovery of unconfirmed issuance; private current-identity flow without paper lists |
-| POST `/api/identity/restore` | Verify the key and issue a new session; return no owned paper IDs, then reconcile SSE and permissions |
+| POST `/api/account/register`, `/api/account/login`, `/api/account/logout` | Optional account for the current identity (ADR 009); rotate the session on sign-in, then reconcile SSE and permissions |
+| GET `/api/account`, `/api/account/papers`, `/api/account/records` | The signed-in owner's own state, active papers and records only; never another person's, never cached |
 | POST `/api/papers/:id/report` | read_receipt, valid reason, rate limiting and deduplication; start separate review without granting destruction rights |
 
 Use understandable JSON error codes such as invalid_input, unauthenticated, forbidden, paper_gone, submission_conflict, moderation_rejected and service_unavailable, alongside the existing English error field where appropriate. Do not match API state to UI solely by parsing natural-language messages.
@@ -448,7 +447,7 @@ The paths below are relative to the actual repository root, regardless of the di
 | `src/scene/vendor/paper-scene.js` | Material / exposure review, local animation, immediately visible arrivals, removal and cleanup |
 | `server/db.ts` | Versioned migrations, constraints, revision, minimal tombstones and idempotency metadata |
 | `server/papers.ts` | Active queries, mode, private reading state, transactional checks and post-commit broadcasts |
-| `server/session.ts` | Identity continuity, return-key flow, cookies and rate limits |
+| `server/session.ts` | Identity continuity, session rotation on sign-in, cookies (accounts: `server/accounts.ts`, `server/password.ts`) |
 
 Add a small SSE module and identity-recovery component only as needed. Do not begin with a global state library, generic repository layer, event-sourcing framework, room system or new UI suite.
 
@@ -462,7 +461,7 @@ For each phase, explain the changes and their purpose, run the relevant verifica
 | P1 — Real-time foundation | Minimal migration, shared revision, SSE snapshot / live events, version merging, visible live arrival and a total outside dialogs | The same paper appears across three independent sessions within about one second after successful submission; reconnect reconciles; failed saving does not broadcast; D01/M01 |
 | P2 — Modes and witnessing | Extend Write, immutable mode, unique acknowledgement, private reading permissions and live witness updates | Different identities and same-identity tabs; author count rules; illegal edits rejected; D02/D03/M02/M03 |
 | P3 — Destruction and final reading | Transactional permissions, idempotent destruction, live removal, final-reading state and late-response merging | Simultaneous destruction decrements once; unauthorized requests fail; readers may finish but cannot reopen after closing; D04/D07 |
-| P4 — Return keys | Global key issuance after the first Keep, lost-response recovery, cross-device restoration and permission-cache clearing | Another browser recovers the same rights; no history returned; SSE uses the correct identity before and after restoration; D05 |
+| P4 — Return keys (since replaced by optional accounts, ADR 009) | Global key issuance after the first Keep, lost-response recovery, cross-device restoration and permission-cache clearing | Another browser recovers the same rights; SSE uses the correct identity before and after restoration; D05. Accounts now cover this: the same rights from any browser, plus the owner's private panel |
 | P5 — Automated safety flow | Real moderation integration, submission blocking, independent report review / retry and quarantine events | allow/reject/error; reporting itself does not delete; quarantine propagates live; D08; explicitly incomplete if the real service is unconfigured |
 | P6 — Visuals and accessibility | Compare every relevant reference: paper material, Read / Write, mobile, long content, soft keyboard, reduced motion and fallback | Actual screenshots compared with their references at least at five concrete points; an unsupported claim of visual similarity is insufficient |
 | P7 — Documentation and release | Update README / harness / ADR / PROCESS to actual behavior; pass relevant checks and deploy within implementation-task authorization | Local checks, deployed three-session verification and restart persistence; record only real commits, gaps and evidence |
@@ -496,7 +495,7 @@ Use Context, Options, Decision, Consequences and Verification, recording actual 
 - Record how the user set scope, why SSE was selected, how visual or concurrency problems were identified and corrected, and how the harness / checks changed.
 - The user completes `reflections/crit-9.md` from actual experience. Do not invent experiences, tutor comments or pod feedback.
 - Server logs include time, internal anonymous identity, action, paper ID, outcome and revision. Record actual create, witness, burn permitted/denied, destroy, report, quarantine and connect/disconnect actions.
-- Exclude content, session cookies, return keys, credentials and drafts from logs. Do not log idempotent retries as new successful creations.
+- Exclude content, session cookies, usernames, passwords, other credentials and drafts from logs. Do not log idempotent retries as new successful creations.
 
 ### 13.3 Required verification matrix
 
@@ -511,7 +510,7 @@ Use Context, Options, Decision, Consequences and Verification, recording actual 
 | R7 | B reads while C destroys | B receives the final-reading notice within about one second; may finish, cannot interact and cannot retrieve again after closing |
 | R8 | Offline creation / destruction and process restart | Reconnection recovers database facts without replaying all animations, reviving destroyed papers or losing drafts |
 | R9 | GET races with destruction | Late text cannot revive a paper; an old request cannot reopen an ended reading |
-| R10 | Identity restored in another browser | Same ownership / witness rights; no My Papers or history response; old-identity permissions cleared |
+| R10 | Signed in on another browser (ADR 009) | Same ownership / witness rights; the private panel lists only the owner's own papers and records; no one else's list exists; old-identity permissions cleared |
 | R11 | Moderation and reporting | Rejected submissions do not broadcast; reporting itself does not delete; quarantine propagates separately and clears current text; failures are honestly shown |
 | R12 | Refresh / restart / redeploy | Active papers, modes, witnesses, identities and versions persist; destroyed text cannot be retrieved again |
 | V1 | 1920×1080, laptop and 390×844 | Material, layout, type and spacing match relevant references; reachable actions and no horizontal overflow |
@@ -542,9 +541,9 @@ Today, I am leaving that unfinished sentence somewhere outside myself.
 | Write heading | What are you ready to put down? |
 | Empty input | Write something you have been carrying. |
 | Mode label | Choose how to leave it |
-| Keep explanation | Only you may destroy it if you encounter it again. |
+| Keep explanation | Only you may destroy it. Sign in to find it again from any browser. |
 | Release explanation | Its fate is no longer yours to control. |
-| Submission confirmation | I understand: once thrown, this paper cannot be edited or found in a personal history. |
+| Submission confirmation | I understand: once thrown, this paper cannot be edited. |
 | Moderation explanation | Submissions are automatically checked before entering the space. |
 | Submission action | Crumple & throw |
 | Witness | I saw it / Witnessed |
@@ -556,9 +555,11 @@ Today, I am leaving that unfinished sentence somewhere outside myself.
 | Destruction action | Let it disappear |
 | Final reading | This was let go while you were holding it. |
 | Final-reading explanation | You may finish reading. Once you close it, it is gone. |
-| Return-key principle | A return key restores your rights, not your history. |
-| Return-key entry heading | Return with your key |
-| Recovery action | Restore identity |
+| Account entry (header) | Sign in / the username once signed in |
+| Account heading | Sign in / Keep an account |
+| Account principle | Only you can see your own papers and what they became. Everyone else still meets them anonymously. |
+| No recovery notice | At least 8 characters. There's no password recovery yet, so keep it somewhere safe. |
+| Your papers heading | Your papers |
 | Reporting | Report this paper / Send report |
 | Reconnection | Reconnecting… |
 | Missing paper | This paper is no longer here. |
@@ -573,7 +574,7 @@ Claude's implementation handoff must distinguish implemented, locally verified, 
 - Full MVP: all default core features and checks in this plan are completed and real moderation is connected. Optional Gallery / AI features are not completion conditions.
 - Visuals: compare actual rendering with the relevant D01–D08 / M01–M04 areas. Preserve realistic matte crumpled paper and sheets, without sacrificing text or buttons to texture / animation.
 - Data: migrations preserve old content and identities. Retries, disconnections and redeployment must not duplicate creation, revive destroyed papers or incorrectly decrement totals.
-- Scope: no profiles, history queries, social mechanics, shared world coordinates or unnecessary architecture layers.
+- Scope: no public profiles, social mechanics, shared world coordinates or unnecessary architecture layers. The only personal view is the owner's private panel (ADR 009).
 
 The image-generation record below traces the design references. It is not evidence of implementation or application testing.
 
