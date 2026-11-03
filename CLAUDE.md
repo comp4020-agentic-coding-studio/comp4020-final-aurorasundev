@@ -29,7 +29,8 @@ readable centre. Keep phone controls and captions clear of the paper.
   countdowns, online lists, cursors, reader counts or per-frame broadcasts.
 - Optional accounts (ADR 009) are the one personal view, and it stays
   private: a signed-in person's panel inside `/` lists only their own active
-  papers and the records their released papers became, with no witness
+  papers (grouped Kept by you / Released) and the records their released
+  papers became, with no witness
   counts or other figures, never shown to anyone else, never in an event.
   The username is shown only to its owner; nothing public names an author.
   Accounts are a username and password, no email. Passwords are scrypt

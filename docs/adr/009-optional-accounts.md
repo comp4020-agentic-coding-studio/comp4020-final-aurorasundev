@@ -44,11 +44,13 @@ after their first Keep and once more at their third paper. "Not now" closes
 it and nothing records the refusal: the invitation can happen at most twice.
 
 **Only you see your own papers.** Signed in, the header shows your username
-and opens a panel within the space (no new route): the papers you left that
-are still here, each opening into the ordinary reading sheet (so a Keep can
-be let go from there, in the drawn furnace if it isn't on screen), and the
-Gallery records your released papers became, playable with the Gallery's
-one player. The list carries no witness counts, readers or other figures.
+and opens a panel within the space (no new route). The papers you left that
+are still here are grouped by how they were left, because the two mean
+different things to their author: **Kept by you** (still yours to let go)
+and **Released** (in readers' hands). Each opens into the ordinary reading
+sheet, so a Keep can be let go from there, in the drawn furnace if it isn't
+on screen. Below them, **What they became** shows the Gallery records your
+released papers left, playable with the Gallery's one player. The list carries no witness counts, readers or other figures.
 Signing in elsewhere moves any papers the guest in that browser left to the
 account, and the account's own witness on them stops counting, as an
 author's never does.

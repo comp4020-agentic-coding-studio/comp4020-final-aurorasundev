@@ -124,9 +124,10 @@ everything you have already left and your rights to it. There is no email
 and no password recovery yet, so keep your password somewhere safe.
 
 Once signed in, your username replaces **Sign in**. Choose it to see your
-papers: those still in the space, which you can open (and let go, if you
-kept them), and the Gallery records your released papers became, which you
-can play. Only you see this. Everyone else still meets your papers and
+papers still in the space, in two groups: **Kept by you**, which only you
+can let go, and **Released**, which are in readers' hands. Open any of them
+to read it again. Below them, **What they became** shows the Gallery
+records your released papers left, which you can play. Only you see this. Everyone else still meets your papers and
 records anonymously. Signing in on another browser brings the same papers
 and rights there. **Sign out** returns this browser to a new guest.
 

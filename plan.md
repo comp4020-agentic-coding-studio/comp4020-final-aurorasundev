@@ -278,7 +278,7 @@ Technology: Node crypto (scrypt plus a pepper held in a Fly secret) + an `accoun
 - A guest starts with no account. Sign in sits in the header; a guest is also invited after a first Keep and at a third paper, at most twice.
 - An account is a username and a password, no email. Creating one turns the current guest identity into the account in place, so its papers and rights stay.
 - Signing in on another browser rotates the cookie to the account and moves that browser's guest papers to it. Reestablish SSE afterwards and refetch private permissions.
-- Signed in, the header opens a private panel inside `/`: the owner's active papers (each opens the ordinary reading sheet) and the records their released papers became. No witness counts or other figures; never public, never in an event.
+- Signed in, the header opens a private panel inside `/`: the owner's active papers, grouped as Kept by you and Released (each opens the ordinary reading sheet), then What they became, the records their released papers left. No witness counts or other figures; never public, never in an event.
 - The username is shown only to its owner. Nothing public names an author or links a record back to a paper.
 - A wrong password and an unknown username get the same ordinary English error. Limit failed attempts per username and per address. Migrations must preserve existing anonymous identities and saved papers.
 
@@ -559,7 +559,11 @@ Today, I am leaving that unfinished sentence somewhere outside myself.
 | Account heading | Sign in / Keep an account |
 | Account principle | Only you can see your own papers and what they became. Everyone else still meets them anonymously. |
 | No recovery notice | At least 8 characters. There's no password recovery yet, so keep it somewhere safe. |
+| Account offer (after a first Keep or third paper) | Want to find your papers again later? An account lets you come back to them from any browser. / Not now |
 | Your papers heading | Your papers |
+| Kept group | Kept by you / Only you can let these go. |
+| Released group | Released / Handed to whoever reads them. When one burns, it leaves a record below. |
+| Records group | What they became / When a paper you released burns, the record it leaves will appear here. |
 | Reporting | Report this paper / Send report |
 | Reconnection | Reconnecting… |
 | Missing paper | This paper is no longer here. |
