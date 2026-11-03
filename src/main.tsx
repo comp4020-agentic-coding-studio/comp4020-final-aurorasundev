@@ -2,6 +2,7 @@ import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles/tokens.css";
 import "./styles/app.css";
+import "./styles/player.css";
 
 // Two pages from one build. Each is its own chunk, so opening the Gallery
 // never downloads the room (Three.js, the physics, the crumple model or the
