@@ -20,6 +20,13 @@ type Props = {
 
 type Load<T> = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; items: T[] };
 
+// The two ways a paper was left mean different things to its author: a
+// kept paper is still theirs to let go; a released one is in readers' hands.
+const GROUPS = [
+  { mode: "keep", title: "Kept by you", note: "Only you can let these go." },
+  { mode: "release", title: "Released", note: "Handed to whoever reads them. When one burns, it leaves a record below." },
+] as const;
+
 const failed = (err: unknown): string => (err instanceof ApiError ? err.message : "That didn't reach the space. Try again.");
 
 export function AccountPanel({ username, onOpenPaper, onSignedOut, onClose }: Props) {
@@ -71,6 +78,8 @@ export function AccountPanel({ username, onOpenPaper, onSignedOut, onClose }: Pr
     }
   }
 
+  const ownItems = papers.kind === "ready" ? papers.items : null;
+
   const retry = (
     <button type="button" className="button button-secondary" onClick={() => setAttempt((n) => n + 1)}>
       Try again
@@ -96,33 +105,46 @@ export function AccountPanel({ username, onOpenPaper, onSignedOut, onClose }: Pr
         </h2>
         <p className="account-principle">Signed in as {username}. Only you can see this page.</p>
 
-        <section className="mine-section" aria-labelledby="mine-papers">
-          <h3 id="mine-papers" className="mine-heading">
-            Still here
-          </h3>
-          {papers.kind === "loading" && <p className="read-status">Finding your papers…</p>}
-          {papers.kind === "error" && (
+        {papers.kind === "loading" && (
+          <section className="mine-section" aria-label="Your papers in the space">
+            <p className="read-status">Finding your papers…</p>
+          </section>
+        )}
+        {papers.kind === "error" && (
+          <section className="mine-section" aria-label="Your papers in the space">
             <div className="read-status" role="alert">
               <p>{papers.message}</p>
               {retry}
             </div>
-          )}
-          {papers.kind === "ready" && papers.items.length === 0 && (
+          </section>
+        )}
+        {ownItems?.length === 0 && (
+          <section className="mine-section" aria-label="Your papers in the space">
             <p className="account-note">Nothing you left is in the space right now.</p>
-          )}
-          {papers.kind === "ready" && papers.items.length > 0 && (
-            <ul className="mine-papers">
-              {papers.items.map((paper) => (
-                <li key={paper.id}>
-                  <button type="button" className="mine-paper" onClick={() => onOpenPaper(paper.id)} disabled={leaving}>
-                    <span className="mine-mode">{paper.mode === "keep" ? "Kept" : "Released"}</span>
-                    <span className="mine-excerpt">{paper.excerpt || (paper.has_drawing ? "A drawing" : "")}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+          </section>
+        )}
+        {ownItems &&
+          GROUPS.map((group) => {
+            const items = ownItems.filter((paper) => paper.mode === group.mode);
+            if (items.length === 0) return null;
+            return (
+              <section key={group.mode} className="mine-section" aria-labelledby={`mine-${group.mode}`}>
+                <h3 id={`mine-${group.mode}`} className="mine-heading">
+                  {group.title}
+                </h3>
+                <p className="account-note mine-group-note">{group.note}</p>
+                <ul className="mine-papers">
+                  {items.map((paper) => (
+                    <li key={paper.id}>
+                      <button type="button" className="mine-paper" onClick={() => onOpenPaper(paper.id)} disabled={leaving}>
+                        {paper.excerpt || (paper.has_drawing ? "A drawing" : "")}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })}
 
         <section className="mine-section" aria-labelledby="mine-records">
           <h3 id="mine-records" className="mine-heading">

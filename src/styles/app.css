@@ -717,7 +717,7 @@ fieldset:disabled .choice,
 }
 
 .mine-heading {
-  margin: 0 0 14px;
+  margin: 0 0 4px;
   font-family: var(--serif);
   font-weight: 400;
   font-size: 26px;
@@ -734,10 +734,13 @@ fieldset:disabled .choice,
   border-top: 1px solid var(--line);
 }
 
+.mine-group-note {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
 .mine-paper {
-  display: flex;
-  gap: 16px;
-  align-items: baseline;
+  display: block;
   width: 100%;
   min-height: 52px;
   padding: 12px 4px;
@@ -745,26 +748,16 @@ fieldset:disabled .choice,
   background: none;
   color: var(--ink);
   font: inherit;
+  font-size: 18px;
   text-align: left;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
-.mine-paper:hover .mine-excerpt,
-.mine-paper:focus-visible .mine-excerpt {
+.mine-paper:hover,
+.mine-paper:focus-visible {
   text-decoration: underline;
   text-underline-offset: 3px;
-}
-
-.mine-mode {
-  flex: none;
-  min-width: 6.5em;
-  font-size: 15px;
-  color: var(--muted);
-}
-
-.mine-excerpt {
-  font-size: 18px;
-  overflow-wrap: anywhere;
 }
 
 .mine-records {

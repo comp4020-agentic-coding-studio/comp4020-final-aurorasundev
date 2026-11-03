@@ -194,8 +194,10 @@ it("lists your papers, opens one that isn't on screen, and lets a Keep go in the
   await click("mira");
   expect(host.querySelector("#mine-title")!.textContent).toBe("Your papers");
   expect(host.textContent).toContain("When a paper you released burns, the record it leaves will appear here.");
-  const paper = host.querySelector<HTMLButtonElement>(".mine-paper")!;
-  expect(paper.textContent).toBe("KeptA thing I kept");
+  expect(host.querySelector("#mine-keep")!.textContent).toBe("Kept by you");
+  expect(host.querySelector("#mine-release")).toBeNull();
+  const paper = host.querySelector<HTMLButtonElement>("[aria-labelledby=mine-keep] .mine-paper")!;
+  expect(paper.textContent).toBe("A thing I kept");
   await act(async () => paper.click());
   await flush();
   expect(host.querySelector(".mine-dialog")).toBeNull();
@@ -207,6 +209,28 @@ it("lists your papers, opens one that isn't on screen, and lets a Keep go in the
   expect(control.burn).toHaveBeenCalledWith("far", "receipt-far", expect.any(String));
   await act(async () => vi.advanceTimersByTimeAsync(1800));
   expect(host.querySelector(".ritual.is-ashes .ritual-drawn-furnace")).toBeTruthy();
+});
+
+it("groups your papers by how they were left", async () => {
+  control.account.mockResolvedValue({ available: true, signed_in: true, username: "mira" });
+  control.papers.mockResolvedValue({
+    papers: [
+      { id: "r1", mode: "release", excerpt: "Handed over", has_drawing: false, created_at: "2026-11-02T00:00:00.000Z" },
+      { id: "k1", mode: "keep", excerpt: "Still mine", has_drawing: false, created_at: "2026-11-01T00:00:00.000Z" },
+      { id: "k2", mode: "keep", excerpt: "", has_drawing: true, created_at: "2026-10-31T00:00:00.000Z" },
+    ],
+  });
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await act(async () => root.render(createElement(App)));
+  await flush();
+  await click("mira");
+  const headings = [...host.querySelectorAll(".mine-heading")].map((h) => h.textContent);
+  expect(headings).toEqual(["Kept by you", "Released", "What they became"]);
+  const rows = (group: string) => [...host.querySelectorAll(`[aria-labelledby=mine-${group}] .mine-paper`)].map((b) => b.textContent);
+  expect(rows("keep")).toEqual(["Still mine", "A drawing"]);
+  expect(rows("release")).toEqual(["Handed over"]);
+  expect(host.textContent).not.toContain("Nothing you left is in the space right now.");
 });
 
 it("signs out from your papers, back to a guest", async () => {
