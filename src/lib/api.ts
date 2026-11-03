@@ -1,3 +1,5 @@
+import type { PublicArtifact } from "./gallery-api.ts";
+
 export const MAX_CODE_POINTS = 2000;
 
 export class ApiError extends Error {
@@ -79,7 +81,8 @@ export type Created = {
   paper: { id: string; version: number; status: string };
   total: number;
   revision: number;
-  offer_return_key: boolean;
+  // a guest's first Keep, or their third paper: suggest an account
+  offer_account: boolean;
 };
 
 // The sheet size the server accepts a drawing at (see server/papers.ts).
@@ -98,18 +101,6 @@ export async function createPaper(content: string, drawing: string | null, mode:
     }
   }
 }
-
-// The raw key exists only in this reply; the server keeps a digest. The
-// issuance id is not secret: it names which key this page showed.
-export type Issued = { return_key: string; issuance_id: string };
-export const issueReturnKey = (): Promise<Issued> => request("/api/identity/return-key", postJson({}));
-
-export const markReturnKeySaved = (issuanceId: string): Promise<{ ok: true }> =>
-  request("/api/identity/return-key/saved", postJson({ issuance_id: issuanceId }));
-
-// Whether this browser has a key it could still save (an offer it missed).
-export type KeyAvailability = "not_needed" | "available" | "saved";
-export const identityState = (): Promise<{ return_key: KeyAvailability }> => request("/api/identity/state");
 
 // A random handful of papers not already on screen, for exploring.
 export type Sample = { papers: { id: string }[]; total: number; revision: number };
@@ -143,5 +134,21 @@ export const reportPaper = (
     8000,
   );
 
-export const restoreIdentity = (key: string): Promise<{ ok: true }> =>
-  request("/api/identity/restore", postJson({ return_key: key }));
+// Optional accounts (ADR 009). The username is shown only to its owner.
+export type AccountState = { available: boolean; signed_in: boolean; username?: string };
+export const accountState = (): Promise<AccountState> => request("/api/account");
+
+export type SignedIn = { signed_in: true; username: string };
+export const register = (username: string, password: string): Promise<SignedIn> =>
+  request("/api/account/register", postJson({ username, password }), 15000);
+export const signIn = (username: string, password: string): Promise<SignedIn> =>
+  request("/api/account/login", postJson({ username, password }), 15000);
+export const signOut = (): Promise<{ signed_in: false }> => request("/api/account/logout", postJson({}));
+
+// Only this person's own papers that are still here: no witness counts.
+export type OwnPaper = { id: string; mode: "keep" | "release"; excerpt: string; has_drawing: boolean; created_at: string };
+export const ownPapers = (): Promise<{ papers: OwnPaper[] }> => request("/api/account/papers");
+
+// The Gallery records this person's own Release papers became, in the same
+// public shape the Gallery serves. Only ever fetched for the signed-in owner.
+export const ownRecords = (): Promise<{ records: PublicArtifact[] }> => request("/api/account/records");

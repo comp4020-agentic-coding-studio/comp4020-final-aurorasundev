@@ -3,7 +3,7 @@ import { Router } from "express";
 import { beginReleaseExtraction, extractionStatus, type ReleaseSource } from "./artifacts/store.ts";
 import { activeTotal, bumpRevision, currentRevision, requestDigest, serverSecret, type DB } from "./db.ts";
 import { broadcast } from "./events.ts";
-import { keyState } from "./identity.ts";
+import { offerAccount } from "./accounts.ts";
 import { log, person } from "./log.ts";
 import type { Payload, Verdict } from "./moderation.ts";
 import { checkReceipt, issueReceipt } from "./receipt.ts";
@@ -478,9 +478,12 @@ export function papersRouter(
     const { id, version, status, revision, total, fresh } = result.value;
     log("create", { ...person(ownerId), paper: id, mode: submission.mode.toLowerCase(), outcome: fresh ? "created" : "retry", revision });
     if (fresh) broadcast("paper:created", { id, version, revision, active_total: total, op: key });
-    // After a Keep, offer a return key until one has been confirmed saved.
-    const offerReturnKey = req.body.mode === "KEEP" && keyState(db, ownerId) !== "saved";
-    res.status(201).json({ paper: { id, version, status: status.toLowerCase() }, total, revision, offer_return_key: offerReturnKey });
+    res.status(201).json({
+      paper: { id, version, status: status.toLowerCase() },
+      total,
+      revision,
+      offer_account: offerAccount(db, ownerId, submission.mode, fresh),
+    });
   });
 
   return router;

@@ -99,4 +99,31 @@ describe("the server's log tells two visitors apart", () => {
     // and the paper's words never reach the log
     expect(out).not.toContain(content);
   });
+
+  it("names the same person before and after creating an account, and never logs a username or password", async () => {
+    const carol = await session();
+    await settle();
+    const carolWho = field(lines("session").at(-1)!, "who");
+    const username = `carol${randomUUID().slice(0, 6)}`;
+    const password = `secret ${randomUUID()}`;
+    const registered = await post(carol, "/api/account/register", { username, password });
+    expect(registered.status).toBe(201);
+    const signedIn = registered.headers.get("set-cookie")!.split(";")[0];
+    expect((await post(signedIn, "/api/account/logout", {})).status).toBe(200);
+    const elsewhere = await session();
+    const back = await post(elsewhere, "/api/account/login", { username, password });
+    expect(back.status).toBe(200);
+    expect((await post(await session(), "/api/account/login", { username, password: "wrong password here" })).status).toBe(401);
+    await settle();
+
+    expect(field(lines("register").at(-1)!, "who")).toBe(carolWho);
+    expect(field(lines("register").at(-1)!, "outcome")).toBe("created");
+    expect(field(lines("logout").at(-1)!, "who")).toBe(carolWho);
+    const logins = lines("login").slice(-2);
+    expect(field(logins[0], "who")).toBe(carolWho);
+    expect(field(logins[0], "outcome")).toBe("signed_in");
+    expect(field(logins[1], "outcome")).toBe("invalid");
+    expect(out).not.toContain(username);
+    expect(out).not.toContain(password);
+  });
 });

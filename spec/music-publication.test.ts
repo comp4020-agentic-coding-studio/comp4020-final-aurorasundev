@@ -274,7 +274,7 @@ describe("migration 10 on a shipped version-9 database", () => {
     copyFileSync(FIXTURE, path);
     return path;
   };
-  const TABLES = ["identities", "papers", "witnesses", "artifact_jobs", "artifacts", "artifact_reports", "artifact_admin_jobs", "artifact_budgets", "gallery_state", "burn_operations", "return_keys"];
+  const TABLES = ["identities", "papers", "witnesses", "artifact_jobs", "artifacts", "artifact_reports", "artifact_admin_jobs", "artifact_budgets", "gallery_state", "burn_operations"];
   const dump = (db: DB | Database.Database) => Object.fromEntries(TABLES.map((t) => [t, db.prepare(`SELECT * FROM ${t} ORDER BY rowid`).all()]));
 
   it("keeps every row and adds only a null music_score, so old records stay image-only", async () => {
@@ -285,7 +285,7 @@ describe("migration 10 on a shipped version-9 database", () => {
     v9.close();
     expect((before.artifacts as unknown[]).length).toBe(2);
     const db = quiet(() => openDb(path));
-    expect(db.pragma("user_version", { simple: true })).toBe(10);
+    expect(db.pragma("user_version", { simple: true })).toBe(11);
     const after = dump(db);
     const strip = (rows: unknown[]) => rows.map((r) => (({ music_score, ...rest }) => (expect(music_score).toBeNull(), rest))(r as { music_score: unknown }));
     expect(strip(after.artifacts as unknown[])).toEqual(before.artifacts);
@@ -295,7 +295,7 @@ describe("migration 10 on a shipped version-9 database", () => {
     db.close();
     // opened again, nothing moves
     const again = quiet(() => openDb(path));
-    expect(again.pragma("user_version", { simple: true })).toBe(10);
+    expect(again.pragma("user_version", { simple: true })).toBe(11);
     expect(dump(again)).toEqual(after);
     again.close();
   });

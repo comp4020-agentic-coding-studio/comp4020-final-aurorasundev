@@ -35,8 +35,8 @@ export function ensureSession(db: DB, req: Request, res: Response): { identityId
   return { identityId, fresh: true };
 }
 
-// A fresh cookie mapped to an identity: a new visitor's, or one restored
-// with a return key. Only the token's hash is stored.
+// A fresh cookie mapped to an identity: a new visitor's, or an account's
+// after signing in. Only the token's hash is stored.
 export function startSession(db: DB, res: Response, identityId: string): void {
   const token = randomBytes(32).toString("base64url");
   const expires = new Date(Date.now() + MAX_AGE_MS).toISOString();
@@ -48,4 +48,20 @@ export function startSession(db: DB, res: Response, identityId: string): void {
     maxAge: MAX_AGE_MS,
     path: "/",
   });
+}
+
+// Signing in or creating an account: the cookie this browser held stops
+// working and a new one is issued, so a token set before sign-in (session
+// fixation) can never act as the account.
+export function rotateSession(db: DB, req: Request, res: Response, identityId: string): void {
+  const token = readCookie(req);
+  if (token) db.prepare("DELETE FROM sessions WHERE token_hash = ?").run(hash(token));
+  startSession(db, res, identityId);
+}
+
+// Signing out: this browser's session ends. Its next visit starts a new guest.
+export function endSession(db: DB, req: Request, res: Response): void {
+  const token = readCookie(req);
+  if (token) db.prepare("DELETE FROM sessions WHERE token_hash = ?").run(hash(token));
+  res.clearCookie(COOKIE, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/" });
 }

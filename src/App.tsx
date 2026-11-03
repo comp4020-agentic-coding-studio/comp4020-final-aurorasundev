@@ -9,18 +9,21 @@ import {
   type SheetRect,
 } from "./components/PaperField.tsx";
 import { ReadDialog, type Ended } from "./components/ReadDialog.tsx";
-import { ReturnKeyDialog } from "./components/ReturnKeyDialog.tsx";
+import { AccountDialog, type AccountView } from "./components/AccountDialog.tsx";
+import { AccountPanel } from "./components/AccountPanel.tsx";
 import { RitualOverlay, type RitualOutcome, type RitualStage } from "./components/RitualOverlay.tsx";
 import { SpaceFooter } from "./components/SpaceFooter.tsx";
 import { WriteDialog } from "./components/WriteDialog.tsx";
 import { visibleLimit } from "./lib/space-window.ts";
-import { ApiError, burnPaper, getPaper, getSafetyConfig, samplePapers, type Created, type SafetyConfig } from "./lib/api.ts";
+import { accountState, ApiError, burnPaper, getPaper, getSafetyConfig, samplePapers, type AccountState, type Created, type SafetyConfig, type SignedIn } from "./lib/api.ts";
 import { useLiveSpace, type Ending } from "./lib/useLiveSpace.ts";
 
 type Mode =
   | { kind: "space" }
   | { kind: "writing" }
-  | { kind: "key"; variant: "issue" | "restore" }
+  | { kind: "account"; view: AccountView }
+  // your papers and what they became: only for the signed-in person
+  | { kind: "mine" }
   | { kind: "reading"; id: string; revealed: boolean; rect: SheetRect | null; ended: Ended | null }
   | {
       kind: "ritual";
@@ -51,9 +54,9 @@ const reducedMotion = (): boolean => window.matchMedia("(prefers-reduced-motion:
 // follows the viewport's CSS area only (src/lib/space-window.ts).
 const viewportLimit = (): number => visibleLimit(window.innerWidth, window.innerHeight);
 
-// After a throw lands, the return-key offer waits this long, and only while
-// nothing else is open.
-const KEY_OFFER_DELAY_MS = 1800;
+// After a throw lands, the account suggestion waits this long, and only
+// while nothing else is open.
+const OFFER_DELAY_MS = 1800;
 // How many recently seen papers exploring steers away from, besides those on screen.
 const RECENT = 24;
 const EXPLORE_COOLDOWN_MS = 600;
@@ -62,9 +65,11 @@ export function App() {
   const [mode, setMode] = useState<Mode>({ kind: "space" });
   // newest version announced live for the paper being read
   const [readingVersion, setReadingVersion] = useState(0);
-  // A first Keep earns a key offer. It waits for an idle space rather than a
-  // timer that a new draft could swallow; the header can still reach it.
-  const [keyOffer, setKeyOffer] = useState(false);
+  // A guest's first Keep (or third paper) earns an account suggestion. It
+  // waits for an idle space rather than a timer a new draft could swallow;
+  // the header can always reach the same dialog.
+  const [accountOffer, setAccountOffer] = useState(false);
+  const [account, setAccount] = useState<AccountState | null>(null);
   const [limit, setLimit] = useState(viewportLimit);
   const [exploring, setExploring] = useState(false);
   const field = useRef<PaperFieldHandle>(null);
@@ -425,38 +430,77 @@ export function App() {
       const { id, status } = created.paper;
       dispatch({ type: "arrived", id, status, revision: created.revision, total: created.total, limit: limitRef.current, reading: null });
       if (current().ids.includes(id)) field.current?.throwCreatedPaper(id);
-      if (created.offer_return_key) setKeyOffer(true);
+      if (created.offer_account) setAccountOffer(true);
     },
     [dispatch, current],
   );
 
-  // The key offer appears once the space is idle and the throw has landed;
-  // anything opened first (a new draft, a paper) postpones it, never drops it.
   useEffect(() => {
-    if (!keyOffer || mode.kind !== "space") return;
-    const timer = setTimeout(() => {
-      if (modeRef.current.kind !== "space") return;
-      setKeyOffer(false);
-      setMode({ kind: "key", variant: "issue" });
-    }, KEY_OFFER_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [keyOffer, mode.kind]);
-
-  const openReturnKey = useCallback(() => {
-    if (modeRef.current.kind === "ritual") return;
-    returnFocus.current = document.activeElement as HTMLElement | null;
-    setMode({ kind: "key", variant: "restore" });
+    let live = true;
+    accountState().then((state) => { if (live) setAccount(state); }).catch(() => {});
+    return () => {
+      live = false;
+    };
   }, []);
 
-  const closeKey = useCallback(() => {
+  // The suggestion appears once the space is idle and the throw has landed;
+  // anything opened first (a new draft, a paper) postpones it, never drops it.
+  useEffect(() => {
+    if (!accountOffer || mode.kind !== "space") return;
+    const timer = setTimeout(() => {
+      if (modeRef.current.kind !== "space") return;
+      setAccountOffer(false);
+      if (!account?.signed_in) setMode({ kind: "account", view: "offer" });
+    }, OFFER_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [accountOffer, account, mode.kind]);
+
+  // The header's entry: sign in as a guest, your papers once signed in.
+  const openAccount = useCallback(() => {
+    if (modeRef.current.kind === "ritual") return;
+    returnFocus.current = document.activeElement as HTMLElement | null;
+    setMode(account?.signed_in ? { kind: "mine" } : { kind: "account", view: "signin" });
+  }, [account]);
+
+  const closeAccount = useCallback(() => {
     setMode({ kind: "space" });
   }, []);
 
-  // Another identity now: nothing pending belongs to it.
-  const restored = useCallback(() => {
-    setKeyOffer(false);
+  // Another identity now: nothing pending belongs to it, and every paper's
+  // rights are asked again under the new cookie.
+  const signedIn = useCallback(
+    ({ username }: SignedIn) => {
+      setAccountOffer(false);
+      setAccount({ available: true, signed_in: true, username });
+      setMode({ kind: "space" });
+      retry();
+    },
+    [retry],
+  );
+
+  const signedOut = useCallback(() => {
+    setAccount((a) => ({ available: a?.available ?? true, signed_in: false }));
+    setMode({ kind: "space" });
     retry();
   }, [retry]);
+
+  // From your papers: the ordinary reading sheet, whether or not this paper
+  // is in the room's window. Off screen there is no 3D sheet under it, and a
+  // Keep let go from there burns in the drawn furnace.
+  const openOwnPaper = useCallback(
+    (id: string) => {
+      setReadingVersion(0);
+      if (current().ids.includes(id)) {
+        setMode({ kind: "reading", id, revealed: false, rect: null, ended: null });
+        field.current?.openPaper(id, (rect) =>
+          setMode((m) => (m.kind === "reading" && m.id === id ? { ...m, revealed: true, rect } : m)),
+        );
+      } else {
+        setMode({ kind: "reading", id, revealed: true, rect: null, ended: null });
+      }
+    },
+    [current],
+  );
 
   const busy = mode.kind !== "space";
   const busyRef = useRef(busy);
@@ -567,7 +611,13 @@ export function App() {
 
   return (
     <div className={`app${mode.kind === "writing" ? " is-writing" : ""}${mode.kind === "ritual" ? " is-ritual" : ""}`}>
-      <Header onReturnKey={openReturnKey} total={ready ? space.total : null} busy={mode.kind === "ritual"} canVisitGallery={mode.kind === "space"} />
+      <Header
+        onAccount={openAccount}
+        username={account?.signed_in ? (account.username ?? null) : null}
+        total={ready ? space.total : null}
+        busy={mode.kind === "ritual"}
+        canVisitGallery={mode.kind === "space"}
+      />
       {ready && (
         <PaperField
           ref={field}
@@ -606,7 +656,12 @@ export function App() {
       {mode.kind === "writing" && (
         <WriteDialog onCancel={cancelWriting} onThrown={thrown} pendingOps={pendingOps} offline={reconnecting} safety={safety} safetyLoading={safetyLoading} onRetrySafety={retrySafety} />
       )}
-      {mode.kind === "key" && <ReturnKeyDialog variant={mode.variant} onClose={closeKey} onRestored={restored} />}
+      {mode.kind === "account" && (
+        <AccountDialog view={mode.view} available={account?.available ?? true} onClose={closeAccount} onSignedIn={signedIn} />
+      )}
+      {mode.kind === "mine" && account?.signed_in && (
+        <AccountPanel username={account.username ?? ""} onOpenPaper={openOwnPaper} onSignedOut={signedOut} onClose={closeAccount} />
+      )}
       {mode.kind === "reading" && (
         <ReadDialog
           safety={safety}

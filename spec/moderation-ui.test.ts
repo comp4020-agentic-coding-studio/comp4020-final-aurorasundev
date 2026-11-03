@@ -94,7 +94,7 @@ async function readyDraft() {
 
 it("keeps a refused publication editable and submits revised words with a new key", async () => {
   control.create.mockRejectedValueOnce(new ApiError(422, "moderation_rejected", "Please revise this paper."))
-    .mockResolvedValueOnce({ paper: { id: "saved", status: "ACTIVE", version: 1 }, total: 1, revision: 1, offer_return_key: false });
+    .mockResolvedValueOnce({ paper: { id: "saved", status: "ACTIVE", version: 1 }, total: 1, revision: 1, offer_account: false });
   const thrown = vi.fn();
   await act(async () => root.render(createElement(WriteDialog, { safety: { provider: "fixture", reports: true }, offline: false,
     onCancel: vi.fn(), onThrown: thrown, pendingOps: new Set<string>() })));
@@ -108,7 +108,7 @@ it("keeps a refused publication editable and submits revised words with a new ke
 
 it("retries an unconfirmed publication with the original draft and key", async () => {
   control.create.mockRejectedValueOnce(new TypeError("reply lost"))
-    .mockResolvedValueOnce({ paper: { id: "saved", status: "ACTIVE", version: 1 }, total: 1, revision: 1, offer_return_key: false });
+    .mockResolvedValueOnce({ paper: { id: "saved", status: "ACTIVE", version: 1 }, total: 1, revision: 1, offer_account: false });
   const thrown = vi.fn();
   await act(async () => root.render(createElement(WriteDialog, { safety: { provider: "fixture", reports: true }, offline: false,
     onCancel: vi.fn(), onThrown: thrown, pendingOps: new Set<string>() })));
@@ -121,7 +121,7 @@ it("retries an unconfirmed publication with the original draft and key", async (
 
 
 it("asks for understanding below the checkbox before sending, then clears the hint when checked", async () => {
-  control.create.mockResolvedValueOnce({ paper: { id: "saved", status: "ACTIVE", version: 1 }, total: 1, revision: 1, offer_return_key: false });
+  control.create.mockResolvedValueOnce({ paper: { id: "saved", status: "ACTIVE", version: 1 }, total: 1, revision: 1, offer_account: false });
   const thrown = vi.fn();
   await act(async () => root.render(createElement(WriteDialog, { safety: { provider: "fixture", reports: true }, offline: false,
     onCancel: vi.fn(), onThrown: thrown, pendingOps: new Set<string>() })));

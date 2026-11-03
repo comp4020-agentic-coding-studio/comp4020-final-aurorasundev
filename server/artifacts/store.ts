@@ -184,7 +184,7 @@ export function publishedScore(db: DB, id: string, musicEnabled: boolean): { art
 
 // The score for a record about to be published: the job's validated brief
 // and four fresh random bytes as its seed (never derived from a paper, its
-// owner or a return key). Null if it can't be made; an image is never held
+// owner or an account). Null if it can't be made; an image is never held
 // back for its music, and no replacement sound is made.
 export function composeForPublication(brief: CreativeBriefV2): string | null {
   try {

@@ -7,8 +7,8 @@ import { artifactProviderFromEnv } from "./artifacts/provider.ts";
 import { galleryRouter } from "./artifacts/router.ts";
 import { createArtifactWorker } from "./artifacts/worker.ts";
 import { openDb, serverSecret } from "./db.ts";
+import { accountsRouter } from "./accounts.ts";
 import { broadcast, closeAllStreams, eventsRouter } from "./events.ts";
-import { identityRouter } from "./identity.ts";
 import { log, person, setAliasKey } from "./log.ts";
 import { check, providerFromEnv } from "./moderation.ts";
 import { papersRouter } from "./papers.ts";
@@ -71,7 +71,7 @@ app.use(
 app.use("/api", galleryRouter(db, artifactDir, () => artifactWorker.enabled, () => void artifactWorker.wake(), () => musicEnabled));
 app.use("/api", reportsRouter(db, () => void worker.wake()));
 app.use("/api", eventsRouter(db));
-app.use("/api", identityRouter(db));
+app.use("/api", accountsRouter(db, () => musicEnabled));
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "Not found." });
 });

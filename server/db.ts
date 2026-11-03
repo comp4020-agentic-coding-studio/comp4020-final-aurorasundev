@@ -267,7 +267,27 @@ const MIGRATIONS: ((db: DB) => void)[] = [
   // inspected image; never from a paper. Null for every record published
   // before this, which stays image-only: there is no backfill.
   (db) => db.exec("ALTER TABLE artifacts ADD COLUMN music_score TEXT"),
+
+  // 11: optional accounts replace return keys (ADR 009). An account is a
+  // username and password attached to an existing identity, so every paper,
+  // witness and burn it already owns stays exactly where it is. No email.
+  // The password is scrypt plus a pepper held outside the database.
+  (db) =>
+    db.exec(`
+      CREATE TABLE accounts (
+        identity_id TEXT PRIMARY KEY REFERENCES identities(id),
+        username TEXT NOT NULL,
+        username_key TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      DROP TABLE return_keys;
+    `),
 ];
+
+// the version a database is at once every migration has run
+export const SCHEMA_VERSION = MIGRATIONS.length;
 
 export const serverSecret = (db: DB, name: string): Buffer =>
   (db.prepare("SELECT value FROM server_secrets WHERE name = ?").get(name) as { value: Buffer }).value;

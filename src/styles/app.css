@@ -302,7 +302,7 @@ textarea {
 
 .app.is-writing .paper-field,
 .app:has(.read-dialog.is-revealed[open]) .paper-field,
-.app:has(.key-dialog[open]) .paper-field {
+.app:has(.account-dialog[open]) .paper-field {
   filter: blur(var(--scene-defocus));
 }
 
@@ -634,19 +634,19 @@ fieldset:disabled .choice,
   font-size: clamp(16px, 1.4vw, 19px);
 }
 
-/* return key (D05) */
-.key-dialog {
+/* account sign-in and your papers: D05's paper sheet */
+.account-dialog {
   width: min(840px, calc(100vw - 8px));
   max-height: calc(100dvh - 16px);
   padding: 20px 40px 48px 24px;
   overflow-y: auto;
 }
 
-.key-sheet {
+.account-sheet {
   padding: 72px 96px 76px;
 }
 
-.key-title {
+.account-title {
   margin: 24px 0 10px;
   font-family: var(--serif);
   font-weight: 400;
@@ -654,18 +654,22 @@ fieldset:disabled .choice,
   line-height: 1.15;
 }
 
-.key-principle {
-  margin: 0 0 40px;
+.account-principle {
+  margin: 0 0 36px;
   font-size: 19px;
 }
 
-.key-label {
+.account-label {
   display: block;
-  margin-bottom: 10px;
+  margin: 24px 0 10px;
   font-size: 18px;
 }
 
-.key-input {
+.account-label:first-of-type {
+  margin-top: 0;
+}
+
+.account-input {
   display: block;
   width: 100%;
   min-height: 56px;
@@ -673,29 +677,137 @@ fieldset:disabled .choice,
   border: 1px solid #8f897d;
   border-radius: 4px;
   background: rgb(250 248 244 / 0.6);
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font: inherit;
   font-size: 19px;
-  letter-spacing: 0.06em;
 }
 
-.key-value {
-  display: flex;
-  align-items: center;
-  margin: 0;
-  padding: 12px 16px;
-  user-select: all;
-  overflow-wrap: anywhere;
-  line-height: 1.5;
-}
-
-.key-note {
-  margin: 18px 0 0;
-  font-size: 18px;
+.account-note {
+  margin: 12px 0 0;
+  font-size: 17px;
   color: var(--muted);
 }
 
-.key-done {
+.account-done {
   margin-top: 28px;
+}
+
+.account-switch {
+  margin: 24px 0 0;
+  font-size: 17px;
+  color: var(--muted);
+}
+
+.account-switch .text-button,
+.mine-actions .text-button {
+  font-size: 17px;
+  color: var(--ink);
+}
+
+/* the header's account entry: a username can be long */
+.header-account {
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* your papers */
+.mine-section {
+  margin-top: 36px;
+}
+
+.mine-heading {
+  margin: 0 0 14px;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 26px;
+}
+
+.mine-papers,
+.mine-records {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mine-papers li + li {
+  border-top: 1px solid var(--line);
+}
+
+.mine-paper {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 4px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mine-paper:hover .mine-excerpt,
+.mine-paper:focus-visible .mine-excerpt {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.mine-mode {
+  flex: none;
+  min-width: 6.5em;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.mine-excerpt {
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.mine-records {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.mine-record {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mine-record img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 2px;
+  box-shadow: 0 1px 4px rgb(41 41 39 / 0.25);
+}
+
+.is-listening .mine-record img {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.mine-record-title {
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.mine-actions {
+  margin-top: 40px;
+  text-align: right;
 }
 
 /* reading (D03/M03) */
@@ -874,26 +986,29 @@ fieldset:disabled .choice,
     gap: 10px;
   }
 
-  .header-links .header-link:last-child {
+  .header-links a[href="/readme/"] {
     order: -1;
   }
 
-  .key-dialog {
+  .account-dialog {
     width: 100vw;
     padding: 0 12px 48px 8px;
   }
 
-  .key-sheet {
+  .account-sheet {
     padding: 40px 24px 32px;
   }
 
-  .key-title {
+  .account-title {
     font-size: 28px;
   }
 
-  .key-input {
+  .account-input {
     font-size: 16px;
-    letter-spacing: 0.02em;
+  }
+
+  .mine-records {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .header-link {
@@ -1073,20 +1188,6 @@ fieldset:disabled .choice,
 .read-report-link {
   font-size: 15px;
   color: var(--muted);
-}
-
-/* A missed key offer, reachable from the header's Return key. */
-.key-recover {
-  margin-top: 20px;
-}
-
-.key-recover .key-note {
-  margin: 0 0 8px;
-}
-
-.key-recover .text-button {
-  font-size: 18px;
-  color: var(--ink);
 }
 
 @media (max-width: 600px) {
@@ -1321,4 +1422,10 @@ fieldset:disabled .choice,
     margin-left: auto;
     padding: 0 28px;
   }
+}
+
+/* in your papers, the player sits under the record grid, closer than in the
+   Gallery's opened record */
+.mine-section .record-player {
+  margin: 8px 0 0;
 }

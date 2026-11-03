@@ -64,7 +64,7 @@ it("release_copy_explains_automatic_public_keepsake", async () => {
   );
   // Keep makes no keepsake promise
   const keep = host.querySelector('input[value="KEEP"]')!.closest("label")!;
-  expect(keep.textContent).toBe("Keep itOnly you may destroy it if you encounter it again.");
+  expect(keep.textContent).toBe("Keep itOnly you may destroy it. Sign in to find it again from any browser.");
 });
 
 it("gallery_does_not_add_another_checkbox", async () => {
@@ -79,7 +79,7 @@ it("sends exactly the same request as before, and the I understand check still h
     paper: { id: "p", version: 1, status: "active" },
     total: 1,
     revision: 1,
-    offer_return_key: false,
+    offer_account: false,
   });
   await write();
   await type("Something released.");
@@ -96,14 +96,14 @@ it("sends exactly the same request as before, and the I understand check still h
   expect(control.create.mock.calls[1]).toEqual(control.create.mock.calls[0]);
 });
 
-it("shows the Gallery link only from the idle space", async () => {
-  await act(async () => root.render(createElement(Header, { onReturnKey: vi.fn(), total: 3, canVisitGallery: true })));
+it("shows the Gallery link only from the idle space, beside About and the account entry", async () => {
+  await act(async () => root.render(createElement(Header, { onAccount: vi.fn(), username: null, total: 3, canVisitGallery: true })));
   const links = () => [...host.querySelectorAll(".header-link")].map((l) => l.textContent);
-  expect(links()).toEqual(["Return key", "Gallery", "About"]);
+  expect(links()).toEqual(["Gallery", "About", "Sign in"]);
   expect(host.querySelector<HTMLAnchorElement>('a[href="/gallery/"]')).not.toBeNull();
-  // writing, reading, the return key and the ritual all pass false
+  // writing, reading, the account dialogs and the ritual all pass false
   for (const busy of [false, true]) {
-    await act(async () => root.render(createElement(Header, { onReturnKey: vi.fn(), total: 3, busy, canVisitGallery: false })));
-    expect(links()).toEqual(["Return key", "About"]);
+    await act(async () => root.render(createElement(Header, { onAccount: vi.fn(), username: "mira", total: 3, busy, canVisitGallery: false })));
+    expect(links()).toEqual(["About", "mira"]);
   }
 });

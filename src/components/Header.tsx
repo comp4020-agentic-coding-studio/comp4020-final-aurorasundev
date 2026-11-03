@@ -1,17 +1,19 @@
 import { countLine } from "../lib/space.ts";
 
 type Props = {
-  onReturnKey: () => void;
+  // "Sign in" for a guest; the username for an account, opening its papers
+  onAccount: () => void;
+  username: string | null;
   // the shared total, once the space has loaded; shown beside the wordmark
   total: number | null;
-  // a paper is being let go: the header stays, its key flow waits
+  // a paper is being let go: the header stays, its account entry waits
   busy?: boolean;
   // only from the idle space: leaving mid-draft, mid-reading or mid-ritual
   // would drop what the visitor is doing
   canVisitGallery?: boolean;
 };
 
-export function Header({ onReturnKey, total, busy = false, canVisitGallery = false }: Props) {
+export function Header({ onAccount, username, total, busy = false, canVisitGallery = false }: Props) {
   return (
     <header className="site-header">
       <div className="header-brand">
@@ -25,9 +27,6 @@ export function Header({ onReturnKey, total, busy = false, canVisitGallery = fal
         )}
       </div>
       <nav className="header-links" aria-label="Site">
-        <button type="button" className="header-link" onClick={onReturnKey} disabled={busy}>
-          Return key
-        </button>
         {canVisitGallery && (
           <a className="header-link" href="/gallery/">
             Gallery
@@ -36,6 +35,15 @@ export function Header({ onReturnKey, total, busy = false, canVisitGallery = fal
         <a className="header-link" href="/readme/">
           About
         </a>
+        <button
+          type="button"
+          className="header-link header-account"
+          onClick={onAccount}
+          disabled={busy}
+          aria-label={username ? `Your papers (signed in as ${username})` : undefined}
+        >
+          {username ?? "Sign in"}
+        </button>
       </nav>
     </header>
   );

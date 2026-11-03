@@ -3,7 +3,7 @@ import { copyFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { openDb, requestDigest, type DB } from "../server/db.ts";
+import { openDb, requestDigest, SCHEMA_VERSION, type DB } from "../server/db.ts";
 import { beginReleaseExtraction, EXTRACT_LIMIT_MS } from "../server/artifacts/store.ts";
 
 // Migration 9 against a real version-8 database captured from the shipped
@@ -39,7 +39,7 @@ describe("migrations 9 and later on a shipped version-8 database", () => {
     const before = papers(v8);
     v8.close();
     const raw = quiet(() => openDb(path));
-    expect(raw.pragma("user_version", { simple: true })).toBe(10);
+    expect(raw.pragma("user_version", { simple: true })).toBe(SCHEMA_VERSION);
     const rows = papers(raw);
     expect(rows).toEqual(before);
     expect(rows).toHaveLength(6);
@@ -57,7 +57,7 @@ describe("migrations 9 and later on a shipped version-8 database", () => {
     const tables = first.prepare("SELECT name FROM sqlite_master ORDER BY name").all();
     first.close();
     const second = quiet(() => openDb(path));
-    expect(second.pragma("user_version", { simple: true })).toBe(10);
+    expect(second.pragma("user_version", { simple: true })).toBe(SCHEMA_VERSION);
     expect(JSON.stringify(papers(second))).toBe(snapshot);
     expect(second.prepare("SELECT name FROM sqlite_master ORDER BY name").all()).toEqual(tables);
     second.close();

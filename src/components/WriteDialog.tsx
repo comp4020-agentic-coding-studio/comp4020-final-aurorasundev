@@ -153,7 +153,7 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
             <input type="radio" name="mode" value="KEEP" checked={mode === "KEEP"} onChange={() => setMode("KEEP")} />
             <span>
               <span className="choice-label">Keep it</span>
-              <span className="choice-hint">Only you may destroy it if you encounter it again.</span>
+              <span className="choice-hint">Only you may destroy it. Sign in to find it again from any browser.</span>
             </span>
           </label>
           <label className="choice">
@@ -193,7 +193,7 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
             aria-invalid={confirmationError || undefined}
             aria-describedby={confirmationError ? "write-confirm-error" : undefined}
           />
-          <span>I understand: once thrown, this paper cannot be edited or found in a personal history.</span>
+          <span>I understand: once thrown, this paper cannot be edited.</span>
         </label>
 
         {confirmationError && (

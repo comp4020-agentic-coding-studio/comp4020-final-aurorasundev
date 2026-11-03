@@ -202,7 +202,7 @@ describe("over HTTP", () => {
     const created = await post(author, "/api/papers", { content: "release words", mode: "RELEASE", confirmed: true, submission_key: randomUUID(), keepsake: false });
     expect(created.status).toBe(201);
     const body = (await created.json()) as Record<string, unknown>;
-    expect(Object.keys(body).sort()).toEqual(["offer_return_key", "paper", "revision", "total"]);
+    expect(Object.keys(body).sort()).toEqual(["offer_account", "paper", "revision", "total"]);
     const id = (body.paper as { id: string }).id;
     const reader = await visitor();
     const opened = await open(reader, id);
