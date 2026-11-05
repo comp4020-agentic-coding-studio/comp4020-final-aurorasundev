@@ -11,11 +11,12 @@ import {
 import { ReadDialog, type Ended } from "./components/ReadDialog.tsx";
 import { AccountDialog, type AccountView } from "./components/AccountDialog.tsx";
 import { AccountPanel } from "./components/AccountPanel.tsx";
-import { RitualOverlay, type RitualOutcome, type RitualStage } from "./components/RitualOverlay.tsx";
+import { RitualOverlay, type RitualAfter, type RitualOutcome, type RitualStage } from "./components/RitualOverlay.tsx";
 import { SpaceFooter } from "./components/SpaceFooter.tsx";
 import { WriteDialog } from "./components/WriteDialog.tsx";
 import { visibleLimit } from "./lib/space-window.ts";
 import { accountState, ApiError, burnPaper, getPaper, getSafetyConfig, samplePapers, type AccountState, type Created, type SafetyConfig, type SignedIn } from "./lib/api.ts";
+import { getGalleryConfig } from "./lib/gallery-api.ts";
 import { useLiveSpace, type Ending } from "./lib/useLiveSpace.ts";
 
 type Mode =
@@ -34,6 +35,8 @@ type Mode =
       canPlace: boolean;
       // no scene to hold the paper: HTML confirmation and a drawn ending
       fallback: boolean;
+      // a Release paper, which may leave a Gallery record when it burns
+      released: boolean;
     };
 
 // What the ritual keeps in memory, outside React's render cycle: the paper,
@@ -70,6 +73,8 @@ export function App() {
   // the header can always reach the same dialog.
   const [accountOffer, setAccountOffer] = useState(false);
   const [account, setAccount] = useState<AccountState | null>(null);
+  // whether a burned Release paper is being made into a record right now
+  const [recordsMade, setRecordsMade] = useState(true);
   const [limit, setLimit] = useState(viewportLimit);
   const [exploring, setExploring] = useState(false);
   const field = useRef<PaperFieldHandle>(null);
@@ -229,7 +234,7 @@ export function App() {
 
   // "Release it": the reading closes, the paper balls up over the furnace.
   // Nothing has been sent; Cancel leaves everything as it was.
-  const startRitual = useCallback((receipt: string) => {
+  const startRitual = useCallback((receipt: string, released: boolean) => {
     const m = modeRef.current;
     if (m.kind !== "reading" || m.ended) return;
     clearTimeout(fallbackTimer.current);
@@ -244,6 +249,7 @@ export function App() {
       error: null,
       canPlace: true,
       fallback: !prepared,
+      released,
     });
   }, []);
 
@@ -437,6 +443,7 @@ export function App() {
 
   useEffect(() => {
     let live = true;
+    getGalleryConfig().then((c) => { if (live) setRecordsMade(c.generation_enabled); }).catch(() => {});
     accountState().then((state) => { if (live) setAccount(state); }).catch(() => {});
     return () => {
       live = false;
@@ -680,6 +687,7 @@ export function App() {
       {mode.kind === "ritual" && (
         <RitualOverlay
           stage={mode.stage}
+          after={(mode.released ? (recordsMade ? "record" : "paused") : "none") satisfies RitualAfter}
           outcome={mode.outcome}
           error={mode.error}
           canPlace={mode.canPlace && !reconnecting}

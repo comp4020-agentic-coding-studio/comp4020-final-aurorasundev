@@ -1268,6 +1268,22 @@ fieldset:disabled .choice,
   opacity: 0.5;
 }
 
+/* after a Release paper burns: where what it carried is going */
+.ritual-gallery {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 19px;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ritual-gallery[aria-disabled="true"] {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
 /* without WebGL: a drawn paper over a drawn furnace, and its ending */
 .ritual-drawn {
   position: absolute;

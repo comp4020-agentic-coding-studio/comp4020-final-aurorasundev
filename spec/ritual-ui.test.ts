@@ -15,6 +15,8 @@ const control = vi.hoisted(() => ({
   end: vi.fn(),
   ignite: vi.fn(),
   prepare: false,
+  mode: "keep" as "keep" | "release",
+  generation: true,
   onGone: null as null | ((id: string, why: "destroyed", ending: Ending) => void),
   onRitual: null as null | ((event: RitualEvent) => void),
 }));
@@ -23,10 +25,15 @@ vi.mock("../src/lib/api.ts", async (original) => ({
   ...await original<typeof import("../src/lib/api.ts")>(),
   getSafetyConfig: control.safety,
   getPaper: async (id: string) => ({
-    id, mode: "keep", version: 1, witness_count: 0, content: "Words belonging to " + id,
+    id, mode: control.mode, version: 1, witness_count: 0, content: "Words belonging to " + id,
     read_receipt: "receipt-" + id, viewer: { is_author: true, has_witnessed: false, can_burn: true },
   }),
   burnPaper: control.burn,
+}));
+
+vi.mock("../src/lib/gallery-api.ts", async (original) => ({
+  ...await original<typeof import("../src/lib/gallery-api.ts")>(),
+  getGalleryConfig: async () => ({ generation_enabled: control.generation, music_enabled: true }),
 }));
 
 vi.mock("../src/lib/useLiveSpace.ts", () => {
@@ -81,6 +88,8 @@ beforeEach(async () => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   control.prepare = false;
+  control.mode = "keep";
+  control.generation = true;
   control.safety.mockResolvedValue({ provider: "fixture", reports: true });
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   window.matchMedia = vi.fn().mockImplementation((media: string) => ({ matches: false, media, addEventListener() {}, removeEventListener() {} }));
@@ -189,3 +198,44 @@ it("recovers a failed safety configuration request without losing the open draft
   expect(host.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe("A retained draft.");
   expect(host.textContent).not.toContain("Safety checks are unavailable.");
 });
+
+async function burnToAshes() {
+  control.burn.mockImplementationOnce(async (id: string, _receipt: string, op: string) => answer(id, op));
+  await prepare("first");
+  await click("Place in furnace");
+  await act(async () => vi.advanceTimersByTimeAsync(1800));
+  expect(host.querySelector(".ritual.is-ashes")).toBeTruthy();
+}
+
+it("tells the writer a released paper is becoming a record, and where to find it", async () => {
+  control.mode = "release";
+  await remount();
+  await burnToAshes();
+  expect(host.querySelector(".ritual-note")!.textContent).toBe("What it carried is becoming a record in the Gallery.");
+  const link = host.querySelector<HTMLAnchorElement>(".ritual-gallery")!;
+  expect(link.getAttribute("href")).toBe("/gallery/");
+  expect(link.getAttribute("aria-disabled")).toBe("true");
+  await act(async () => vi.advanceTimersByTimeAsync(3000));
+  expect(link.getAttribute("aria-disabled")).toBeNull();
+});
+
+it("says a kept paper leaves no record, and offers no Gallery link", async () => {
+  await burnToAshes();
+  expect(host.querySelector(".ritual-note")!.textContent).toBe("A kept paper leaves no record behind.");
+  expect(host.querySelector(".ritual-gallery")).toBeNull();
+});
+
+it("promises no record while records aren't being made", async () => {
+  control.mode = "release";
+  control.generation = false;
+  await remount();
+  await burnToAshes();
+  expect(host.querySelector(".ritual-note")!.textContent).toBe("New Gallery records aren't being made right now.");
+  expect(host.querySelector(".ritual-gallery")).toBeNull();
+});
+
+async function remount() {
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await act(async () => root.render(createElement(App)));
+}

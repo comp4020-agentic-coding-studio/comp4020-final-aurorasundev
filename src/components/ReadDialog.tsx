@@ -42,7 +42,8 @@ type Props = {
   reconnecting: boolean;
   // "Release it": prepares the furnace ritual with this reading's receipt.
   // Nothing is sent yet; the drop into the furnace is the confirmation.
-  onRelease: (receipt: string) => void;
+  // `released`: a Release paper, which may become a Gallery record
+  onRelease: (receipt: string, released: boolean) => void;
   // this reader may let it go: worth fetching the fire ahead of time
   onReleasable: () => void;
   onEnded: (why: Ended) => void;
@@ -155,7 +156,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
 
   function release() {
     if (load.kind !== "ready" || !load.paper.read_receipt || !load.paper.viewer.can_burn || acting) return;
-    onRelease(load.paper.read_receipt);
+    onRelease(load.paper.read_receipt, load.paper.mode.toLowerCase() === "release");
   }
 
   function startReport() {

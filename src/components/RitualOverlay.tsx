@@ -9,8 +9,13 @@ export type RitualStage = "preparing" | "ready" | "committing" | "checking" | "b
 // first, or a removal for safety (no fire at all)
 export type RitualOutcome = "own" | "other" | "removed";
 
+// What the ending leaves: a Release paper is being made into a Gallery
+// record; a Keep paper leaves none; "paused" when records aren't being made.
+export type RitualAfter = "record" | "none" | "paused";
+
 type Props = {
   stage: RitualStage;
+  after: RitualAfter;
   outcome: RitualOutcome;
   error: string | null;
   canPlace: boolean;
@@ -23,7 +28,13 @@ type Props = {
 
 const PRECOMMIT: RitualStage[] = ["preparing", "ready"];
 
-function words(stage: RitualStage, outcome: RitualOutcome, fallback: boolean): { lead: string; note: string | null } {
+const AFTER: Record<RitualAfter, string> = {
+  record: "What it carried is becoming a record in the Gallery.",
+  none: "A kept paper leaves no record behind.",
+  paused: "New Gallery records aren't being made right now.",
+};
+
+function words(stage: RitualStage, outcome: RitualOutcome, fallback: boolean, after: RitualAfter): { lead: string; note: string | null } {
   if (outcome === "removed") return { lead: "This paper is no longer available.", note: null };
   if (outcome === "other") {
     return stage === "ashes"
@@ -42,15 +53,15 @@ function words(stage: RitualStage, outcome: RitualOutcome, fallback: boolean): {
     case "checking":
       return { lead: "Checking whether it was released…", note: "Leaving now can't undo it if it already was." };
     case "ashes":
-      return { lead: "It is gone.", note: null };
+      return { lead: "It is gone.", note: AFTER[after] };
   }
 }
 
-export function RitualOverlay({ stage, outcome, error, canPlace, fallback, layout, onCancel, onPlace, onBack }: Props) {
+export function RitualOverlay({ stage, after, outcome, error, canPlace, fallback, layout, onCancel, onPlace, onBack }: Props) {
   const title = useRef<HTMLHeadingElement>(null);
   const [ashReady, setAshReady] = useState(false);
   const precommit = PRECOMMIT.includes(stage) && outcome === "own";
-  const { lead, note } = words(stage, outcome, fallback);
+  const { lead, note } = words(stage, outcome, fallback, after);
   const ended = stage === "ashes" || outcome !== "own";
 
   // focus comes into the ritual, onto its (visually hidden) title
@@ -107,6 +118,11 @@ export function RitualOverlay({ stage, outcome, error, canPlace, fallback, layou
               Place in furnace
             </button>
           </>
+        )}
+        {stage === "ashes" && outcome === "own" && after === "record" && (
+          <a className="text-button ritual-gallery" href="/gallery/" aria-disabled={!ashReady || undefined} tabIndex={ashReady ? undefined : -1}>
+            Visit the Gallery
+          </a>
         )}
         {(ended || stage === "checking") && (
           <button type="button" className="button button-secondary ritual-back" onClick={onBack} disabled={stage === "ashes" && !ashReady}>
