@@ -125,6 +125,8 @@ Use a documented, frozen Mulberry32 PRNG for composition. Round musical times to
 
 These are initial compositional constraints requiring listening tests. Different notes may share a mood/motif. Do not claim that every output is unique or that music accurately diagnoses an emotion.
 
+> **Revision (2026-11-05/06).** The translation above is composer **v1**, kept frozen so its stored scores reproduce. Listening led to two new composer versions ([ADR 006](../../../docs/adr/006-browser-synthesised-record-music.md#revision-2026-11-0506-new-composers-v2-and-v3)): **v2** writes a short piece in sections with a chord progression per `relation` (major, minor, dorian or lydian), a bass line, an accompaniment set by `pulse` and `density`, and a melody whose theme and rhythm come from `metaphor`; **v3**, now current, keeps that form and walks the melody mostly by step towards one high point, contrasts the middle section and spreads keys across the octave. The brief still chooses every musical meaning, and the seed only the key and small variations. The score schema, its limits and the renderer are unchanged.
+
 ### Version and repeatability rules
 
 - Save the score and seed once. Replay, another visitor, reconnect and browser resize do not recompose or request AI.

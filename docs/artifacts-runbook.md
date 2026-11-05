@@ -155,6 +155,11 @@ when music is off.
   `space` choices) and a fresh four-byte random seed. The note itself is gone
   by then and is never read again. A score that fails validation is stored as
   `NULL`; the image still publishes, and no substitute sound is made.
+- New scores are composed by the current composer, `throwaway-score-v3`.
+  Each stored score keeps the `composer_version` it was made with (v1, v2 or
+  v3) and is never recomposed; the browser validates and plays all three
+  with the same renderer. A changed composer is always a new version
+  ([ADR 006](adr/006-browser-synthesised-record-music.md)).
 - The stored score holds only versions, the seed, tempo, timbre, ending,
   reverb mix and up to 96 note events (time, length, MIDI pitch, velocity).
   No words, drawing, brief, prompt, URL or code.
