@@ -14,7 +14,7 @@ has yet to be recorded.
 ADR 005 and the Gallery's original design asked the ignition brief to
 *match* a note's emotional tone: `BRIEF_INSTRUCTION` in
 `server/artifacts/provider.ts` said "Do not force a hopeful ending onto a
-sad note," and `design/gallery-records-2026-10-18/design.md` said "do not
+sad note," and `design/gallery/record-exhibition/design.md` said "do not
 force every sad note into a cheerful ending."
 
 The owner reframed the Gallery's purpose as destruction → rebirth and wrote
@@ -136,6 +136,6 @@ the new tempo table is an acceptable, scoped cost, not a correctness bug.
 - [ADR 006](006-browser-synthesised-record-music.md) — the composer/
   renderer contract this ADR extends with one new timbre and tempo tier,
   not a new version of either.
-- `design/gallery-records-2026-10-18/design.md` §5 and
-  `design/gallery-records-2026-10-18/music-design.md` §4 — updated
+- `design/gallery/record-exhibition/design.md` §5 and
+  `design/gallery/record-exhibition/music-design.md` §4 — updated
   illustrative tables and the `MusicScoreV1` type comment.

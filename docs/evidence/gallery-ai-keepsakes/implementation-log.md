@@ -1,8 +1,8 @@
 # Gallery and AI keepsakes: implementation log
 
 Factual checkpoint for resuming this feature. Plan:
-[plans-gallery-ai.md](../../superpowers/plans/plans-gallery-ai.md); spec:
-[design](../../superpowers/specs/2026-10-18-gallery-ai-keepsakes-design.md).
+[Gallery implementation plan](../../../design/gallery/ai-keepsakes/implementation-plan.md); spec:
+[design](../../../design/gallery/ai-keepsakes/design.md).
 
 Started 2026-10-18 15:11 AEDT on branch `claude/gallery-ai-keepsakes` from
 `08a7e9e`. The owner asked for periodic commits and pushes during the work;

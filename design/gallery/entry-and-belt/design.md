@@ -1,7 +1,7 @@
 # Gallery: entry mist and the record belt (2026-10-19)
 
 Status: **draft for the owner's approval.** Supersedes the browse layout of
-`design/gallery-records-2026-10-18/` (G01's orbit and its title block). The
+`design/gallery/record-exhibition/` (G01's orbit and its title block). The
 opened record (G02) and the report view (G03) keep their content and copy;
 only how they are reached changes. Reference for structure and motion craft:
 goodgrowth.com (Codrops case study, 2026-08-27). Nothing is copied from its
@@ -10,7 +10,7 @@ assets, type or palette.
 Unchanged rules (CLAUDE.md, ADR 005): an unordered exhibition, with no feed,
 dates, counts, ranking, likes or comments, and no link back to a paper. Text
 lives only in HTML. This visual draft adds no sound and no room code.
-The separately selected [Web Audio music design](../gallery-records-2026-10-18/music-design.md)
+The separately selected [Web Audio music design](../record-exhibition/music-design.md)
 is independent of belt/entry motion: future sound starts only from explicit
 Play in a record, never from the entry, wheel or transition. Music remains
 unimplemented; this note does not approve the draft layout. A reduced-motion

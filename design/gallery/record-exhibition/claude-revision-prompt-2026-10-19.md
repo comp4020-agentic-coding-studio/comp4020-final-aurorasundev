@@ -27,7 +27,7 @@ The artwork must still derive from that particular burned note. Preserve the at-
 
 - Repository file: `public/textures/gallery/gallery-stage-mist-v2.jpg`
 - Public URL: `/textures/gallery/gallery-stage-mist-v2.jpg`
-- [Preview the actual clean background](../../public/textures/gallery/gallery-stage-mist-v2.jpg)
+- [Preview the actual clean background](../../../public/textures/gallery/gallery-stage-mist-v2.jpg)
 - 1584 × 993, opaque sRGB JPEG, 237,246 bytes.
 - SHA-256: `f064130419ef58f0df9af7870672e466da264cf4d722e6cf34bb803754897512`.
 

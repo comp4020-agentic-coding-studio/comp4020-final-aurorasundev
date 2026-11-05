@@ -59,7 +59,7 @@ The saved runtime images are decoded and inspected directly, with alpha checks f
 
 Input/edit target: [G01](reference-images/G01-orbit-desktop-mineral.png), identical to the owner's supplied “唱片馆.png” (SHA-256 `1bc013649cab220e7ca735f9a4c8f3374ff80c8e32df6a9c9815dfa87369ffbd`). This is a clean-plate edit/reconstruction, removing the entire foreground and preserving the requested atmosphere and soft white lower mist.
 
-Built-in Image Gen source: `exec-0f8ac5df-60b6-4b66-a864-41d379585667.png`, 1584×993. Export: opaque sRGB JPEG quality 88 with macOS sips, no resize. Runtime asset: [gallery-stage-mist-v2.jpg](../../public/textures/gallery/gallery-stage-mist-v2.jpg). Bytes: 237,246. SHA-256: `f064130419ef58f0df9af7870672e466da264cf4d722e6cf34bb803754897512`.
+Built-in Image Gen source: `exec-0f8ac5df-60b6-4b66-a864-41d379585667.png`, 1584×993. Export: opaque sRGB JPEG quality 88 with macOS sips, no resize. Runtime asset: [gallery-stage-mist-v2.jpg](../../../public/textures/gallery/gallery-stage-mist-v2.jpg). Bytes: 237,246. SHA-256: `f064130419ef58f0df9af7870672e466da264cf4d722e6cf34bb803754897512`.
 
 Exact submitted prompt:
 

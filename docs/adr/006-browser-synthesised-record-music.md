@@ -57,7 +57,7 @@ historical backfill is included.
 
 The complete contract, synthesis limits, UI states, implementation boundaries
 and acceptance checks are in the
-[music design](../../design/gallery-records-2026-10-18/music-design.md).
+[music design](../../design/gallery/record-exhibition/music-design.md).
 
 ## Implementation (2026-10-27)
 

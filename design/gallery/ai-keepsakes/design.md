@@ -1,6 +1,6 @@
 # Throwaway: public Gallery and AI keepsakes
 
-> **Current authority — amendment 2026-10-19:** This is the historical image-Gallery handoff, not a checklist to rerun on the completed branch. Its pre-burn preparation/neutral-fallback details were superseded by the implemented ignition extraction in [ADR 005](../../adr/005-release-keepsakes.md). The selected music extension is [AI-directed parameters → stored score → Web Audio](../../../design/gallery-records-2026-10-18/music-design.md), designed but not implemented. It preserves the existing brief/fire/image flow and adds no external music provider, audio files or extra AI request. Read the current source and music design before further work.
+> **Historical handoff, October 2026.** This records the first image-Gallery implementation. [ADR 005](../../../docs/adr/005-release-keepsakes.md) records the move to extraction at ignition, [ADR 006](../../../docs/adr/006-browser-synthesised-record-music.md) covers the shipped music, and [ADR 008](../../../docs/adr/008-rebirth-reversal.md) sets the later creative direction. See the [design index](../../README.md) for the current pointers.
 
 Date: 2026-10-18. Status: design for the requested Claude implementation handoff; application code is not changed by this document.
 
@@ -156,7 +156,7 @@ Publication/hiding changes only `gallery_state.revision`, not paper revision or 
 - Preserve the furnace's existing ash dwell and Back control. The Gallery is reached through the header after returning to the space; do not add a ritual link that bypasses scene cleanup or sends a Keep author a generation promise. No automatic Gallery navigation or paper-to-object lookup.
 - Keep 16 px input text and 44 px controls. Preserve current header/count positions, paper materials, drawing tabs, scene bounds and recent physics work. Use fluid sizing and verify the longer Release description at 1,280×720 and 390×844. Do not hide controls, shrink input text below 16 px or add another consent control.
 
-Use [space materials](../../../reference-images/01-space-desktop.png), [writing sheet](../../../reference-images/02-write-desktop.png), [mobile writing](../../../reference-images/08-write-mobile.png) and [reading material](../../../reference-images/03-read-desktop.png) as material references. These older images do not authorize reverting newer header/counter placement. Capture the actual current app before edits. No new paid reference-image generation is part of this plan.
+Use [space materials](../../room/reference-images/01-space-desktop.png), [writing sheet](../../room/reference-images/02-write-desktop.png), [mobile writing](../../room/reference-images/08-write-mobile.png) and [reading material](../../room/reference-images/03-read-desktop.png) as material references. These older images do not authorize reverting newer header/counter placement. Capture the actual current app before edits. No new paid reference-image generation is part of this plan.
 
 ## 7. Operator and acceptance boundaries
 

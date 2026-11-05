@@ -8,11 +8,12 @@ This repo is the COMP8020 final project; crits 8, 9 and 10 run in it.
 ## Current scope: final project
 
 Use these rules, the accepted ADRs and the checks in `spec/` for the shipped
-room, furnace, moderation, Gallery and optional accounts. `plan.md` records
-the original C9 implementation plan and remains a guide to the visual
-references in `reference-images/` (D01–D08 desktop, M01–M04 mobile). Read the
-relevant reference before changing the interface. Apply the current rules
-when an older plan or image shows a superseded flow.
+room, furnace, moderation, Gallery and optional accounts. Start at the
+[design index](design/README.md) for the plans, Claude handoffs and visual
+references. The original C9 plan and the room references (D01–D08 desktop,
+M01–M04 mobile) are in `design/room/`. Read the relevant reference before
+changing the interface. Apply the current rules when a dated handoff or
+image shows a superseded flow.
 
 For the furnace and material pass, also use B01–B05 and the user's approved
 `01-space-desktop.png` and `02-write-desktop.png`. B01 defines a squat,
@@ -52,7 +53,7 @@ readable centre. Keep phone controls and captions clear of the paper.
   no link back. An image request with an unknown outcome is never resent
   automatically. It is an unordered record exhibition (no feed, ranking,
   counts, likes or comments), and loads no room code. The browse layout
-  is `design/gallery-belt-2026-10-19/design.md`, which supersedes G01's
+  is `design/gallery/entry-and-belt/design.md`, which supersedes G01's
   orbit; G02/G03 (opened record, report) keep their content. An entry
   screen with the centred title (Gloock, self-hosted) half-hidden under a
   dense, breathing, pointer-parted mist veil leads by one gesture into the
@@ -80,7 +81,7 @@ readable centre. Keep phone controls and captions clear of the paper.
   in production on 2026-10-27** (a Fly secret; unset it to switch off).
   A one-time operator backfill scored five older records. Records without a
   valid score remain image-only. The design is
-  `design/gallery-records-2026-10-18/music-design.md` (ADR 006): the
+  `design/gallery/record-exhibition/music-design.md` (ADR 006): the
   existing AI musical directions plus a random seed go through the frozen
   composer in `shared/music-score.ts`; the score is saved once, in the
   image's publication transaction (migration 10, `artifacts.music_score`,

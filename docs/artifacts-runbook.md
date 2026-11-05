@@ -127,7 +127,7 @@ while paused.
 
 ## Record music (Web Audio) — implemented, off by default
 
-The [music design](../design/gallery-records-2026-10-18/music-design.md) and
+The [music design](../design/gallery/record-exhibition/music-design.md) and
 [ADR 006](adr/006-browser-synthesised-record-music.md) are implemented behind
 `GALLERY_MUSIC_ENABLED`, which is **off** unless set to `1`. There is no
 music-service key, audio endpoint, audio file, music quota or extra model

@@ -2,7 +2,7 @@
 
 Original plan: 2026-10-08 · C9 / Week 10 real-time interaction and the initial final project scope.
 
-**Status: historical plan and visual reference.** The room, realtime updates, furnace, moderation, Gallery and optional accounts have shipped. The current rules are in [CLAUDE.md](CLAUDE.md) and [spec/](spec/README.md). Use [ADR 004](docs/adr/004-configured-safety-review.md) for live moderation, [ADR 005](docs/adr/005-release-keepsakes.md) for the Gallery, [ADR 006](docs/adr/006-browser-synthesised-record-music.md) for music, [ADR 008](docs/adr/008-rebirth-reversal.md) for the current creative direction and [ADR 009](docs/adr/009-optional-accounts.md) for the optional accounts that replaced return keys. The dated phases below document how the work was originally planned.
+**Status: historical plan and visual reference.** The room, realtime updates, furnace, moderation, Gallery and optional accounts have shipped. The current rules are in [CLAUDE.md](../../CLAUDE.md) and [spec/](../../spec/README.md). Use [ADR 004](../../docs/adr/004-configured-safety-review.md) for live moderation, [ADR 005](../../docs/adr/005-release-keepsakes.md) for the Gallery, [ADR 006](../../docs/adr/006-browser-synthesised-record-music.md) for music, [ADR 008](../../docs/adr/008-rebirth-reversal.md) for the current creative direction and [ADR 009](../../docs/adr/009-optional-accounts.md) for the optional accounts that replaced return keys. The dated phases below document how the work was originally planned.
 
 ## 1. Starting point, sources and delivery scope
 
@@ -87,13 +87,13 @@ Desktop images are approximately 1672 × 941. Mobile images are approximately 85
 
 ### Package portability and relative image paths
 
-Every Markdown image and image-file link in this document uses a relative path beginning with `reference-images/`. It resolves from the directory containing `plan.md`, independently of the old absolute workspace location.
+Every Markdown image and image-file link in this document uses a relative path beginning with `reference-images/`. It resolves from the directory containing `c9-implementation-plan.md`, independently of the old absolute workspace location.
 
-Move `plan.md` and `reference-images/` together, retaining this structure:
+Move `c9-implementation-plan.md` and `reference-images/` together, retaining this structure:
 
 ```text
 <any destination directory>/
-├── plan.md
+├── c9-implementation-plan.md
 └── reference-images/
     ├── 01-space-desktop.png
     ├── 02-write-desktop.png
@@ -269,7 +269,7 @@ Technology: current reading copy held in React memory + SSE / reconnect reconcil
 
 ![D05 — the paper-sheet dialog material, reused for signing in and your papers](reference-images/05-return-key-desktop.png)
 
-Superseded design: this section first specified an anonymous return key (one global key after the first Keep, restoring rights but not papers). The owner replaced it on 2026-11-03 because a Keep paper could only be found again by chance; see [ADR 009](docs/adr/009-optional-accounts.md).
+Superseded design: this section first specified an anonymous return key (one global key after the first Keep, restoring rights but not papers). The owner replaced it on 2026-11-03 because a Keep paper could only be found again by chance; see [ADR 009](../../docs/adr/009-optional-accounts.md).
 
 Technology: Node crypto (scrypt plus a pepper held in a Fly secret) + an `accounts` table on the existing identity + React paper states.
 
@@ -412,7 +412,7 @@ Disable persistent caching for body and reading-state responses. Destruction res
 
 ## 10. External moderation: an explicit implementation prerequisite
 
-The original plan left the moderation provider open. The shipped implementation uses OpenAI as documented in [ADR 004](docs/adr/004-configured-safety-review.md) and the [moderation runbook](docs/moderation-runbook.md). The requirements below record what the implementation was meant to enforce.
+The original plan left the moderation provider open. The shipped implementation uses OpenAI as documented in [ADR 004](../../docs/adr/004-configured-safety-review.md) and the [moderation runbook](../../docs/moderation-runbook.md). The requirements below record what the implementation was meant to enforce.
 
 Moderation contract:
 

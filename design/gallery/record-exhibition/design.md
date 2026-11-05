@@ -111,7 +111,7 @@ Invented examples, for testing only:
 | A note of powerlessness | A threshold opening into bold, saturated colour | A bolder bell-like voice rising with gathering strength |
 | A note whose meaning is unclear | Forms in an ambiguous, shifting relation | A sparse, suspended, open-ended phrase |
 
-These are illustrative mappings, not hardcoded per-note templates. Do not infer a diagnosis or reproduce private details. The direction is now a deliberate contrast: answer a note's weight with a transformed, newly made feeling rather than mirroring it, per [ADR 008](../../docs/adr/008-rebirth-reversal.md). Different notes can share a broad metaphor; variation should reflect validated content parameters, not unrelated filler.
+These are illustrative mappings, not hardcoded per-note templates. Do not infer a diagnosis or reproduce private details. The direction is now a deliberate contrast: answer a note's weight with a transformed, newly made feeling rather than mirroring it, per [ADR 008](../../../docs/adr/008-rebirth-reversal.md). Different notes can share a broad metaphor; variation should reflect validated content parameters, not unrelated filler.
 
 ## 6. Revised timing: extraction at ignition
 
@@ -158,7 +158,7 @@ The GSAP [Observer documentation](https://gsap.com/docs/v3/Plugins/Observer/) su
 
 ## 9. Music: selected browser-synthesis flow
 
-The authoritative [music design](music-design.md) and [ADR 006](../../docs/adr/006-browser-synthesised-record-music.md) replace the previous external music-service recommendation. A 24-second instrumental uses the **existing** note-derived `CreativeBriefV2.music` plus its visual semantics. A bounded local composer and a random seed produce a stored score once, at inspected-image publication; there is no extra model request or change to ignition timing.
+The authoritative [music design](music-design.md) and [ADR 006](../../../docs/adr/006-browser-synthesised-record-music.md) replace the previous external music-service recommendation. A 24-second instrumental uses the **existing** note-derived `CreativeBriefV2.music` plus its visual semantics. A bounded local composer and a random seed produce a stored score once, at inspected-image publication; there is no extra model request or change to ignition timing.
 
 Only an explicit Play creates/resumes the browser audio context, reads the current published score and renders its buffer. One player owns pause/resume/replay/volume and stops on switch, close, reporting, hide, reconnect, backgrounding or leaving. No autoplay, voice, lyrics, sample download, MP3, audio endpoint or music job is required. Images remain complete when music is disabled, missing or unsupported.
 
@@ -196,16 +196,16 @@ The original asset-only pass delivered three visual references, fixed assets in 
 
 The fixed material pack has now been generated and saved under **`public/textures/gallery/`**. These are real runtime material files, not cropped website mockups. Use these existing files during implementation rather than replacing them with new approximate gradients or fetching reference-image crops. The original asset pass did not wire them in; the current image Gallery does. Preserve its existing asset usage when adding music.
 
-Public URLs begin with `/textures/gallery/` — **never `/public/textures/gallery/`**. The [asset manifest](../../public/textures/gallery/manifest.json) records dimensions, byte sizes, hashes and colour/data semantics. Full prompts and processing are in [asset-prompts.md](asset-prompts.md).
+Public URLs begin with `/textures/gallery/` — **never `/public/textures/gallery/`**. The [asset manifest](../../../public/textures/gallery/manifest.json) records dimensions, byte sizes, hashes and colour/data semantics. Full prompts and processing are in [asset-prompts.md](asset-prompts.md).
 
 | Fixed asset | Size / format | Where to use it | Composition rule |
 | --- | --- | --- | --- |
-| [vinyl-face.png](../../public/textures/gallery/vinyl-face.png) | 1024×1024 RGBA PNG | G01 central record, G02 enlarged record, G03 phone record; useful for a layered CSS/plane front and the 2D fallback | Keep the outer margin and central label window transparent. Place that record's generated image beneath the window. Add the tiny spindle hole with geometry/masking. No fixed artwork or lettering belongs in this file. |
-| [vinyl-grooves-height.png](../../public/textures/gallery/vinyl-grooves-height.png) | 1024×1024 PNG data map | The physical Three.js vinyl face in G01/G02, where live lighting should reveal fine grooves | Load as **NoColorSpace**, use as a restrained bump map, not a visible grey record, normal map or background. Use a charcoal material colour. |
-| [paper-stock.jpg](../../public/textures/gallery/paper-stock.jpg) | 1024×1024 opaque JPEG | Sleeve back/edge and record-label paper substrate in G01/G02/G03 | Reuse the same file for square stock and a circular geometry/CSS mask. This is a blank material, not a second generated note image. |
-| [sleeve-frame.png](../../public/textures/gallery/sleeve-frame.png) | 1024×1024 RGBA PNG | The square orbiting sleeves in G01/G03 and the full artwork sleeve in G02 | Paper stock behind, the complete generated image inset about 10%, frame over it. The large centre is transparent. Keep the full image visible; do not crop the note's artwork to fill a tiny label or cover it with an opaque white card. |
-| [mineral-surface.jpg](../../public/textures/gallery/mineral-surface.jpg) | 1536×1024 opaque JPEG | Legacy flat mineral material, retained for compatibility | Superseded as the active Gallery backdrop by the 2026-10-19 mist plate below. Do not stack both as competing background textures. |
-| [gallery-stage-mist-v2.jpg](../../public/textures/gallery/gallery-stage-mist-v2.jpg) | 1584×993 opaque sRGB JPEG; 237,246 bytes | **Active Gallery orbit backdrop**, with continuity into detail; selected G01 atmosphere | Use the full clean plate at normal blending/full opacity. Preserve the soft white lower mist. Keep live records, sleeves, object shadows and HTML separate. See section 14. |
+| [vinyl-face.png](../../../public/textures/gallery/vinyl-face.png) | 1024×1024 RGBA PNG | G01 central record, G02 enlarged record, G03 phone record; useful for a layered CSS/plane front and the 2D fallback | Keep the outer margin and central label window transparent. Place that record's generated image beneath the window. Add the tiny spindle hole with geometry/masking. No fixed artwork or lettering belongs in this file. |
+| [vinyl-grooves-height.png](../../../public/textures/gallery/vinyl-grooves-height.png) | 1024×1024 PNG data map | The physical Three.js vinyl face in G01/G02, where live lighting should reveal fine grooves | Load as **NoColorSpace**, use as a restrained bump map, not a visible grey record, normal map or background. Use a charcoal material colour. |
+| [paper-stock.jpg](../../../public/textures/gallery/paper-stock.jpg) | 1024×1024 opaque JPEG | Sleeve back/edge and record-label paper substrate in G01/G02/G03 | Reuse the same file for square stock and a circular geometry/CSS mask. This is a blank material, not a second generated note image. |
+| [sleeve-frame.png](../../../public/textures/gallery/sleeve-frame.png) | 1024×1024 RGBA PNG | The square orbiting sleeves in G01/G03 and the full artwork sleeve in G02 | Paper stock behind, the complete generated image inset about 10%, frame over it. The large centre is transparent. Keep the full image visible; do not crop the note's artwork to fill a tiny label or cover it with an opaque white card. |
+| [mineral-surface.jpg](../../../public/textures/gallery/mineral-surface.jpg) | 1536×1024 opaque JPEG | Legacy flat mineral material, retained for compatibility | Superseded as the active Gallery backdrop by the 2026-10-19 mist plate below. Do not stack both as competing background textures. |
+| [gallery-stage-mist-v2.jpg](../../../public/textures/gallery/gallery-stage-mist-v2.jpg) | 1584×993 opaque sRGB JPEG; 237,246 bytes | **Active Gallery orbit backdrop**, with continuity into detail; selected G01 atmosphere | Use the full clean plate at normal blending/full opacity. Preserve the soft white lower mist. Keep live records, sleeves, object shadows and HTML separate. See section 14. |
 
 ### Layer order
 
@@ -235,9 +235,9 @@ Only the selected A references G01, G02 and G03 are retained in `reference-image
 
 The owner supplied “唱片馆.png” and asked for its exact background direction, especially the white cloud-like layer below the records. Its SHA-256 matches the existing G01 reference, so G01 remains the portable visual source of truth. This amendment supersedes the older flat, evenly lit mineral-surface guidance for the Gallery backdrop only.
 
-The new [gallery-stage-mist-v2.jpg](../../public/textures/gallery/gallery-stage-mist-v2.jpg) is a built-in Image Gen clean-plate reconstruction of G01 with all lettering, controls, records, sleeves, artwork and object shadows removed. It preserves the grey-green upper atmosphere and broad soft milky ground haze below. Areas hidden by the original foreground are reconstructed; this is not a claim of pixel-for-pixel recovery of the unseen background.
+The new [gallery-stage-mist-v2.jpg](../../../public/textures/gallery/gallery-stage-mist-v2.jpg) is a built-in Image Gen clean-plate reconstruction of G01 with all lettering, controls, records, sleeves, artwork and object shadows removed. It preserves the grey-green upper atmosphere and broad soft milky ground haze below. Areas hidden by the original foreground are reconstructed; this is not a claim of pixel-for-pixel recovery of the unseen background.
 
-![Approved-direction clean mist background](../../public/textures/gallery/gallery-stage-mist-v2.jpg)
+![Approved-direction clean mist background](../../../public/textures/gallery/gallery-stage-mist-v2.jpg)
 
 Use the runtime URL `/textures/gallery/gallery-stage-mist-v2.jpg`. Start with normal blending, opacity 1, no-repeat, cover and a centred crop. Retain the lower mist across screen sizes; use responsive background positioning when needed rather than stretching, tiling, or adding another grain texture. Disable the old 0.7-opacity surface contribution and competing gradients in `.records-surface` so they cannot erase or discolour the mist. The plate is already atmosphere-lit; interactive object shadows remain separate.
 
