@@ -82,8 +82,10 @@ readable centre. Keep phone controls and captions clear of the paper.
   A one-time operator backfill scored five older records. Records without a
   valid score remain image-only. The design is
   `design/gallery/record-exhibition/music-design.md` (ADR 006): the
-  existing AI musical directions plus a random seed go through the frozen
-  composer in `shared/music-score.ts`; the score is saved once, in the
+  existing AI musical directions plus a random seed go through the current
+  composer in `shared/music-score.ts` (`throwaway-score-v3`; v1 and v2 are
+  kept frozen beside it, pinned by tests, and still validate and play);
+  the score is saved once, in the
   image's publication transaction (migration 10, `artifacts.music_score`,
   no automatic backfill), served only by the published-gated
   `/api/gallery/:id/score`, and performed with native Web Audio

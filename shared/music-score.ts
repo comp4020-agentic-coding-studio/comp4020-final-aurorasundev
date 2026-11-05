@@ -10,12 +10,14 @@
 // shipped version composes: a different algorithm is a new composer_version.
 
 export const SCORE_SCHEMA_VERSION = 1;
-// v1 (shipped 2026-10-27): one rising motif over a held root. Its stored
-// scores are kept exactly and still play. v2 (2026-11-05): a short piece with
-// a chord progression, bass, accompaniment and a melody in sections. New
-// publications use v2; both are valid scores.
-export const COMPOSER_VERSION = "throwaway-score-v2";
-export const COMPOSER_VERSIONS = ["throwaway-score-v1", "throwaway-score-v2"] as const;
+// v1 (shipped 2026-10-27): one rising motif over a held root. v2 (shipped
+// 2026-11-05): a short piece with a chord progression, bass, accompaniment
+// and a melody in sections. v3 (2026-11-06): v2's form with a singing melody
+// (mostly stepwise, one high point), contrasting B texture, sevenths and keys
+// across the octave. Stored scores of every version are kept exactly and
+// still play; new publications use v3.
+export const COMPOSER_VERSION = "throwaway-score-v3";
+export const COMPOSER_VERSIONS = ["throwaway-score-v1", "throwaway-score-v2", "throwaway-score-v3"] as const;
 export const RENDERER_VERSION = "throwaway-synth-v1";
 export const SCORE_DURATION_MS = 24_000;
 // every event ends by here, leaving the last two seconds for the tail and fade
@@ -327,9 +329,10 @@ function stepToMidi(base: number, mode: readonly number[], step: number): number
 }
 const mod7 = (s: number) => ((s % 7) + 7) % 7;
 
-// Composes the score for one brief and seed with throwaway-score-v2. Same
+// throwaway-score-v2, frozen: kept so a v2 score can be reproduced from its
+// brief and seed, and so its tests prove shipped scores never change. Same
 // brief, seed and composer version give the same events, always.
-export function composeMusicScore(brief: ScoreBrief, seed: string): MusicScoreV1 {
+export function composeMusicScoreV2(brief: ScoreBrief, seed: string): MusicScoreV1 {
   if (!SEED.test(seed)) throw new Error("bad_seed");
   const rand = mulberry32(parseInt(seed, 16));
   const pick = <T>(values: readonly T[]): T => values[Math.floor(rand() * values.length)];
@@ -638,6 +641,454 @@ export function composeMusicScore(brief: ScoreBrief, seed: string): MusicScoreV1
       const candidates = chordTones(span.root).flatMap((d) => [-12, 0, 12].map((o) => above(bassMidi(span.root) + 6, d) + o));
       counter = candidates.filter((m) => m >= 55 && m <= 72).sort((x, y) => Math.abs(x - counter) - Math.abs(y - counter) || x - y)[0] ?? counter;
       add(span.t + eighth, span.beats * beat - eighth, counter, 0.2 + arc(span.t));
+    }
+  }
+
+  notes.sort((a, b) => a.at_ms - b.at_ms || a.midi - b.midi || a.duration_ms - b.duration_ms);
+  const score: MusicScoreV1 = {
+    schema_version: 1,
+    composer_version: "throwaway-score-v2",
+    renderer_version: RENDERER_VERSION,
+    seed,
+    duration_ms: SCORE_DURATION_MS,
+    tempo_bpm: tempo,
+    timbre,
+    ending,
+    reverb_mix: REVERB_FOR[brief.space],
+    notes,
+  };
+  const checked = parseMusicScore(score);
+  if (!checked) throw new Error("score_invalid");
+  return checked;
+}
+
+// --- throwaway-score-v3: a singing melody -----------------------------------
+//
+// v2's form, harmony and cadence, with richer material. The melody is a line,
+// not a repeated motif: each bar takes its metaphor's theme as a contour and
+// walks it mostly by step from wherever the previous bar ended, allowing one
+// leap a bar and turning back by step after it, rising to a single high point
+// in B and falling towards the cadence. Short notes may pass or turn between
+// chord tones; notes of a quarter or longer sit on the chord. B changes the
+// accompaniment's pattern and register and adds the chord's seventh. Keys
+// span the octave. The brief still chooses every musical meaning; the seed
+// still picks only the key, rhythmic swaps and the B variation.
+
+// the theme as a contour per metaphor: steps to move (signed) and lengths in
+// eighths; a bar's line follows these moves from the previous note
+const CONTOURS: Record<ScoreBrief["metaphor"], { moves: readonly number[]; eighths: readonly number[] }> = {
+  // a dotted pull up, then a turn back down
+  thread: { moves: [0, 1, -1, -1, -1, 1], eighths: [3, 1, 1, 1, 1, 1] },
+  // a wide open shape: a leap, a step back, a lift
+  vessel: { moves: [0, 3, -1, 1], eighths: [2, 3, 1, 2] },
+  // climbing towards a held note on the far side
+  threshold: { moves: [0, 1, 1, 2], eighths: [1, 1, 2, 4] },
+  // walking up and back
+  path: { moves: [0, 1, 1, -1, -1], eighths: [2, 1, 1, 2, 2] },
+  // a small repeated start that grows
+  seed: { moves: [0, 0, 1, 2], eighths: [1, 1, 2, 4] },
+  // a heavy note sinking
+  stone: { moves: [0, 0, -1, -1], eighths: [3, 1, 2, 2] },
+};
+const KEYS_V3 = [48, 49, 50, 51, 52, 53, 54, 55, 56, 57] as const;
+
+// What v3 decided before turning it into notes, for tests that check the
+// melody's shape and the key directly; it never changes the score.
+export type ScoreV3Plan = { key: number; melody: number[] };
+
+// Composes the score for one brief and seed with throwaway-score-v3. Same
+// brief, seed and composer version give the same events, always.
+export function composeMusicScore(brief: ScoreBrief, seed: string, plan?: (p: ScoreV3Plan) => void): MusicScoreV1 {
+  if (!SEED.test(seed)) throw new Error("bad_seed");
+  const rand = mulberry32(parseInt(seed, 16));
+  const pick = <T>(values: readonly T[]): T => values[Math.floor(rand() * values.length)];
+
+  const tempo = TEMPO_FOR[brief.motion];
+  const beat = 60_000 / tempo;
+  const eighth = beat / 2;
+  const halfBarChords = tempo <= 60;
+  const harmony = HARMONY[brief.relation];
+  const mode = MODES[harmony.mode];
+  const timbre = brief.music.timbre;
+  const layered = brief.music.density === "layered";
+  const pulsed = brief.music.pulse === "slow";
+  const ending = brief.music.ending;
+  const contour = CONTOURS[brief.metaphor];
+  const pressure = brief.relation === "under_pressure";
+
+  // the seed's choices, drawn in a fixed order
+  const key = pick(KEYS_V3);
+  const bVariation = pick(["invert", "lift"] as const);
+  const swaps = [rand() < 0.5, rand() < 0.5, rand() < 0.5];
+
+  // --- the form, counted back from the final chord (as v2) ------------------
+  const totalBeats = Math.floor((FINAL_MS - LEAD_MS) / beat);
+  const barCount = Math.floor(totalBeats / 4);
+  const spare = totalBeats - barCount * 4;
+  const hasIntro = barCount >= 5;
+  const body = barCount - (hasIntro ? 1 : 0) - 1;
+  const bBars = body >= 5 ? 2 : 1;
+  const a2Bars = 1;
+  const aBars = body - bBars - a2Bars;
+  type Section = "intro" | "a" | "b" | "a2" | "cadence";
+  type Bar = { section: Section; index: number; of: number; t: number; beats: number; chords: number[] };
+  const bars: Bar[] = [];
+  let t = FINAL_MS - totalBeats * beat + spare * beat;
+  const push = (section: Section, of: number) => {
+    for (let index = 0; index < of; index++) {
+      bars.push({ section, index, of, t, beats: 4, chords: [] });
+      t += 4 * beat;
+    }
+  };
+  if (hasIntro) push("intro", 1);
+  push("a", aBars);
+  push("b", bBars);
+  push("a2", a2Bars);
+  push("cadence", 1);
+  for (const bar of bars) {
+    const prog = bar.section === "b" ? harmony.b : harmony.a;
+    if (bar.section === "intro") bar.chords = [0];
+    else if (bar.section === "cadence") bar.chords = [...harmony.cadence];
+    else if (halfBarChords || bar.of === 1) bar.chords = [prog[(2 * bar.index) % 4], prog[(2 * bar.index + 1) % 4]];
+    else bar.chords = [prog[bar.index % 4]];
+  }
+  const finalRoot = ending === "open" ? harmony.open : 0;
+  type Span = { t: number; beats: number; root: number; bar: Bar };
+  const spans: Span[] = bars.flatMap((bar) => {
+    const beats = bar.beats / bar.chords.length;
+    return bar.chords.map((root, i) => ({ t: bar.t + i * beats * beat, beats, root, bar }));
+  });
+  const chordAt = (at: number) => [...spans].reverse().find((s) => s.t <= at + 1)?.root ?? 0;
+
+  const notes: ScoreNote[] = [];
+  const fits = (at: number, duration: number, midi: number): boolean => {
+    if (notes.length >= MAX_NOTES) return false;
+    if (at < 0 || duration < NOTE_DURATION_RANGE[0] || at + duration > NOTES_END_MS) return false;
+    if (midi < MIDI_RANGE[0] || midi > MIDI_RANGE[1]) return false;
+    if (notes.some((n) => n.at_ms === at && n.midi === midi)) return false;
+    const onsets = [at, ...notes.filter((n) => n.at_ms > at && n.at_ms < at + duration).map((n) => n.at_ms)];
+    return onsets.every((p) => notes.filter((n) => n.at_ms <= p && n.at_ms + n.duration_ms > p).length < MAX_VOICES);
+  };
+  const add = (at: number, duration: number, midi: number, velocity: number): boolean => {
+    const a = Math.round(at);
+    const d = Math.round(clamp(Math.min(duration, NOTES_END_MS - a), NOTE_DURATION_RANGE[0], NOTE_DURATION_RANGE[1]));
+    if (!fits(a, d, midi)) return false;
+    let v = velocity;
+    if (ending === "fading" && a > NOTES_END_MS * 0.6) v *= 1 - 0.45 * ((a - NOTES_END_MS * 0.6) / (NOTES_END_MS * 0.4));
+    notes.push({ at_ms: a, duration_ms: d, midi, velocity: round2(clamp(v, VELOCITY_RANGE[0], VELOCITY_RANGE[1])) });
+    return true;
+  };
+  const arc = (at: number) => 0.06 * Math.sin((Math.PI * at) / FINAL_MS);
+
+  // --- registers -------------------------------------------------------------
+  const bassMidi = (step: number) => {
+    let m = stepToMidi(key, mode, mod7(step));
+    while (m > 59) m -= 12;
+    while (m < 48) m += 12;
+    return m;
+  };
+  const above = (floor: number, step: number) => {
+    let m = stepToMidi(key, mode, mod7(step));
+    while (m <= floor) m += 12;
+    return m;
+  };
+  // the melody lives in one octave-and-a-half above middle C; steps are
+  // counted from the key an octave up, so step 0 is the home note there
+  const melodyBase = key + 12;
+  const [lo, hi] = pressure ? [62, 74] : [62, 81];
+  const melodyMidi = (step: number) => stepToMidi(melodyBase, mode, step);
+  const inRange = (step: number) => melodyMidi(step) >= lo && melodyMidi(step) <= hi;
+  const chordTones = (root: number) => [mod7(root), mod7(root + 2), mod7(root + 4)];
+  const isChordTone = (step: number, root: number) => chordTones(root).includes(mod7(step));
+  // the chord tone nearest to `step`, a step or two away at most
+  const nearestChordTone = (step: number, root: number) => {
+    for (const d of [0, 1, -1, 2, -2, 3, -3]) if (isChordTone(step + d, root) && inRange(step + d)) return step + d;
+    return step;
+  };
+  const firstInRange = (() => {
+    for (let s = 0; s < 14; s++) if (inRange(s)) return s;
+    return 0;
+  })();
+  const lastInRange = (() => {
+    for (let s = 21; s >= 0; s--) if (inRange(s)) return s;
+    return 14;
+  })();
+
+  // --- melody: a line walked by step ----------------------------------------
+  type Tone = { at: number; eighths: number; step: number; strong: boolean };
+  const melody: Tone[] = [];
+  const legato = timbre === "warm_pad" ? 1.1 : timbre === "soft_glass" ? 1 : 0.92;
+  // start on a chord tone in the lower middle of the range
+  let prev = nearestChordTone(firstInRange + 2, 0);
+  // the line's target height per section: rise through A, peak in B, settle
+  const span = lastInRange - firstInRange;
+  const target = (section: Section, index: number, of: number) => {
+    const p = of > 1 ? index / (of - 1) : 0.5;
+    if (section === "a") return firstInRange + Math.round(span * (0.3 + 0.25 * p));
+    if (section === "b") return firstInRange + Math.round(span * (0.7 + 0.25 * Math.sin(Math.PI * p)));
+    return firstInRange + Math.round(span * 0.45);
+  };
+  let firstA: Tone[] = [];
+
+  for (let i = 0; i < bars.length; i++) {
+    const bar = bars[i];
+    if (bar.section === "intro" || bar.section === "cadence") continue;
+    let eighths = [...contour.eighths];
+    let moves = contour.moves.map((m) => (bar.section === "b" && bVariation === "invert" ? -m : m));
+    const swapAt = bar.section === "b" && bar.index === 0 ? 0 : bar.section === "a" && bar.index === 1 ? 1 : -1;
+    if (swapAt >= 0 && swaps[swapAt] && eighths[0] !== eighths[1]) [eighths[0], eighths[1]] = [eighths[1], eighths[0]];
+    // the last bar of a longer section ends on a held tone
+    const answer = bar.of > 1 && bar.index === bar.of - 1;
+    if (answer) {
+      let sum = 0;
+      let keep = 0;
+      while (keep < eighths.length && sum + eighths[keep] <= 4) sum += eighths[keep++];
+      keep = Math.max(1, keep);
+      eighths = [...eighths.slice(0, keep), 8 - eighths.slice(0, keep).reduce((x, y) => x + y, 0)];
+      moves = [...moves.slice(0, keep), 0];
+    }
+
+    let tones: Tone[];
+    if (bar.section === "a2" && firstA.length) {
+      // A' brings back A's opening bar: the same intervals and rhythm, moved by
+      // whole octaves to start near where B left off, so the return is heard
+      // without dropping or leaping an octave to reach it
+      let steps = firstA.map((n) => n.step);
+      eighths = firstA.map((n) => n.eighths);
+      let best = 0;
+      let bestDistance = Infinity;
+      for (const k of [-14, -7, 0, 7, 14]) {
+        if (!steps.every((s) => inRange(s + k))) continue;
+        const d = Math.abs(steps[0] + k - prev);
+        if (d < bestDistance) [best, bestDistance] = [k, d];
+      }
+      steps = steps.map((s) => s + best);
+      if (brief.motion === "unfolding" && steps.every((s) => inRange(s + 7)) && Math.abs(steps[0] + 7 - prev) < 7) steps = steps.map((s) => s + 7);
+      if (brief.motion === "drifting" && swaps[2] && eighths[0] !== eighths[1]) [eighths[0], eighths[1]] = [eighths[1], eighths[0]];
+      if (brief.motion === "settling") {
+        let sum = 0;
+        let keep = 0;
+        while (keep < eighths.length && sum + eighths[keep] <= 4) sum += eighths[keep++];
+        keep = Math.max(1, keep);
+        eighths = [...eighths.slice(0, keep), 8 - eighths.slice(0, keep).reduce((x, y) => x + y, 0)];
+        // the held end comes to rest a step below the last kept note
+        steps = [...steps.slice(0, keep), steps[keep - 1] - 1];
+      }
+      let at = bar.t;
+      tones = steps.map((step, k) => {
+        const tone = { at, eighths: eighths[k], step, strong: Math.round((at - bar.t) / eighth) % 4 === 0 };
+        at += eighths[k] * eighth;
+        return tone;
+      });
+      // the held end of A' lands on the chord under it, moving downwards to
+      // rest rather than repeating the note before it
+      const last = tones[tones.length - 1];
+      const before = tones[tones.length - 2]?.step;
+      if (last.eighths >= 2) {
+        const under = chordAt(last.at);
+        let rest = last.step;
+        for (const d of [0, -1, -2, 1, 2]) {
+          const c = last.step + d;
+          if (isChordTone(c, under) && inRange(c) && c !== before) {
+            rest = c;
+            break;
+          }
+        }
+        last.step = rest;
+      }
+    } else {
+      // walk the contour from the previous note. Each move follows the
+      // theme's shape but leans towards the section's target height, so the
+      // line climbs to B's high point and settles after it; far from the
+      // target it moves by thirds, near it by steps. A repeated note becomes
+      // a step, one leap is allowed a bar and is answered by a step back.
+      const goal = target(bar.section, bar.index, bar.of);
+      let step = prev;
+      let at = bar.t;
+      let leapt = 0;
+      tones = [];
+      eighths.forEach((len, k) => {
+        const under = chordAt(at);
+        const gap = goal - step;
+        let move = moves[k];
+        if (bar.section === "b" && bVariation === "lift" && k === 0) move += 1;
+        // lean towards the target: a gap of three or more steps adds a step
+        // in its direction to every move; at the start of the bar, a third
+        if (Math.abs(gap) >= 3) move += Math.sign(gap) * (k === 0 ? 2 : 1);
+        else if (k === 0 && move === 0 && gap !== 0) move = Math.sign(gap);
+        // a repeated note becomes a step, in the theme's direction or towards
+        // the target
+        if (move === 0) move = Math.sign(gap) || (k % 2 === 0 ? 1 : -1);
+        // after a leap, turn back by step
+        if (leapt !== 0) move = -Math.sign(leapt);
+        // at most one leap (more than a third) a bar
+        if (Math.abs(move) > 2) move = Math.sign(move) * 2;
+        let next = step + move;
+        // long notes sit on the chord, reached by the smallest move that
+        // keeps the direction
+        if (len >= 2 && !isChordTone(next, under)) {
+          const dir = Math.sign(move) || 1;
+          // the nearest chord tone onward in the line's direction, never
+          // falling back onto the note just played
+          let landed = next;
+          for (const d of [dir, 2 * dir, -dir, -2 * dir]) {
+            const c = next + d;
+            if (isChordTone(c, under) && inRange(c) && c !== step) {
+              landed = c;
+              break;
+            }
+          }
+          next = landed;
+        }
+        // stay in the register by turning around, never jumping an octave
+        if (!inRange(next)) next = step - Math.sign(move || 1);
+        if (!inRange(next)) next = nearestChordTone(step, under);
+        leapt = Math.abs(next - step) >= 3 ? next - step : 0;
+        tones.push({ at, eighths: len, step: next, strong: Math.round((at - bar.t) / eighth) % 4 === 0 });
+        step = next;
+        at += len * eighth;
+      });
+    }
+    if (bar.section === "a" && bar.index === 0) firstA = tones.map((n) => ({ ...n }));
+    const next = bars[i + 1];
+    // the last bar of B comes down from its high point: its final notes
+    // step back towards where A' will begin, so the theme returns from
+    // nearby instead of after a drop
+    if (bar.section === "b" && next?.section === "a2" && firstA.length) {
+      const home = firstA[0].step;
+      for (let k = tones.length - 1; k >= 1; k--) {
+        const want = tones[k - 1].step + Math.sign(home - tones[k - 1].step) * Math.min(2, Math.abs(home - tones[k - 1].step));
+        if (Math.abs(tones[k].step - home) <= Math.abs(want - home)) break;
+        const under = chordAt(tones[k].at);
+        let step = tones[k].eighths >= 2 && !isChordTone(want, under) ? nearestChordTone(want, under) : want;
+        // never land back on the note just before it
+        if (step === tones[k - 1].step) step += Math.sign(home - step) || -1;
+        tones[k].step = step;
+      }
+    }
+    // a held phrase end gives its last eighth to a pickup a step below the
+    // next section's first note
+    if (answer && next && (next.section === "b" || next.section === "a2")) {
+      const held = tones[tones.length - 1];
+      if (held.eighths >= 3) {
+        held.eighths -= 1;
+        tones.push({ at: held.at + held.eighths * eighth, eighths: 1, step: held.step - 1, strong: false });
+      }
+    }
+    prev = tones[tones.length - 1].step;
+    melody.push(...tones);
+  }
+
+  // a section's line can end high and the next begin low: where two notes
+  // a sixth or more apart meet, move the following run by whole octaves if
+  // that keeps it in range and narrows the gap, so the melody never drops
+  // or leaps an octave between sections
+  for (let k = 1; k < melody.length; k++) {
+    const gap = melody[k].step - melody[k - 1].step;
+    if (Math.abs(gap) < 5) continue;
+    const shift = gap > 0 ? -7 : 7;
+    const run = melody.slice(k);
+    if (run.every((n) => inRange(n.step + shift)) && Math.abs(gap + shift) < Math.abs(gap)) for (const n of run) n.step += shift;
+  }
+  prev = melody.length ? melody[melody.length - 1].step : prev;
+
+  // the cadence falls home: a chord tone of the first cadence chord a step or
+  // two below where the line stands, a passing note, then a chord tone of the
+  // second chord below that; each note lower than the one before
+  const cadenceBar = bars[bars.length - 1];
+  const finalDegree = ending === "settled" ? 0 : ending === "fading" ? 2 : mod7(finalRoot + 1);
+  const below = (from: number, root: number) => {
+    for (let d = 1; d <= 4; d++) if (isChordTone(from - d, root) && inRange(from - d)) return from - d;
+    return nearestChordTone(from, root);
+  };
+  const first = below(prev + 1, harmony.cadence[0]);
+  const third = below(first, harmony.cadence[1]);
+  const passing = first - third >= 2 ? first - 1 : first;
+  let finalStep = third;
+  for (const d of [0, -1, -2, 1, -3, 2]) {
+    if (mod7(third + d) === finalDegree && inRange(third + d)) {
+      finalStep = third + d;
+      break;
+    }
+  }
+  melody.push(
+    { at: cadenceBar.t, eighths: 3, step: first, strong: true },
+    { at: cadenceBar.t + 3 * eighth, eighths: 1, step: passing, strong: false },
+    { at: cadenceBar.t + 4 * eighth, eighths: 4, step: third, strong: true },
+  );
+
+  plan?.({ key, melody: melody.map((n) => melodyMidi(n.step)) });
+
+  // --- bass: root, then the fifth (as v2) ------------------------------------
+  for (const s of spans) {
+    const portions = Math.max(1, Math.round(s.beats / 2));
+    const portionBeats = s.beats / portions;
+    for (let p = 0; p < portions; p++) {
+      const step = p % 2 === 0 ? s.root : s.root + 4;
+      const at = s.t + p * portionBeats * beat;
+      add(at, portionBeats * beat * 0.95, bassMidi(step), (p === 0 ? 0.36 : 0.3) + arc(at));
+    }
+  }
+
+  // --- melody into notes ------------------------------------------------------
+  for (const n of melody) {
+    const section = bars.find((b) => b.t <= n.at + 1 && n.at < b.t + b.beats * beat - 1)?.section;
+    const lift = section === "b" ? 0.05 : section === "a2" && brief.motion === "unfolding" ? 0.06 : section === "cadence" ? -0.03 : 0;
+    const shape = (n.strong ? 0.05 : -0.02) + (n.eighths >= 4 ? -0.03 : 0);
+    const quiet = section === "a2" && brief.motion === "still" ? -0.05 : 0;
+    add(n.at, n.eighths * eighth * legato, melodyMidi(n.step), 0.44 + lift + shape + quiet + arc(n.at));
+  }
+
+  // --- the final chord, ringing into the tail (as v2) ------------------------
+  const finalBass = bassMidi(finalRoot);
+  const finalLevel = ending === "settled" ? 0.4 : ending === "open" ? 0.36 : 0.3;
+  add(FINAL_MS, NOTES_END_MS - FINAL_MS, melodyMidi(finalStep), finalLevel);
+  add(FINAL_MS, NOTES_END_MS - FINAL_MS, finalBass, finalLevel - 0.06);
+  add(FINAL_MS, NOTES_END_MS - FINAL_MS, above(finalBass + 2, finalRoot + 2), finalLevel - 0.12);
+  add(FINAL_MS, NOTES_END_MS - FINAL_MS, above(finalBass + 6, finalRoot + 4), finalLevel - 0.12);
+
+  // --- accompaniment: A as the brief asks, B in contrast ----------------------
+  for (const s of spans) {
+    const inB = s.bar.section === "b";
+    const bass = bassMidi(s.root);
+    // B lifts the accompaniment an octave and adds the chord's seventh
+    const lift = inB ? 12 : 0;
+    const third = above(bass + 2, s.root + 2) + lift;
+    const fifth = above(bass + 6, s.root + 4) + lift;
+    const seventh = above(bass + 9, s.root + 6) + lift;
+    const barBeat = (at: number) => Math.round((at - s.bar.t) / beat);
+    // B swaps the pattern: pulsed pieces open into a broken chord there, and
+    // broken-chord pieces gather into soft repeated chords
+    const usePulse = inB ? !pulsed : pulsed;
+    if (usePulse) {
+      for (let b = 0; b < s.beats; b++) {
+        const at = s.t + b * beat;
+        if (barBeat(at) % 2 !== 1) continue;
+        add(at, beat * 0.7, third, 0.22 + arc(at));
+        if (layered || inB) add(at, beat * 0.7, inB ? seventh : fifth, 0.2 + arc(at));
+      }
+    } else {
+      const portions = Math.max(1, Math.round(s.beats / 2));
+      const portionBeats = s.beats / portions;
+      const pattern = inB ? (layered ? [third, seventh, fifth + 12] : [third, seventh]) : layered ? [third, fifth, third + 12] : [third, fifth];
+      for (let p = 0; p < portions; p++) {
+        const p0 = s.t + p * portionBeats * beat;
+        pattern.forEach((m, k) => {
+          const at = p0 + (k + 1) * (portionBeats / (pattern.length + 1)) * beat;
+          add(at, p0 + portionBeats * beat - at, m, 0.2 - k * 0.01 + arc(at));
+        });
+      }
+    }
+  }
+
+  // --- a quiet countermelody (as v2) -----------------------------------------
+  if (layered && pulsed) {
+    let counter = above(bassMidi(0) + 8, 2);
+    for (const s of spans) {
+      if (s.bar.section !== "b" && s.bar.section !== "a2") continue;
+      const candidates = chordTones(s.root).flatMap((d) => [-12, 0, 12].map((o) => above(bassMidi(s.root) + 6, d) + o));
+      counter = candidates.filter((m) => m >= 55 && m <= 72).sort((x, y) => Math.abs(x - counter) - Math.abs(y - counter) || x - y)[0] ?? counter;
+      add(s.t + eighth, s.beats * beat - eighth, counter, 0.2 + arc(s.t));
     }
   }
 

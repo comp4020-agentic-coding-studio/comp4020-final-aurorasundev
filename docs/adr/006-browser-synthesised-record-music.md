@@ -92,3 +92,32 @@ fourth timbre (`bright_bell`) and a fourth tempo tier (88 BPM) were added,
 and the velocity ceiling moved from 0.70 to 0.78, all within the existing
 `throwaway-score-v1`/`throwaway-synth-v1` versions — the score schema,
 composer/renderer version strings and stored contract here are unchanged.
+
+### Revision 2026-11-05/06: new composers, v2 and v3
+
+The owner listened to records made by v1 and found them thin: one rising
+motif over a held root, every note the same length. Following this ADR's
+rule that a changed composer is a new version, two composers were added in
+`shared/music-score.ts`, and the validator accepts all three
+(`COMPOSER_VERSIONS`); the score schema and `throwaway-synth-v1` renderer
+are unchanged, so the browser plays every version the same way.
+
+- **`throwaway-score-v2`** (2026-11-05,
+  [`fe4be95`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/fe4be95)):
+  a short piece in sections (intro, A, B, A', cadence, final chord), a
+  chord progression chosen by `relation`, a bass line and accompaniment,
+  and a melody with varied rhythm that fills the 24 seconds at every tempo.
+- **`throwaway-score-v3`** (2026-11-06,
+  [`3cc6633`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/3cc6633)):
+  after listening to v2, the owner kept its rhythm but heard the melody as
+  a high note and a low one in turn. v3 walks the melody mostly by step
+  towards one high point in B and never jumps an octave, contrasts B's
+  accompaniment and adds sevenths there, and spreads keys across the
+  octave. New publications use v3.
+
+v1 and v2 are frozen beside v3 (`composeMusicScoreV1`, `composeMusicScoreV2`)
+so a stored score can be reproduced from its brief and seed; tests pin v1's
+first notes and a fingerprint of v2's output for every brief. Stored scores
+are never recomposed: each record keeps the version it was published with.
+The one-time backfill script uses the current composer, and only for a
+record that has no score.
