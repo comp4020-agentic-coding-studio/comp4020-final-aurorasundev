@@ -63,7 +63,7 @@ textarea {
 
 .wordmark {
   font-family: var(--serif);
-  font-size: 40px;
+  font-size: 34px;
   letter-spacing: -0.01em;
   line-height: 1;
 }
@@ -73,20 +73,36 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  height: 34px;
-  padding: 0 10px;
+  min-width: 40px;
+  height: 30px;
+  padding: 0 9px;
   border: 1px solid var(--ink);
   border-radius: 4px;
-  font-size: 18px;
+  font-size: 17px;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
+/* The links sit in equal slots across a fixed span, its right edge on the
+   gutter, so switching to the shorter Chinese labels moves nothing: each
+   label centres in its slot instead of the whole row sliding right. */
 .header-links {
-  display: flex;
-  align-items: baseline;
-  gap: 40px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 6.2em;
+  justify-items: center;
+  /* centred, not on a baseline: "中 / EN" mixes scripts whose baselines
+     differ, so a shared baseline lifted it above the English links */
+  align-items: center;
+  font-size: 22px;
+}
+
+.header-links > * {
+  line-height: 1.2;
+}
+
+.lang-toggle {
+  align-items: center;
 }
 
 .header-link {
@@ -95,7 +111,7 @@ textarea {
   background: none;
   color: var(--ink);
   text-decoration: none;
-  font-size: 19px;
+  font-size: 22px;
   cursor: pointer;
 }
 
@@ -110,7 +126,7 @@ textarea {
   padding: 0;
   border: 0;
   background: none;
-  font-size: 19px;
+  font-size: 22px;
   cursor: pointer;
   display: inline-flex;
   gap: 0.3em;
@@ -287,7 +303,7 @@ textarea {
 .space-write {
   min-width: 400px;
   min-height: 72px;
-  font-size: 22px;
+  font-size: 24px;
 }
 
 .button[hidden] {
@@ -986,7 +1002,7 @@ fieldset:disabled .choice,
   }
 
   .wordmark {
-    font-size: 30px;
+    font-size: 27px;
   }
 
   .header-brand {
@@ -1001,9 +1017,11 @@ fieldset:disabled .choice,
   }
 
   .header-links {
+    display: flex;
     flex-direction: column;
     align-items: flex-end;
     gap: 10px;
+    font-size: 18px;
   }
 
   .header-links .header-about {
@@ -1040,7 +1058,7 @@ fieldset:disabled .choice,
 
   .header-link,
   .lang-toggle {
-    font-size: 16px;
+    font-size: 18px;
   }
 
   .space-footer {
@@ -1052,7 +1070,7 @@ fieldset:disabled .choice,
     width: 100%;
     min-width: 0;
     min-height: 56px;
-    font-size: 19px;
+    font-size: 21px;
   }
 
   .space-hint {

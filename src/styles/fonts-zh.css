@@ -226,3 +226,29 @@
   font-family: var(--zh-display);
   font-weight: 400;
 }
+
+/* Chinese reads smaller than Latin at the same size, so Chinese labels run
+   about 9% larger than their English counterparts: the header links and the
+   room's main action and its hint, on desktop and phone. */
+:lang(zh) .header-link,
+:lang(zh) .lang-toggle {
+  font-size: 24px;
+}
+:lang(zh) .space-write {
+  font-size: 26px;
+}
+:lang(zh) .space-hint {
+  font-size: 18.5px;
+}
+@media (max-width: 600px) {
+  :lang(zh) .header-link,
+  :lang(zh) .lang-toggle {
+    font-size: 19.5px;
+  }
+  :lang(zh) .space-write {
+    font-size: 23px;
+  }
+  :lang(zh) .space-hint {
+    font-size: 16.5px;
+  }
+}
