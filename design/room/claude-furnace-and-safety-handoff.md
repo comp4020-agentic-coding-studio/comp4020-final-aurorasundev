@@ -1,5 +1,10 @@
 # Throwaway — implementation correction prompt for Claude
 
+> **Historical handoff, 2026-10-08.** The requirements below record what
+> Claude was asked to implement at the time. For current behaviour, see
+> [CLAUDE.md](../../CLAUDE.md), the [furnace ADR](../../docs/adr/003-furnace-confirmation.md),
+> the [moderation ADR](../../docs/adr/004-configured-safety-review.md) and the
+> [accounts ADR](../../docs/adr/009-optional-accounts.md), which replaced return keys.
 
 Scope: fix the reviewed regressions, complete the previously planned Final MVP, improve visual fidelity, and implement the user's revised furnace ritual.
 
@@ -7,7 +12,7 @@ Scope: fix the reviewed regressions, complete the previously planned Final MVP, 
 
 Implement the work below in the existing repository. Read the current code and working-tree status first, preserve the user's and other contributors' changes, and recheck whether a finding has already been fixed. This is an incremental correction task, not a rebuild.
 
-Use the original full product plan and the root `plan.md`. Do not use the old Week 9 delivery boundary as the feature scope. This prompt settles the previously unspecified moderation service and supersedes the old immediate disappearance interaction with the furnace flow described here. Preserve the other accepted product rules.
+Use the original full product plan and the [C9 implementation plan](c9-implementation-plan.md). Do not use the old Week 9 delivery boundary as the feature scope. This prompt settles the previously unspecified moderation service and supersedes the old immediate disappearance interaction with the furnace flow described here. Preserve the other accepted product rules.
 
 Finish and verify local implementation. Use small, reviewable commits if committing is included in the implementation assignment. Do not push to `main`, deploy, modify production data, create a paid account, or change repository visibility without the user's authorization for that action. The current public repository deploys on a push to `main`.
 
@@ -34,7 +39,7 @@ All image references below are relative to this document. Move this file and `re
 
 ```text
 throwaway-claude-polish-package/
-├── prompt.md
+├── claude-furnace-and-safety-handoff.md
 └── reference-images/
     ├── 01-space-desktop.png
     ├── ... original 12 coordinated references ...
@@ -428,11 +433,11 @@ Claude must open and compare these references during implementation:
 
 | State               | Required reference                                           | Main comparison                                              |
 | ------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| Desktop preparation | [B01](app://-/reference-images/B01-furnace-ready-desktop.png) | Floating matte paper, empty cold furnace, composition and controls |
-| Active combustion   | [B02](app://-/reference-images/B02-furnace-burning-desktop.png) | Intact ivory upper paper, charred lower paper, upward combustion boundary, localized flames and falling fragments |
-| Local ending        | [B03](app://-/reference-images/B03-furnace-ashes-desktop.png) | Visible powder and brittle flakes, quiet ending, consistent furnace geometry |
-| Remote combustion   | [B04](app://-/reference-images/B04-remote-paper-burning-desktop.png) | Original paper position, upward burning and ash beneath it, with no furnace |
-| Mobile preparation  | [B05](app://-/reference-images/B05-furnace-ready-mobile.png) | Same furnace identity, readable instructions, visible opening and reachable controls |
+| Desktop preparation | [B01](reference-images/B01-furnace-ready-desktop.png) | Floating matte paper, empty cold furnace, composition and controls |
+| Active combustion   | [B02](reference-images/B02-furnace-burning-desktop.png) | Intact ivory upper paper, charred lower paper, upward combustion boundary, localized flames and falling fragments |
+| Local ending        | [B03](reference-images/B03-furnace-ashes-desktop.png) | Visible powder and brittle flakes, quiet ending, consistent furnace geometry |
+| Remote combustion   | [B04](reference-images/B04-remote-paper-burning-desktop.png) | Original paper position, upward burning and ash beneath it, with no furnace |
+| Mobile preparation  | [B05](reference-images/B05-furnace-ready-mobile.png) | Same furnace identity, readable instructions, visible opening and reachable controls |
 
 All paths are relative to this prompt. Preserve this portability.
 
@@ -848,7 +853,7 @@ Complete all unblocked local work before asking about an external prerequisite. 
 ## Appendix — source and reference rules
 
 - Original full product source: [shared design conversation](https://chatgpt.com/share/6ac39a5c-ca44-83ec-b582-ae042218c2a0).
-- Original root `plan.md` and the current repository remain implementation context. Current code is not evidence that every old plan statement is still accurate.
+- The original [C9 implementation plan](c9-implementation-plan.md) and the current repository remain implementation context. Current code is not evidence that every old plan statement is still accurate.
 - Demo source: [paper-crumple-demo](https://github.com/item-develop/paper-crumple-demo).
 - Provider/model/API facts were checked against the linked official OpenAI pages on 8 October 2026. The chosen thresholds, timings, limits and policy are design decisions, not measured provider guarantees.
 - Generated reference images use the built-in image generation tool. They are not deployed-app evidence and are not production fire/texture assets; create separable assets only if necessary during implementation.

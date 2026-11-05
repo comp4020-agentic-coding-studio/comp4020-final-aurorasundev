@@ -12,15 +12,19 @@ paper and read what others have left. They can write without attaching their
 name to the feeling. Good means giving that feeling a way out, and giving
 someone else a chance to recognise themselves in it.
 
-The [Paper Crumple demo](https://github.com/item-develop/paper-crumple-demo)
-showed me how folding and throwing could feel physical. In Throwaway, a paper
-enters the shared room closed. A visitor chooses to open it, then can press “I
-saw it” after reading. That small action means someone has stopped to pay
-attention. I left out rankings, comments, public profiles and search because
-I want people to leave a thought without having to perform for an audience.
-An optional account lets a person find their own papers again, and see what
-their released papers became, in a view no one else can open. With no
-audience, it gives no reason to perform.
+Robin Sloan's [family messaging app](https://www.robinsloan.com/notes/home-cooked-app/)
+gave me a way to think about scale. Throwaway is open to strangers, but a
+visit can be worthwhile even if all you do is read one paper. I left out
+rankings, comments, public profiles and search so there is room for that
+kind of visit. An optional account lets you find your own papers and see
+what they became in a private view. With no audience, it gives no reason
+to perform.
+
+In [Popcannibal's Kind Words](https://popcannibal.itch.io/kindwords),
+strangers answer anonymous requests with letters of comfort or advice.
+I wanted a reader to be able to show they paid attention without asking
+the writer to start a conversation. A paper arrives closed. After opening
+and reading it, the visitor can simply press “I saw it”.
 
 I do not filter for “interesting” papers either. A short, awkward sentence may
 be exactly what someone needed to put down. Safety checks address harm; they
@@ -30,12 +34,12 @@ Weiser and Brown's
 offers a way to describe the room: closed papers sit at the edge of attention,
 and opening one brings it into focus.
 
-The furnace is where leaving becomes real. I did not want the room to keep
-accumulating anonymous messages; I wanted each paper to have an ending. Keep
-leaves that choice with the writer. Release hands it to someone who has
-witnessed the paper. Opening the furnace only prepares the choice: the paper
-stays suspended until someone places it inside. Then it burns from the bottom
-up, collapses and leaves ash. The pause and the fire give the decision weight.
+The [Paper Crumple demo](https://github.com/item-develop/paper-crumple-demo)
+showed me how folding and throwing could feel physical. I wanted that same
+weight at the end. Keep leaves the decision to burn with the writer.
+Release hands it to someone who has witnessed the paper. The paper hangs
+above the furnace until someone places it inside, then burns from the bottom
+up and collapses into ash.
 
 Burning can also give a Release paper another life in the Gallery. The
 original words are gone, and the new work stands on its own. A paper may
@@ -194,6 +198,7 @@ and [Gallery decision](https://github.com/comp4020-agentic-coding-studio/comp402
   [finishing a reading](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/002-active-reader-final-read.md),
   [furnace placement](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/003-furnace-confirmation.md),
   [record music](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/006-browser-synthesised-record-music.md),
-  [anonymous identity](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/007-people-and-permissions.md)
+  [anonymous identity](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/007-people-and-permissions.md),
+  [emotional reversal](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/008-rebirth-reversal.md)
   and [optional accounts](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/009-optional-accounts.md)
   explain how the experience is implemented.

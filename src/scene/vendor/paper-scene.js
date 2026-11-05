@@ -298,7 +298,7 @@ export function createPaperScene(container, buttonLayer, options) {
   roomPlate.load(`${options.textureBase ?? "/textures/"}room/home-window-light-v1.jpg`, renderer);
 
   // Lights
-  // plan.md's D01 target is soft broad light and restrained contact shadows
+  // The D01 room design reference is soft broad light and restrained contact shadows
   // with visible but gentle shade in the folds. The hemisphere and fill reach
   // shadowed ground too (no light here is blocked except the key), so they
   // set how light the shadows stay; the key stays soft-edged and moderate.

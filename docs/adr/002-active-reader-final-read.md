@@ -1,6 +1,6 @@
 # 002 — Letting go takes effect at once; a current reader may finish
 
-Status: accepted, implemented (`db19918`, `947450f`). Decided in `plan.md` §13.1.
+Status: accepted, implemented (`db19918`, `947450f`). Decided in the [C9 plan](../../design/room/c9-implementation-plan.md) §13.1.
 
 ## Context
 

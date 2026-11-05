@@ -1,9 +1,9 @@
 # 009 — Optional accounts replace return keys; only you see your own papers
 
-Status: accepted, 2026-11-03. Implemented on branch `feat/optional-accounts`
-and verified locally (`pnpm check`). Not deployed. Supersedes the identity
-and return-key parts of [ADR 007](007-people-and-permissions.md); its
-permission rules for papers are unchanged.
+Status: accepted on 2026-11-03. Merged to `main` and deployed on
+2026-11-04 in [run 41795798041](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/actions/runs/41795798041).
+Supersedes the return-key decision in [ADR 007](007-people-and-permissions.md).
+The same paper permissions apply to guests and signed-in visitors.
 
 ## Context
 
@@ -110,13 +110,17 @@ regard to case. Passwords are 8–128 characters and can't equal the username.
   reveals which username wrote which paper: the private owner link existed
   before, but was attached only to random ids. No email or other personal
   data is held.
-- Anyone who saved a return key loses that way back once this is deployed.
+- Previously saved return keys stopped working at deployment.
   Their current browser's cookie still works for a year, and creating an
   account there carries everything with it.
 - Logs name the person (`who=`), never the username or password; see
   `docs/logging-runbook.md`.
 
-## Not verified
+## Verification
 
-The real-browser flow at desktop and phone sizes, and anything in
-production: `ACCOUNT_PEPPER` is not yet set and the branch is not merged.
+The deployment used `ACCOUNT_PEPPER` and applied migration 11 after a
+database backup. [The local Chromium pass](../evidence/accounts-2026-11/README.md)
+records desktop and phone-size evidence and its limits. The owner also
+reported trying the account flow successfully on the live site. The
+local pass leaves Safari, a physical phone and playback from the private
+panel outside its coverage.

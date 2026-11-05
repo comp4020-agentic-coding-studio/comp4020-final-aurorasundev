@@ -94,7 +94,7 @@ The selected disc label, square sleeve and opened image reference **the same art
 
 ### Fixed materials are now available
 
-Use the material files already generated in `public/textures/gallery/`: `vinyl-face.png`, `vinyl-grooves-height.png`, `paper-stock.jpg`, `sleeve-frame.png` and `mineral-surface.jpg`. Their public URL prefix is `/textures/gallery/`. See [the exact state/material mapping and layer order](design.md#13-fixed-visual-assets-and-where-to-use-them) and [the machine-readable manifest](../../public/textures/gallery/manifest.json).
+Use the material files already generated in `public/textures/gallery/`: `vinyl-face.png`, `vinyl-grooves-height.png`, `paper-stock.jpg`, `sleeve-frame.png` and `mineral-surface.jpg`. Their public URL prefix is `/textures/gallery/`. See [the exact state/material mapping and layer order](design.md#13-fixed-visual-assets-and-where-to-use-them) and [the machine-readable manifest](../../../public/textures/gallery/manifest.json).
 
 A 2D/plane-based record may use the transparent vinyl face over its content-generated label. A physically lit geometry version uses the groove height as NoColorSpace bump data and a charcoal base; the bitmap front plate is then a fallback, not an additional shiny layer. Sleeve stock is shared with the blank label substrate, while dynamic note imagery stays separate. Transparent frame/face materials must preserve alpha so they cannot create an opaque central rectangle.
 
@@ -158,7 +158,7 @@ This source-handling rule is a change from the earlier plan: original data may e
 
 ## 6. Selected music contract: stored score, no new provider
 
-The owner selected **existing OpenAI parameters → deterministic score → Web Audio**. [music-design.md](music-design.md) is the authoritative end-to-end design; [ADR 006](../../docs/adr/006-browser-synthesised-record-music.md) records its alternatives and costs. This replaces the external music-service, private MP3 and extra audio-job proposal.
+The owner selected **existing OpenAI parameters → deterministic score → Web Audio**. [music-design.md](music-design.md) is the authoritative end-to-end design; [ADR 006](../../../docs/adr/006-browser-synthesised-record-music.md) records its alternatives and costs. This replaces the external music-service, private MP3 and extra audio-job proposal.
 
 Reuse `CreativeBriefV2` unchanged. At accepted-image publication, compose and save one bounded 24-second `MusicScoreV1` with a fresh fixed seed, exact note events and pinned composer/renderer versions. The next append-only migration adds nullable `artifacts.music_score`. Music validation failure preserves the accepted image; existing null/legacy records remain image-only. No backfill, new paid request, original reread, music quota or new SSE event is part of v1.
 

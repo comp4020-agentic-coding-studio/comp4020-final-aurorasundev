@@ -1,6 +1,6 @@
 # Throwaway Gallery and AI Keepsakes Implementation Plan
 
-> **Current authority — amendment 2026-10-19:** This is the historical image-Gallery handoff, not a checklist to rerun on the completed branch. Its pre-burn preparation/neutral-fallback details were superseded by the implemented ignition extraction in [ADR 005](../../adr/005-release-keepsakes.md). The selected music extension is [AI-directed parameters → stored score → Web Audio](../../../design/gallery-records-2026-10-18/music-design.md), designed but not implemented. It preserves the existing brief/fire/image flow and adds no external music provider, audio files or extra AI request. Read the current source and music design before further work.
+> **Historical handoff, October 2026.** This records the first image-Gallery implementation. [ADR 005](../../../docs/adr/005-release-keepsakes.md) records the move to extraction at ignition, [ADR 006](../../../docs/adr/006-browser-synthesised-record-music.md) covers the shipped music, and [ADR 008](../../../docs/adr/008-rebirth-reversal.md) sets the later creative direction. See the [design index](../../README.md) for the current pointers.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended by that workflow) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. For this handoff, use **one continuous native Claude session** with executing-plans; do not spawn parallel agents merely to fill time. If those skills are unavailable in Claude, follow this checklist directly.
 
@@ -10,7 +10,7 @@
 
 **Tech Stack:** Existing Node 24.21.0, pnpm 11.9.0, React 19, Vite, TypeScript, Express 5, better-sqlite3, native fetch/EventSource/dialog, Vitest and local browser testing. OpenAI Responses for constrained recipes/inspection, Images API for 1024×1024 WebP; persistent local files on the existing Fly volume. Add no runtime dependency unless a demonstrated requirement cannot be met with the existing stack.
 
-**Spec:** [Product decisions, exact copy, limits and contracts](../specs/2026-10-18-gallery-ai-keepsakes-design.md). Read both documents. This spec supersedes the old Gallery exclusion in CLAUDE.md only for the explicitly requested Gallery/keepsake extension. It is not authorization to redesign the paper scene.
+**Spec:** [Product decisions, exact copy, limits and contracts](design.md). Read both documents. This spec supersedes the old Gallery exclusion in CLAUDE.md only for the explicitly requested Gallery/keepsake extension. It is not authorization to redesign the paper scene.
 
 ## Global Constraints
 
@@ -267,6 +267,6 @@ A later authorized release needs: a consistent backup of the live SQLite databas
 
 ## Visual and API references
 
-- Use [the current design spec's material references](../specs/2026-10-18-gallery-ai-keepsakes-design.md#6-gallery-experience-and-references), especially [space](../../../reference-images/01-space-desktop.png), [write](../../../reference-images/02-write-desktop.png) and [mobile write](../../../reference-images/08-write-mobile.png), for paper/background tone only. Current baseline screenshots control the newer layout. These links are relative and remain valid when this repository structure is moved intact.
+- Use [the current design spec's material references](design.md#6-gallery-experience-and-references), especially [space](../../room/reference-images/01-space-desktop.png), [write](../../room/reference-images/02-write-desktop.png) and [mobile write](../../room/reference-images/08-write-mobile.png), for paper/background tone only. Current baseline screenshots control the newer layout. These links are relative and remain valid when this repository structure is moved intact.
 - The room continues to use the existing [paper-crumple-demo](https://github.com/item-develop/paper-crumple-demo); do not replace or remodel it for the Gallery.
 - Official [Images API](https://developers.openai.com/api/reference/resources/images/methods/generate), [image generation guide](https://developers.openai.com/api/docs/guides/image-generation), and [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs) ground adapter parameters. The architecture, consent-by-Release rule and operating limits are this project's decisions.

@@ -1,11 +1,11 @@
 # 005 — Release papers leave a separate AI keepsake; the original is still deleted
 
-Status: implemented on branch `claude/gallery-ai-keepsakes` and verified
-locally with fixture providers on 2026-10-18; revised the same day to
-extract at ignition and to the record-exhibition design (G01–G03). Not
-deployed. Real OpenAI image
-generation and the visual-policy check have **not** been exercised; see the
-release boundary below.
+Status: implemented and deployed. The 2026-10-18 design moved extraction
+to ignition and set the record exhibition's visual direction. The
+[2026-10-20 preflight](../evidence/gallery-generation-preflight-2026-10-20.md)
+exercised real image generation and inspection in an isolated database.
+The [Gallery release](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/actions/runs/39380817085)
+followed. The dated revisions below record subsequent changes.
 
 ## Context
 
@@ -77,13 +77,10 @@ after a published-state check.
 - **Failure is visible, not hidden.** Generation can fail or be delayed; the
   original paper is still gone. With processing paused the Gallery says new
   records are not being made, and a burn reads nothing and queues nothing.
-- **Sound is not built.** The record view keeps a disabled player slot with
-  honest copy. The owner selected existing AI musical directions → stored
-  deterministic score → browser Web Audio on 2026-10-19; see
-  [ADR 006](006-browser-synthesised-record-music.md) and the
-  [music design](../../design/gallery-records-2026-10-18/music-design.md).
-  This future extension adds no external music provider, audio file/job or
-  extra AI request, and does not change the existing fire or image policy.
+- **Sound.** A published image may also have a stored score based on the
+  same brief. Web Audio plays it in the visitor's browser. The owner
+  enabled music on 2026-10-27. See [ADR 006](006-browser-synthesised-record-music.md)
+  for the score and playback contract.
 
 ### Revision 2026-10-30: rebirth reversal
 
@@ -105,12 +102,9 @@ the same public shape. Everyone else still meets every record anonymously.
 
 ## Release boundary
 
-Before any of this reaches production: a consistent backup of the live
-database (and, from then on, of `/data/artifacts`); confirmation that the
-account can use the configured image model (`gpt-image-2` by default; the
-2026-10-18 docs list `gpt-image-2.5-*` and do not name `gpt-image-2`, so
-access is unverified and the model is not switched silently); one separately
-approved paid smoke test with synthetic content and a look at its result;
-the owner's decision on `ARTIFACTS_ENABLED`; CI; deployment; read-only
-post-deploy checks. Operating details are in
-[the artifacts runbook](../artifacts-runbook.md).
+For a change to the live generation path, check the configured provider,
+use synthetic content in an isolated paid preflight when authorised,
+and verify the results before enabling the change. Back up the live
+database and `/data/artifacts` for relevant data changes. See
+[the artifacts runbook](../artifacts-runbook.md) for the feature switches
+and release checks.

@@ -1,6 +1,6 @@
 # 001 — Real-time over SSE + HTTP, recovered from snapshots
 
-Status: accepted, implemented (`2a9f943`, `594b830`). Decided in `plan.md` §3 and §7.
+Status: accepted, implemented (`2a9f943`, `594b830`). Decided in the [C9 plan](../../design/room/c9-implementation-plan.md) §3 and §7.
 
 ## Context
 

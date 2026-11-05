@@ -134,7 +134,7 @@ artworks remain runtime output and are not part of this fixed pack.
 - **Generator:** Codex built-in Image Gen. The exact underlying model ID is
   not exposed. The record/frame use the selected G02 concept as a style
   reference; the other three are standalone material generations.
-- **Prompts:** [complete material prompts and selected sources](../design/gallery-records-2026-10-18/asset-prompts.md).
+- **Prompts:** [complete material prompts and selected sources](../design/gallery/record-exhibition/asset-prompts.md).
   One cleanup edit preceded the final sleeve-frame selection.
 - **Packaging:** macOS sips resized square exports to 1024 pixels. PNG
   preserves alpha for cutouts and lossless encoding for height data; opaque
@@ -144,7 +144,7 @@ artworks remain runtime output and are not part of this fixed pack.
   corner alpha, and recorded bytes/hashes in the public manifest. The runtime
   pack totals 4,125,514 bytes. No page-rendering fidelity or provider-backed
   generation claim follows from these material checks.
-- **Usage:** [state-by-state composition guidance](../design/gallery-records-2026-10-18/design.md#13-fixed-visual-assets-and-where-to-use-them).
+- **Usage:** [state-by-state composition guidance](../design/gallery/record-exhibition/design.md#13-fixed-visual-assets-and-where-to-use-them).
   This pass does not modify the application's current material wiring.
 
 ## Gallery G01 mist background — 2026-10-19
@@ -158,7 +158,7 @@ The owner requested the same visual background as the supplied “唱片馆.png�
 - **SHA-256:** `f064130419ef58f0df9af7870672e466da264cf4d722e6cf34bb803754897512`.
 - **Image:** quiet grey-green upper atmosphere, soft white lower ground mist and restrained fine grain. No text, UI, discs, sleeves, artwork or baked object shadows. Occluded parts are reconstructed; pixel-identical recovery of unseen areas is not claimed.
 - **Usage:** replaces the flat mineral-surface composition as the active Gallery backdrop. Keep independent real artwork, live object shadows and HTML above it. Preserve the old surface file for compatibility without loading both background layers.
-- **Prompt and usage:** [exact generation prompt](../design/gallery-records-2026-10-18/asset-prompts.md#6-gallery-stage-mist-v2jpg--2026-10-19), [latest design amendment](../design/gallery-records-2026-10-18/design.md#14-owner-amendment--restore-g01s-white-ground-mist-2026-10-19), and [Claude repair handoff](../design/gallery-records-2026-10-18/claude-revision-prompt-2026-10-19.md).
+- **Prompt and usage:** [exact generation prompt](../design/gallery/record-exhibition/asset-prompts.md#6-gallery-stage-mist-v2jpg--2026-10-19), [latest design amendment](../design/gallery/record-exhibition/design.md#14-owner-amendment--restore-g01s-white-ground-mist-2026-10-19), and [Claude repair handoff](../design/gallery/record-exhibition/claude-revision-prompt-2026-10-19.md).
 - **Verification boundary:** decoded and visually inspected the delivered JPEG; checked dimensions/profile/hash and relative asset links. This delivery edits assets and documentation only; the new backdrop is not yet wired into or browser-verified in the application.
 
 ## Homepage window-lit room plate — 2026-10-19

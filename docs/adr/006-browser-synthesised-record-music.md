@@ -1,18 +1,17 @@
 # 006 — AI-directed scores, performed locally with Web Audio
 
-Date: 2026-10-19. Status: **implemented 2026-10-27; enabled in production by the owner on 2026-10-27**
-(`GALLERY_MUSIC_ENABLED` unset in production; enabling it is the owner's
-decision, after real-browser listening that has not yet been done).
-Extends
-[ADR 005](005-release-keepsakes.md) without changing its source deletion,
-burn permissions, extraction deadline or image publication policy.
+Date: 2026-10-19. Status: **implemented and enabled in production on
+2026-10-27** via `GALLERY_MUSIC_ENABLED`. Extends
+[ADR 005](005-release-keepsakes.md) while preserving its source deletion,
+burn permissions, extraction deadline and image publication policy.
 
 ## Context
 
 The owner wants a released note to become both an abstract cover and a short
 instrumental in the record exhibition. They selected OpenAI-generated
-parameters followed by browser synthesis. The current ignition brief
-already includes musical directions; the current Gallery is image-only.
+parameters followed by browser synthesis. At the time of the decision,
+the ignition brief already included musical directions and the Gallery
+was image-only.
 
 ## Decision
 
@@ -50,8 +49,7 @@ historical backfill is included.
 - Strict score/renderer allowlists exclude arbitrary code, files, voices,
   lyrics and URLs. Existing reports target the whole record; hiding gates
   both the image and score. Downloaded data cannot be recalled.
-- Music is independently gated by proposed `GALLERY_MUSIC_ENABLED`, off by
-  default. Existing `ARTIFACTS_ENABLED` and image budgets keep their meaning.
+- Music is independently gated by `GALLERY_MUSIC_ENABLED`, off when unset. Existing `ARTIFACTS_ENABLED` and image budgets keep their meaning.
 - Image publication remains valid if music is disabled/invalid. No fake
   sound or unrelated loop is substituted.
 - No new music SSE event: the optional descriptor travels in the existing
@@ -59,14 +57,16 @@ historical backfill is included.
 
 The complete contract, synthesis limits, UI states, implementation boundaries
 and acceptance checks are in the
-[music design](../../design/gallery-records-2026-10-18/music-design.md).
+[music design](../../design/gallery/record-exhibition/music-design.md).
 
 ## Implementation (2026-10-27)
 
 - `shared/music-score.ts`: `MusicScoreV1`, the strict validator and the
   frozen `throwaway-score-v1` composer (Mulberry32), shared by server and
   browser.
-- Migration 10: nullable `artifacts.music_score`; no backfill.
+- Migration 10 adds nullable `artifacts.music_score`. It leaves older rows
+  unchanged. The owner later ran a one-time production backfill for five
+  older records ([`710fed9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/710fed9)).
 - `publishArtifact` composes and saves the score in its own transaction when
   the flag is on; `GET /api/gallery/:id/score` is the gated read;
   `/api/gallery/config` adds `music_enabled`.
@@ -76,9 +76,10 @@ and acceptance checks are in the
 - Specs: `music-score`, `music-publication` (including a schema-9 fixture),
   `gallery-synth`, `gallery-sound-ui` (Web Audio mocked).
 
-Not verified: real-browser rendering and listening, iOS Safari's audio
-unlock, first-render latency and memory on a real phone, and the Release
-disclosure copy (unchanged until the owner enables music). Operating notes
+The owner listened to the earlier records and found them too similar.
+That listening informed ADR 008. The sound of newly generated records
+under that revision, iOS Safari's audio unlock, and first-render latency
+and memory on a physical phone remain separate checks. Operating notes
 are in [the runbook](../artifacts-runbook.md).
 
 ### Revision 2026-10-30: rebirth reversal
