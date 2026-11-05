@@ -95,7 +95,8 @@
   gap: 48px;
 }
 
-.records-links .header-link {
+.records-links .header-link,
+.records-links .lang-toggle {
   font-size: 17px;
 }
 
@@ -725,7 +726,8 @@
     gap: 28px;
   }
 
-  .records-links .header-link {
+  .records-links .header-link,
+  .records-links .lang-toggle {
     font-size: 16px;
   }
 
@@ -1068,7 +1070,8 @@
     gap: 28px;
   }
 
-  .records-links .header-link {
+  .records-links .header-link,
+  .records-links .lang-toggle {
     font-size: 15px;
   }
 

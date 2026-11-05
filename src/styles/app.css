@@ -104,8 +104,14 @@ textarea {
   text-underline-offset: 4px;
 }
 
-/* "中 / EN": the current language in ink, the other one quieter */
+/* "中 / EN": a header link in look, the current language in ink and the
+   other one quieter. Not a .header-link: it is a control, not a place. */
 .lang-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 19px;
+  cursor: pointer;
   display: inline-flex;
   gap: 0.3em;
   white-space: nowrap;
@@ -1025,7 +1031,8 @@ fieldset:disabled .choice,
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .header-link {
+  .header-link,
+  .lang-toggle {
     font-size: 16px;
   }
 

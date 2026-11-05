@@ -99,18 +99,20 @@ export function titleText(lang: Lang, title: string): string {
   return lang === "zh" ? (TITLE_ZH[title] ?? title) : title;
 }
 
-const ALT = /^An abstract artwork: (.+), (.+)\.$/;
+// The phrases themselves hold commas, so the pieces are found by matching
+// whole known phrases from each end, never by splitting.
+const ALT_HEAD = "An abstract artwork: ";
 export function altText(lang: Lang, alt: string): string {
-  if (lang === "en") return alt;
-  const m = ALT.exec(alt);
-  if (!m) return alt;
-  const [, thing, relation] = m;
-  const rel = (ALT_ZH.relation as Record<string, string>)[relation];
-  if (!rel) return alt;
-  for (const [metaphor, zm] of Object.entries(ALT_ZH.metaphor)) {
-    if (!thing.startsWith(metaphor + " ")) continue;
-    const material = (ALT_ZH.material as Record<string, string>)[thing.slice(metaphor.length + 1)];
-    if (material) return `一件抽象作品：${zm}，${material}；${rel}。`;
+  if (lang === "en" || !alt.startsWith(ALT_HEAD) || !alt.endsWith(".")) return alt;
+  const body = alt.slice(ALT_HEAD.length, -1);
+  for (const [relation, rel] of Object.entries(ALT_ZH.relation)) {
+    if (!body.endsWith(", " + relation)) continue;
+    const thing = body.slice(0, -(relation.length + 2));
+    for (const [metaphor, zm] of Object.entries(ALT_ZH.metaphor)) {
+      if (!thing.startsWith(metaphor + " ")) continue;
+      const material = (ALT_ZH.material as Record<string, string>)[thing.slice(metaphor.length + 1)];
+      if (material) return `一件抽象作品：${zm}，${material}；${rel}。`;
+    }
   }
   return alt;
 }

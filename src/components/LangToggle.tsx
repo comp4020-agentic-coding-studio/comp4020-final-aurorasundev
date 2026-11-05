@@ -7,7 +7,7 @@ export function LangToggle() {
   return (
     <button
       type="button"
-      className="header-link lang-toggle"
+      className="lang-toggle"
       onClick={toggle}
       aria-label={lang === "zh" ? "Switch to English" : "切换到中文"}
       lang={lang === "zh" ? "en" : "zh-CN"}
