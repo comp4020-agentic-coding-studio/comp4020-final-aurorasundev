@@ -153,7 +153,10 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
             <input type="radio" name="mode" value="KEEP" checked={mode === "KEEP"} onChange={() => setMode("KEEP")} />
             <span>
               <span className="choice-label">Keep it</span>
-              <span className="choice-hint">Only you may destroy it. Sign in to find it again from any browser.</span>
+              <span className="choice-hint">
+                It stays in your hands. Only you may destroy it, and when it burns it leaves no record. Sign in to find it again from
+                any browser.
+              </span>
             </span>
           </label>
           <label className="choice">
@@ -161,8 +164,9 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
             <span>
               <span className="choice-label">Release it</span>
               <span className="choice-hint">
-                Its fate is no longer yours to control. When it burns, its words and drawing are sent to OpenAI once to shape an anonymous
-                AI image for the public Gallery. Your original words and drawing are deleted as it burns.
+                When it burns, it becomes a record in the Gallery: an image, and often a short piece of music. Its fate is no longer yours
+                to control. As it burns, its words and drawing are sent to OpenAI once to shape an anonymous AI image for the public
+                Gallery. Your original words and drawing are deleted as it burns.
               </span>
             </span>
           </label>
