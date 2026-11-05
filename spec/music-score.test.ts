@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   composeMusicScore,
   composeMusicScoreV1,
+  composeMusicScoreV2,
   MAX_NOTES,
   MAX_SCORE_BYTES,
   MAX_VOICES,
@@ -9,6 +10,7 @@ import {
   parseMusicScore,
   type MusicScoreV1,
   type ScoreBrief,
+  type ScoreV3Plan,
 } from "../shared/music-score.ts";
 import { METAPHORS, MOTIONS, RELATIONS, SPACES, TIMBRES } from "../server/artifacts/types.ts";
 
@@ -148,7 +150,11 @@ describe("v1: the brief shapes the music", () => {
   });
 });
 
-describe("v2: a short piece", () => {
+for (const [label, compose, version] of [
+  ["v2", composeMusicScoreV2, "throwaway-score-v2"],
+  ["v3", composeMusicScore, "throwaway-score-v3"],
+] as const)
+describe(`${label}: a short piece`, () => {
   const seeds = ["00000001", "a0b1c2d3", "ffffffff", "1a2b3c4d"];
   // the lowest voice sounding at each onset, in time order
   const lowestLine = (s: MusicScoreV1) =>
@@ -166,14 +172,14 @@ describe("v2: a short piece", () => {
   };
   const motions = ["still", "drifting", "unfolding"] as const;
 
-  it("is the current composer", () => {
-    expect(composeMusicScore(base, "deadbeef").composer_version).toBe("throwaway-score-v2");
+  it("labels its scores with its own composer version", () => {
+    expect(compose(base, "deadbeef").composer_version).toBe(version);
   });
 
   it("moves through chords: the lowest voice changes root at least four times", () => {
     for (const motion of motions)
       for (const seed of seeds) {
-        const line = lowestLine(composeMusicScore(withMusic({}, { motion }), seed)).map((m) => m % 12);
+        const line = lowestLine(compose(withMusic({}, { motion }), seed)).map((m) => m % 12);
         const changes = line.filter((pc, i) => i > 0 && pc !== line[i - 1]).length;
         expect(changes, `${motion} ${seed}`).toBeGreaterThanOrEqual(4);
       }
@@ -182,7 +188,7 @@ describe("v2: a short piece", () => {
   it("gives the melody varied note values, at least three distinct lengths", () => {
     for (const metaphor of METAPHORS)
       for (const motion of motions) {
-        const s = composeMusicScore(withMusic({}, { metaphor, motion }), "1a2b3c4d");
+        const s = compose(withMusic({}, { metaphor, motion }), "1a2b3c4d");
         expect(new Set(topLine(s).map((n) => n.duration_ms)).size, `${metaphor} ${motion}`).toBeGreaterThanOrEqual(3);
       }
   });
@@ -192,7 +198,7 @@ describe("v2: a short piece", () => {
     for (const motion of MOTIONS)
       for (const ending of ["open", "settled", "fading"] as const)
         for (const seed of seeds) {
-          const s = composeMusicScore(withMusic({ ending }, { motion }), seed);
+          const s = compose(withMusic({ ending }, { motion }), seed);
           tempos.add(s.tempo_bpm);
           expect(s.notes[s.notes.length - 1].at_ms, `${motion} ${ending} ${seed}`).toBeGreaterThanOrEqual(20_000);
           for (const n of s.notes) expect(n.at_ms + n.duration_ms).toBeLessThanOrEqual(NOTES_END_MS);
@@ -202,7 +208,7 @@ describe("v2: a short piece", () => {
 
   it("relation picks the mode: major, minor or lydian", () => {
     for (const seed of seeds) {
-      const score = (relation: ScoreBrief["relation"]) => composeMusicScore(withMusic({}, { relation }), seed);
+      const score = (relation: ScoreBrief["relation"]) => compose(withMusic({}, { relation }), seed);
       const opening = score("opening");
       const separated = score("separated");
       const receding = score("receding");
@@ -224,12 +230,12 @@ describe("v2: a short piece", () => {
   it("pulse and density change the accompaniment", () => {
     for (const seed of seeds) {
       const quiet = (s: MusicScoreV1) => JSON.stringify(s.notes.filter((n) => n.velocity < 0.3).map((n) => [n.at_ms, n.midi]));
-      const none = composeMusicScore(withMusic({ pulse: "none" }), seed);
-      const slow = composeMusicScore(withMusic({ pulse: "slow" }), seed);
+      const none = compose(withMusic({ pulse: "none" }), seed);
+      const slow = compose(withMusic({ pulse: "slow" }), seed);
       expect(quiet(none)).not.toBe(quiet(slow));
       for (const pulse of ["none", "slow"] as const) {
-        const sparse = composeMusicScore(withMusic({ pulse, density: "sparse" }), seed);
-        const layered = composeMusicScore(withMusic({ pulse, density: "layered" }), seed);
+        const sparse = compose(withMusic({ pulse, density: "sparse" }), seed);
+        const layered = compose(withMusic({ pulse, density: "layered" }), seed);
         expect(layered.notes.length).toBeGreaterThan(sparse.notes.length);
         expect(maxOverlap(layered)).toBeGreaterThanOrEqual(maxOverlap(sparse));
       }
@@ -237,22 +243,104 @@ describe("v2: a short piece", () => {
   });
 
   it("the same brief and seed give the same score", () => {
-    const a = composeMusicScore(base, "deadbeef");
-    const b = composeMusicScore(structuredClone(base), "deadbeef");
+    const a = compose(base, "deadbeef");
+    const b = compose(structuredClone(base), "deadbeef");
     expect(JSON.stringify(b)).toBe(JSON.stringify(a));
   });
 
   it("different seeds change the notes, never the tempo, timbre, room or ending", () => {
     for (const brief of [base, withMusic({ timbre: "warm_pad", pulse: "none", ending: "fading" }, { motion: "still", space: "distant" })]) {
-      const a = composeMusicScore(brief, "00000001");
-      const b = composeMusicScore(brief, "89abcdef");
+      const a = compose(brief, "00000001");
+      const b = compose(brief, "89abcdef");
       expect([a.timbre, a.tempo_bpm, a.reverb_mix, a.ending]).toEqual([b.timbre, b.tempo_bpm, b.reverb_mix, b.ending]);
       expect(JSON.stringify(a.notes)).not.toBe(JSON.stringify(b.notes));
     }
   });
 
   it("refuses a seed that isn't eight lowercase hex characters", () => {
-    for (const seed of ["", "DEADBEEF", "deadbee", "deadbeef0", "xyzxyzxy"]) expect(() => composeMusicScore(base, seed), seed).toThrow();
+    for (const seed of ["", "DEADBEEF", "deadbee", "deadbeef0", "xyzxyzxy"]) expect(() => compose(base, seed), seed).toThrow();
+  });
+});
+
+describe("v2 is frozen", () => {
+  // v2 is shipped: every score it made must stay reproducible, so its output
+  // across every brief and three seeds is pinned. If this changes, a stored
+  // v2 score would no longer match its composer: add a new version instead.
+  it("composes exactly as shipped, for every brief", async () => {
+    const { createHash } = await import("node:crypto");
+    const h = createHash("sha256");
+    for (const brief of everyBrief())
+      for (const seed of ["00000000", "7f3a9c01", "1a2b3c4d"]) {
+        const sc = composeMusicScoreV2(brief, seed);
+        h.update(JSON.stringify(sc.notes) + sc.tempo_bpm + sc.reverb_mix);
+      }
+    expect(h.digest("hex").slice(0, 16)).toBe("f4a1edf479c453c6");
+  }, 60_000);
+});
+
+describe("v3: a melody that sings", () => {
+  // what the composer decided: its key and the melody line it walked
+  const planned = (brief: ScoreBrief, seed: string) => {
+    let plan: ScoreV3Plan = { key: 0, melody: [] };
+    composeMusicScore(brief, seed, (p) => (plan = p));
+    return plan;
+  };
+  const lines = () => {
+    const out: { seed: string; melody: number[] }[] = [];
+    for (const metaphor of METAPHORS)
+      for (const relation of RELATIONS)
+        for (const motion of MOTIONS)
+          for (const seed of ["00000001", "1a2b3c4d", "c0ffee11"])
+            out.push({ seed, melody: planned({ ...base, metaphor, relation, motion }, seed).melody });
+    return out;
+  };
+
+  it("moves mostly by step and never jumps an octave", () => {
+    let steps = 0;
+    let moves = 0;
+    for (const { seed, melody } of lines()) {
+      for (let i = 1; i < melody.length; i++) {
+        const d = Math.abs(melody[i] - melody[i - 1]);
+        expect(d, seed).toBeLessThan(12);
+        if (d >= 1 && d <= 2) steps++;
+        moves++;
+      }
+    }
+    expect(steps / moves).toBeGreaterThan(0.45);
+  });
+
+  it("rarely repeats a note and spans a real range", () => {
+    let repeats = 0;
+    let moves = 0;
+    for (const { seed, melody } of lines()) {
+      for (let i = 1; i < melody.length; i++) {
+        if (melody[i] === melody[i - 1]) repeats++;
+        moves++;
+      }
+      expect(Math.max(...melody) - Math.min(...melody), seed).toBeGreaterThanOrEqual(5);
+    }
+    expect(repeats / moves).toBeLessThan(0.12);
+  });
+
+  it("the plan it reports is the melody in the score", () => {
+    const sc = composeMusicScore(base, "1a2b3c4d", (p) => {
+      for (const m of p.melody) expect(sc_notes().some((n) => n.midi === m)).toBe(true);
+    });
+    function sc_notes() {
+      return composeMusicScore(base, "1a2b3c4d").notes;
+    }
+    expect(sc.composer_version).toBe("throwaway-score-v3");
+  });
+
+  it("spreads keys across the octave as the seed changes", () => {
+    const keys = new Set<number>();
+    for (const seed of ["00000000", "11111111", "22222222", "33333333", "44444444", "55555555", "66666666", "77777777", "88888888", "99999999", "aaaaaaaa", "bbbbbbbb"])
+      keys.add(planned(base, seed).key % 12);
+    expect(keys.size).toBeGreaterThanOrEqual(6);
+  });
+
+  it("is the current composer", () => {
+    expect(composeMusicScore(base, "deadbeef").composer_version).toBe("throwaway-score-v3");
   });
 });
 
@@ -261,7 +349,8 @@ describe("bounds", () => {
     let n = 0;
     const composers = [
       [composeMusicScoreV1, "throwaway-score-v1"],
-      [composeMusicScore, "throwaway-score-v2"],
+      [composeMusicScoreV2, "throwaway-score-v2"],
+      [composeMusicScore, "throwaway-score-v3"],
     ] as const;
     for (const brief of everyBrief()) {
       for (const seed of ["00000000", "7f3a9c01", "ffffffff"]) {
@@ -278,18 +367,18 @@ describe("bounds", () => {
         }
       }
     }
-    expect(n).toBe(2 * 51_840);
-    // 103,680 scores (51,840 per composer): several seconds locally, slower
-    // on a shared CI runner
-  }, 60_000);
+    expect(n).toBe(3 * 51_840);
+    // 155,520 scores (51,840 per composer): some seconds locally, slower on a
+    // shared CI runner
+  }, 120_000);
 });
 
 describe("validation", () => {
   const good = () => JSON.parse(JSON.stringify(composeMusicScore(base, "deadbeef"))) as Record<string, unknown> & { notes: Record<string, unknown>[] };
 
-  it("accepts a v2 and a v1 score, and rejects an unknown composer version", () => {
-    expect(parseMusicScore(JSON.parse(JSON.stringify(composeMusicScore(base, "deadbeef"))))).not.toBeNull();
-    expect(parseMusicScore(JSON.parse(JSON.stringify(composeMusicScoreV1(base, "deadbeef"))))).not.toBeNull();
+  it("accepts a score from every shipped composer, and rejects an unknown version", () => {
+    for (const compose of [composeMusicScoreV1, composeMusicScoreV2, composeMusicScore])
+      expect(parseMusicScore(JSON.parse(JSON.stringify(compose(base, "deadbeef"))))).not.toBeNull();
     for (const composer_version of ["throwaway-score-v9", "throwaway-score-v0", "", null])
       expect(parseMusicScore({ ...good(), composer_version }), String(composer_version)).toBeNull();
   });
