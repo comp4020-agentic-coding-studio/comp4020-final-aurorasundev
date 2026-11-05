@@ -1010,6 +1010,13 @@ fieldset:disabled .choice,
     order: -1;
   }
 
+  /* While a paper, the writing sheet or a dialog is open, the stacked links
+     keep to the two rows the sheets leave clear; the language waits for the
+     idle space (the open dialog holds the header inert anyway). */
+  .site-header.is-occupied .lang-toggle {
+    display: none;
+  }
+
   .account-dialog {
     width: 100vw;
     padding: 0 12px 48px 8px;

@@ -18,7 +18,7 @@ type Props = {
 export function Header({ onAccount, username, total, busy = false, canVisitGallery = false }: Props) {
   const t = useT();
   return (
-    <header className="site-header">
+    <header className={`site-header${canVisitGallery ? "" : " is-occupied"}`}>
       <div className="header-brand">
         <span className="wordmark">Throwaway</span>
         {total !== null && (

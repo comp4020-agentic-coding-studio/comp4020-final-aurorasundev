@@ -1496,3 +1496,11 @@
     font-size: 28px;
   }
 }
+
+/* Chinese titles break only at their spaces: "Throwaway 展馆" never leaves
+   one character alone on a line */
+.entry-title:lang(zh),
+.wm-name:lang(zh),
+.record-title:lang(zh) {
+  word-break: keep-all;
+}

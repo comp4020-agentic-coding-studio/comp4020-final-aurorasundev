@@ -26,9 +26,11 @@ const PAGES = {
 } as const;
 
 // A line break inside a Chinese paragraph would render as a stray space
-// between two characters; Chinese runs straight on.
+// between two characters; Chinese runs straight on, into and out of a link
+// (a line ending in a link's ")" or starting with "[" for a Chinese label).
 const CJK = "\u3000-\u303f\u3400-\u9fff\uff00-\uffef";
-const joinCjkLines = (md: string): string => md.replace(new RegExp(`(?<=[${CJK}])\n(?=[${CJK}])`, "g"), "");
+const joinCjkLines = (md: string): string =>
+  md.replace(new RegExp(`(?<=[${CJK})])\\n[ \\t]*(?=[${CJK}]|\\[[${CJK}])`, "g"), "");
 
 // Rendered server-side so the page carries the full README with no script:
 // spec/invariants.test.ts reads the headings straight from this HTML.
