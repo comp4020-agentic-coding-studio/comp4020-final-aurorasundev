@@ -12,11 +12,12 @@ import {
   type SafetyConfig,
 } from "../lib/api.ts";
 import type { PaperStatus } from "../lib/space.ts";
+import { errorMsg, useT, type Key, type Msg, type T } from "../lib/i18n.ts";
 import type { SheetRect } from "./PaperField.tsx";
 
 export type Ended = Exclude<PaperStatus, "active">;
 
-const REASONS: { value: ReportReason; label: string }[] = [
+const REASONS: { value: ReportReason; label: Key }[] = [
   { value: "threats_abuse", label: "Threats or targeted abuse" },
   { value: "private_information", label: "Private information" },
   { value: "sexual_graphic", label: "Sexual or graphic content" },
@@ -52,7 +53,7 @@ type Props = {
 
 type Load =
   | { kind: "loading" }
-  | { kind: "error"; message: string }
+  | { kind: "error"; message: Msg }
   | { kind: "missing" }
   | { kind: "ready"; paper: OpenedPaper };
 
@@ -72,8 +73,11 @@ function sheetBox(rect: SheetRect): { left: number; top: number; width: number; 
   return { left: rect.left - (width - rect.width) / 2, top, width, height };
 }
 
-export const witnessLine = (n: number): string | null =>
-  n === 0 ? null : `${n.toLocaleString("en-AU")} ${n === 1 ? "person has" : "people have"} witnessed this.`;
+export const witnessLine = (n: number, t?: T): string | null => {
+  if (n === 0) return null;
+  if (t) return t(n === 1 ? "{n} person has witnessed this." : "{n} people have witnessed this.", { n: t.num(n) });
+  return `${n.toLocaleString("en-AU")} ${n === 1 ? "person has" : "people have"} witnessed this.`;
+};
 
 export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnecting, onRelease, onReleasable, onEnded, onClose, safety }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -88,7 +92,8 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
   const reportDraft = useRef<{ reason: ReportReason; note: string; key: string } | null>(null);
   const [unsettledReport, setUnsettledReport] = useState(false);
   const [acting, setActing] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<Msg | null>(null);
+  const t = useT();
   // Once the paper has left the space, no late answer may bring it back.
   const endedRef = useRef(ended);
   endedRef.current = ended;
@@ -110,7 +115,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
       .catch((err: Error) => {
         if (!live || endedRef.current) return;
         if (err instanceof ApiError && err.status === 404) setLoad((c) => (c.kind === "ready" ? c : { kind: "missing" }));
-        else setLoad((c) => (c.kind === "ready" ? c : { kind: "error", message: err.message }));
+        else setLoad((c) => (c.kind === "ready" ? c : { kind: "error", message: errorMsg(err, "That didn't reach the space. Try again.") }));
       });
     return () => {
       live = false;
@@ -148,7 +153,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
       merge(await witnessPaper(id, load.paper.read_receipt));
     } catch (err) {
       if (err instanceof ApiError && err.code === "paper_gone") onEnded("destroyed");
-      else setActionError(err instanceof ApiError ? err.message : "That didn't reach the space. Try again.");
+      else setActionError(errorMsg(err, "That didn't reach the space. Try again."));
     } finally {
       setActing(false);
     }
@@ -183,7 +188,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
       if (err instanceof ApiError && err.code === "paper_gone") onEnded("destroyed");
       else if (err instanceof ApiError && err.status < 500) {
         setUnsettledReport(false);
-        setActionError(err.message);
+        setActionError({ code: err.code, message: err.message });
       } else {
         setUnsettledReport(true);
         setActionError("We couldn't confirm your report was received. Try again: it won't be sent twice.");
@@ -196,9 +201,9 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
   const noteCount = countCodePoints(note);
   const box = rect ? sheetBox(rect) : null;
   const paper = load.kind === "ready" ? load.paper : null;
-  const count = paper ? witnessLine(paper.witness_count) : null;
+  const count = paper ? witnessLine(paper.witness_count, t) : null;
   const finalReading = !!ended && ended !== "quarantined" && !!paper;
-  const goneText = ended === "quarantined" ? "This paper is no longer available." : "This paper is no longer here.";
+  const goneText = ended === "quarantined" ? t("This paper is no longer available.") : t("This paper is no longer here.");
   // Keep: only its author sees the action at all. Release: everyone sees it,
   // usable once they have witnessed the paper (the author by the same rule).
   const showBurn = paper && (paper.mode === "release" || paper.viewer.is_author);
@@ -212,14 +217,14 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
       ref={dialogRef}
       className={`dialog read-dialog${revealed ? " is-revealed" : ""}${rect ? " over-scene" : ""}${finalReading ? " is-final" : ""}`}
       style={box ? { ...box, margin: 0 } : undefined}
-      aria-label="A paper someone left"
+      aria-label={t("A paper someone left")}
       onCancel={(e) => {
         e.preventDefault();
         onClose();
       }}
     >
       <article className="paper-sheet read-sheet">
-        <button type="button" className="sheet-close sheet-close-icon" aria-label="Close" onClick={onClose}>
+        <button type="button" className="sheet-close sheet-close-icon" aria-label={t("Close")} onClick={onClose}>
           <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
             <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
@@ -228,25 +233,25 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
           <form className="read-report" onSubmit={sendReport} aria-labelledby="report-title">
             <div className="read-body" tabIndex={0}>
               <h2 id="report-title" className="read-report-title">
-                Report this paper
+                {t("Report this paper")}
               </h2>
               <p className="read-report-lead">
-                Reporting starts an automated check. It does not give you permission to destroy this paper.
+                {t("Reporting starts an automated check. It does not give you permission to destroy this paper.")}
               </p>
               <fieldset className="report-reasons" disabled={acting || unsettledReport}>
-                <legend>What concerns you?</legend>
+                <legend>{t("What concerns you?")}</legend>
                 {REASONS.map((r) => (
                   <label key={r.value} className="choice">
                     <input type="radio" name="reason" value={r.value} checked={reason === r.value} onChange={() => setReason(r.value)} />
-                    <span className="choice-label">{r.label}</span>
+                    <span className="choice-label">{t(r.label)}</span>
                   </label>
                 ))}
               </fieldset>
               <label className="report-note-label" htmlFor="report-note">
-                Anything to add? (optional)
+                {t("Anything to add? (optional)")}
               </label>
               <p id="report-note-hint" className="report-note-hint">
-                Don't add names, contact details or anything private.
+                {t("Don't add names, contact details or anything private.")}
               </p>
               <textarea
                 id="report-note"
@@ -258,52 +263,52 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
                 rows={3}
               />
               <p id="report-note-count" className={`report-note-count${noteCount > MAX_REPORT_NOTE ? " is-over" : ""}`}>
-                {noteCount.toLocaleString("en-AU")} / {MAX_REPORT_NOTE}
+                {t.num(noteCount)} / {MAX_REPORT_NOTE}
               </p>
             </div>
             <div className="read-foot">
-              <p className="read-report-caveat">The paper is only removed from the space if the check requires it.</p>
-              {reconnecting && <p className="read-reconnecting">Reconnecting… wait a moment before sending.</p>}
+              <p className="read-report-caveat">{t("The paper is only removed from the space if the check requires it.")}</p>
+              {reconnecting && <p className="read-reconnecting">{t("Reconnecting… wait a moment before sending.")}</p>}
               {actionError && (
                 <p className="form-error" role="alert">
-                  {actionError}
+                  {t.msg(actionError)}
                 </p>
               )}
               <div className="read-actions">
                 <button type="button" className="button button-secondary" onClick={() => setView("read")} disabled={acting}>
-                  Cancel
+                  {t("Cancel")}
                 </button>
                 <button
                   type="submit"
                   className="button button-primary"
                   disabled={!reason || noteCount > MAX_REPORT_NOTE || acting || reconnecting || !paper.read_receipt}
                 >
-                  {acting ? "Sending…" : unsettledReport ? "Try again" : "Send report"}
+                  {acting ? t("Sending…") : unsettledReport ? t("Try again") : t("Send report")}
                 </button>
               </div>
             </div>
           </form>
         ) : (
         <div className="read-body" tabIndex={0}>
-          {load.kind === "loading" && <p className="read-status">Opening paper…</p>}
+          {load.kind === "loading" && <p className="read-status">{t("Opening paper…")}</p>}
           {load.kind === "missing" && <p className="read-status">{goneText}</p>}
           {load.kind === "error" && (
             <div className="read-status" role="alert">
-              <p>This paper couldn't be opened. {load.message}</p>
+              <p>{t("This paper couldn't be opened.")} {t.msg(load.message)}</p>
               <button type="button" className="button button-secondary" onClick={fetchPaper}>
-                Try again
+                {t("Try again")}
               </button>
             </div>
           )}
-          {paper?.drawing && <img className="read-drawing" src={paper.drawing} alt="A drawing someone left" />}
+          {paper?.drawing && <img className="read-drawing" src={paper.drawing} alt={t("A drawing someone left")} />}
           {paper && paper.content.trim() !== "" && <p className="read-text">{paper.content}</p>}
         </div>
         )}
 
         {finalReading && (
           <div className="read-foot read-final" role="status">
-            <p className="read-final-title">This was let go while you were holding it.</p>
-            <p className="read-final-note">You may finish reading. Once you close it, it is gone.</p>
+            <p className="read-final-title">{t("This was let go while you were holding it.")}</p>
+            <p className="read-final-note">{t("You may finish reading. Once you close it, it is gone.")}</p>
           </div>
         )}
 
@@ -314,17 +319,17 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
                 nothing here claims a fresh success until it is back. */}
             {reconnecting && (
               <p className="read-reconnecting" role="status">
-                Reconnecting… this paper's details will catch up.
+                {t("Reconnecting… this paper's details will catch up.")}
               </p>
             )}
             {actionError && (
               <p className="form-error" role="alert">
-                {actionError}
+                {t.msg(actionError)}
               </p>
             )}
             {reported && (
               <p className="read-reported" role="status">
-                {REPORTED}
+                {t(REPORTED)}
               </p>
             )}
             <div className="read-actions">
@@ -334,7 +339,7 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
                 onClick={sawIt}
                 disabled={paper.viewer.has_witnessed || acting || !paper.read_receipt || reconnecting}
               >
-                {paper.viewer.has_witnessed ? "Witnessed" : "I saw it"}
+                {paper.viewer.has_witnessed ? t("Witnessed") : t("I saw it")}
               </button>
               {showBurn && (
                 <button
@@ -343,15 +348,15 @@ export function ReadDialog({ id, revealed, rect, liveVersion, ended, reconnectin
                   onClick={release}
                   disabled={!paper.viewer.can_burn || !paper.read_receipt || acting || reconnecting}
                 >
-                  Release it
+                  {t("Release it")}
                 </button>
               )}
             </div>
             <div className="read-meta">
-              <p className="read-origin">{paper.viewer.is_author ? "You left this here." : "Someone left this here."}</p>
+              <p className="read-origin">{paper.viewer.is_author ? t("You left this here.") : t("Someone left this here.")}</p>
               {safety?.reports && !reported && (
                 <button type="button" className="text-button read-report-link" onClick={startReport} disabled={acting}>
-                  Report this paper
+                  {t("Report this paper")}
                 </button>
               )}
             </div>

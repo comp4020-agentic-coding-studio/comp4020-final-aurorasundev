@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, ownPapers, ownRecords, signOut, type OwnPaper } from "../lib/api.ts";
+import { ownPapers, ownRecords, signOut, type OwnPaper } from "../lib/api.ts";
+import { errorMsg, useT, type Msg } from "../lib/i18n.ts";
 import { getGalleryConfig, type PublicArtifact } from "../lib/gallery-api.ts";
 import { useGalleryAudio } from "../lib/useGalleryAudio.ts";
 import { RecordPlayer } from "./RecordPlayer.tsx";
@@ -18,7 +19,7 @@ type Props = {
   onClose: () => void;
 };
 
-type Load<T> = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; items: T[] };
+type Load<T> = { kind: "loading" } | { kind: "error"; message: Msg } | { kind: "ready"; items: T[] };
 
 // The two ways a paper was left mean different things to its author: a
 // kept paper is still theirs to let go; a released one is in readers' hands.
@@ -27,7 +28,7 @@ const GROUPS = [
   { mode: "release", title: "Released", note: "Handed to whoever reads them. When one burns, it leaves a record below." },
 ] as const;
 
-const failed = (err: unknown): string => (err instanceof ApiError ? err.message : "That didn't reach the space. Try again.");
+const failed = (err: unknown): Msg => errorMsg(err, "That didn't reach the space. Try again.");
 
 export function AccountPanel({ username, onOpenPaper, onSignedOut, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -37,7 +38,8 @@ export function AccountPanel({ username, onOpenPaper, onSignedOut, onClose }: Pr
   const [listening, setListening] = useState<PublicArtifact | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [leaving, setLeaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Msg | null>(null);
+  const t = useT();
   const sound = useGalleryAudio(listening, musicEnabled, true);
 
   useEffect(() => {
@@ -82,7 +84,7 @@ export function AccountPanel({ username, onOpenPaper, onSignedOut, onClose }: Pr
 
   const retry = (
     <button type="button" className="button button-secondary" onClick={() => setAttempt((n) => n + 1)}>
-      Try again
+      {t("Try again")}
     </button>
   );
 
@@ -98,29 +100,29 @@ export function AccountPanel({ username, onOpenPaper, onSignedOut, onClose }: Pr
     >
       <div className="paper-sheet account-sheet mine-sheet">
         <button type="button" className="sheet-close" onClick={onClose} disabled={leaving}>
-          Close
+          {t("Close")}
         </button>
         <h2 id="mine-title" className="account-title">
-          Your papers
+          {t("Your papers")}
         </h2>
-        <p className="account-principle">Signed in as {username}. Only you can see this page.</p>
+        <p className="account-principle">{t("Signed in as {name}. Only you can see this page.", { name: username })}</p>
 
         {papers.kind === "loading" && (
-          <section className="mine-section" aria-label="Your papers in the space">
-            <p className="read-status">Finding your papers…</p>
+          <section className="mine-section" aria-label={t("Your papers in the space")}>
+            <p className="read-status">{t("Finding your papers…")}</p>
           </section>
         )}
         {papers.kind === "error" && (
-          <section className="mine-section" aria-label="Your papers in the space">
+          <section className="mine-section" aria-label={t("Your papers in the space")}>
             <div className="read-status" role="alert">
-              <p>{papers.message}</p>
+              <p>{t.msg(papers.message)}</p>
               {retry}
             </div>
           </section>
         )}
         {ownItems?.length === 0 && (
-          <section className="mine-section" aria-label="Your papers in the space">
-            <p className="account-note">Nothing you left is in the space right now.</p>
+          <section className="mine-section" aria-label={t("Your papers in the space")}>
+            <p className="account-note">{t("Nothing you left is in the space right now.")}</p>
           </section>
         )}
         {ownItems &&
@@ -130,14 +132,14 @@ export function AccountPanel({ username, onOpenPaper, onSignedOut, onClose }: Pr
             return (
               <section key={group.mode} className="mine-section" aria-labelledby={`mine-${group.mode}`}>
                 <h3 id={`mine-${group.mode}`} className="mine-heading">
-                  {group.title}
+                  {t(group.title)}
                 </h3>
-                <p className="account-note mine-group-note">{group.note}</p>
+                <p className="account-note mine-group-note">{t(group.note)}</p>
                 <ul className="mine-papers">
                   {items.map((paper) => (
                     <li key={paper.id}>
                       <button type="button" className="mine-paper" onClick={() => onOpenPaper(paper.id)} disabled={leaving}>
-                        {paper.excerpt || (paper.has_drawing ? "A drawing" : "")}
+                        {paper.excerpt || (paper.has_drawing ? t("A drawing") : "")}
                       </button>
                     </li>
                   ))}
@@ -148,17 +150,17 @@ export function AccountPanel({ username, onOpenPaper, onSignedOut, onClose }: Pr
 
         <section className="mine-section" aria-labelledby="mine-records">
           <h3 id="mine-records" className="mine-heading">
-            What they became
+            {t("What they became")}
           </h3>
-          {records.kind === "loading" && <p className="read-status">Finding your records…</p>}
+          {records.kind === "loading" && <p className="read-status">{t("Finding your records…")}</p>}
           {records.kind === "error" && (
             <div className="read-status" role="alert">
-              <p>{records.message}</p>
+              <p>{t.msg(records.message)}</p>
               {retry}
             </div>
           )}
           {records.kind === "ready" && records.items.length === 0 && (
-            <p className="account-note">When a paper you released burns, the record it leaves will appear here.</p>
+            <p className="account-note">{t("When a paper you released burns, the record it leaves will appear here.")}</p>
           )}
           {records.kind === "ready" && records.items.length > 0 && (
             <ul className="mine-records">
@@ -171,8 +173,8 @@ export function AccountPanel({ username, onOpenPaper, onSignedOut, onClose }: Pr
                     onClick={() => setListening((current) => (current?.id === record.id ? null : record))}
                     disabled={leaving}
                   >
-                    <img src={record.image_url} alt={record.alt} width={120} height={120} loading="lazy" />
-                    <span className="mine-record-title">{record.title}</span>
+                    <img src={record.image_url} alt={t.alt(record.alt)} width={120} height={120} loading="lazy" />
+                    <span className="mine-record-title">{t.title(record.title)}</span>
                   </button>
                 </li>
               ))}
@@ -183,12 +185,12 @@ export function AccountPanel({ username, onOpenPaper, onSignedOut, onClose }: Pr
 
         {error && (
           <p className="form-error" role="alert">
-            {error}
+            {t.msg(error)}
           </p>
         )}
         <div className="mine-actions">
           <button type="button" className="text-button" onClick={leave} disabled={leaving}>
-            {leaving ? "Signing out…" : "Sign out"}
+            {leaving ? t("Signing out…") : t("Sign out")}
           </button>
         </div>
       </div>

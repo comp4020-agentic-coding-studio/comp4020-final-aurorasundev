@@ -1,3 +1,5 @@
+import type { T } from "./i18n.ts";
+
 // The shared space as this page instance holds it. The server is the source of
 // truth: snapshots replace what we know, events are merged by revision, and
 // which papers are on screen (and where) stays local.
@@ -121,5 +123,8 @@ export function spaceReducer(space: Space, action: SpaceAction): Space {
   }
 }
 
-export const countLine = (total: number): string =>
-  total === 0 ? "No papers are here yet." : `${total.toLocaleString("en-AU")} ${total === 1 ? "thing is" : "things are"} still here.`;
+// `t` speaks the chosen language; without it, the English line
+export const countLine = (total: number, t?: T): string => {
+  if (t) return total === 0 ? t("No papers are here yet.") : t(total === 1 ? "{n} thing is still here." : "{n} things are still here.", { n: t.num(total) });
+  return total === 0 ? "No papers are here yet." : `${total.toLocaleString("en-AU")} ${total === 1 ? "thing is" : "things are"} still here.`;
+};

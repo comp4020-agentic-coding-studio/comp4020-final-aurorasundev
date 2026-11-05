@@ -4,6 +4,8 @@ import { GalleryOrbit, type OrbitHandle } from "./components/GalleryOrbit.tsx";
 import { GalleryMist } from "./components/GalleryMist.tsx";
 import { GalleryWordmark } from "./components/GalleryWordmark.tsx";
 import { RecordView } from "./components/RecordView.tsx";
+import { LangToggle } from "./components/LangToggle.tsx";
+import { aboutHref, useT } from "./lib/i18n.ts";
 import { createGate, takesInput } from "./lib/gallery-progress.ts";
 import { recordReveal } from "./lib/record-reveal.ts";
 import { useEntryProgress, type EntryRefs } from "./lib/useEntryProgress.ts";
@@ -43,10 +45,11 @@ function useVertical(): boolean {
   return v;
 }
 
-const TITLE = "The Throwaway Gallery";
-const LEDE = "Images shaped by released notes.";
+const TITLE = "The Throwaway Gallery" as const;
+const LEDE = "Images shaped by released notes." as const;
 
 export function GalleryApp() {
+  const t = useT();
   const g = useGallery();
   // one player for the page, following the opened record (ADR 006)
   const sound = useGalleryAudio(g.selected, g.musicEnabled, !g.reconnecting);
@@ -272,32 +275,33 @@ export function GalleryApp() {
 
       <header className="records-header">
         <GalleryWordmark onHome={goHome} nameRef={cornerEl} oldRef={cornerOldEl} />
-        <nav className="records-links" aria-label="Site">
+        <nav className="records-links" aria-label={t("Site")}>
           <a className="header-link" href="/">
-            <span className="wide-only">Back to the space</span>
-            <span className="narrow-only">Space</span>
+            <span className="wide-only">{t("Back to the space")}</span>
+            <span className="narrow-only">{t("Space")}</span>
           </a>
-          <a className="header-link" href="/readme/">
-            About
+          <a className="header-link header-about" href={aboutHref(t.lang)}>
+            {t("About")}
           </a>
+          <LangToggle />
         </nav>
       </header>
 
       {/* the entry (p = 0); with no motion or no WebGL, a plain title above the grid */}
-      <section className="gallery-entry" aria-label="Gallery entry">
+      <section className="gallery-entry" aria-label={t("Gallery entry")}>
         <h1 ref={titleEl} className="entry-title">
-          {TITLE}
+          {t(TITLE)}
         </h1>
         <p ref={ledeEl} className="entry-lede">
-          {LEDE}
+          {t(LEDE)}
         </p>
         {entry && orbit && (
           <button ref={enterEl} type="button" className="entry-enter" onClick={advance}>
             <span className="entry-enter-hint" aria-hidden="true">
-              <span className="wide-only">Scroll</span>
-              <span className="narrow-only">Swipe up</span>
+              <span className="wide-only">{t("Scroll")}</span>
+              <span className="narrow-only">{t("Swipe up")}</span>
             </span>
-            <span className="entry-enter-word">Enter</span>
+            <span className="entry-enter-word">{t("Enter")}</span>
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
               <path d="M6 9l6 6 6-6" />
             </svg>
@@ -306,47 +310,47 @@ export function GalleryApp() {
       </section>
 
       <main ref={mainEl} className="records-main">
-        {g.generationEnabled === false && <p className="records-paused">New records are not being made right now.</p>}
+        {g.generationEnabled === false && <p className="records-paused">{t("New records are not being made right now.")}</p>}
         <p className="visually-hidden" role="status">
-          {g.reconnecting ? "Reconnecting…" : ""}
+          {g.reconnecting ? t("Reconnecting…") : ""}
         </p>
 
         {g.error && g.items.length === 0 ? (
           <div className="records-state" role="alert">
-            <p>The Gallery could not be opened. Try again.</p>
+            <p>{t("The Gallery could not be opened. Try again.")}</p>
             <button type="button" className="button button-secondary" onClick={g.retry}>
-              Try again
+              {t("Try again")}
             </button>
           </div>
         ) : g.loading ? (
           <p className="records-state" role="status">
-            Opening the Gallery…
+            {t("Opening the Gallery…")}
           </p>
         ) : g.items.length === 0 ? (
           <div className="records-state">
-            <p className="records-empty">No records have arrived yet.</p>
-            <p className="records-empty-note">When a released paper is burned, an image shaped by it can arrive here after it passes safety checks.</p>
+            <p className="records-empty">{t("No records have arrived yet.")}</p>
+            <p className="records-empty-note">{t("When a released paper is burned, an image shaped by it can arrive here after it passes safety checks.")}</p>
           </div>
         ) : showOrbit ? (
           <>
             <div ref={band} className="orbit-band" />
             <div className="orbit-foot">
               <div ref={caption} className="orbit-caption" aria-live="polite">
-                {marks.tagFor(focused) && <p className="record-tag">{marks.tagFor(focused)}</p>}
+                {marks.tagFor(focused) && <p className="record-tag">{t(marks.tagFor(focused)!)}</p>}
                 <h2 className="orbit-title">
                   <button type="button" className="orbit-title-button" onClick={() => focused && openRecord(focused.id)}>
-                    {focused?.title}
+                    {focused ? t.title(focused.title) : null}
                   </button>
                 </h2>
-                <p className="orbit-sub">The original note is gone.</p>
+                <p className="orbit-sub">{t("The original note is gone.")}</p>
               </div>
               <p className="orbit-hint">
-                <span className="wide-only">{many ? (vertical ? "Scroll to turn" : "Scroll to turn · Click to open") : "Click to open"}</span>
-                <span className="narrow-only">{many ? (vertical ? "Swipe up or down" : "Swipe to turn") : ""}</span>
+                <span className="wide-only">{many ? (vertical ? t("Scroll to turn") : t("Scroll to turn · Click to open")) : t("Click to open")}</span>
+                <span className="narrow-only">{many ? (vertical ? t("Swipe up or down") : t("Swipe to turn")) : ""}</span>
               </p>
               <div className="orbit-controls">
                 {many && (
-                  <button type="button" className="orbit-arrow" aria-label="Previous record" onClick={() => orbitRef.current?.step(-1)}>
+                  <button type="button" className="orbit-arrow" aria-label={t("Previous record")} onClick={() => orbitRef.current?.step(-1)}>
                     <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
                       <path className="chevron" d="M15 4l-8 8 8 8" />
                       <path className="arrow" d="M20 12H4M10 6l-6 6 6 6" />
@@ -356,10 +360,10 @@ export function GalleryApp() {
                   </button>
                 )}
                 <button type="button" className="button button-primary orbit-open" onClick={() => focused && openRecord(focused.id)}>
-                  Open record
+                  {t("Open record")}
                 </button>
                 {many && (
-                  <button type="button" className="orbit-arrow" aria-label="Next record" onClick={() => orbitRef.current?.step(1)}>
+                  <button type="button" className="orbit-arrow" aria-label={t("Next record")} onClick={() => orbitRef.current?.step(1)}>
                     <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
                       <path className="chevron" d="M9 4l8 8-8 8" />
                       <path className="arrow" d="M4 12h16M14 6l6 6-6 6" />

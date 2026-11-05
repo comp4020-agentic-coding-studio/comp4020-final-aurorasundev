@@ -49,6 +49,7 @@ const artifactWorker = createArtifactWorker(db, artifactProvider, {
   onSettled: (paperId) => broadcast("paper:extraction_settled", { id: paperId }),
 });
 const readmeHtml = renderReadmePage(resolve(root, "README.md"));
+const readmeZhHtml = renderReadmePage(resolve(root, "README.zh.md"), "zh");
 const dist = resolve(root, "dist");
 
 const app = express();
@@ -92,6 +93,10 @@ app.get(/^\/gallery\/?$/, (_req, res, next) => {
 
 app.get("/readme/", (_req, res) => {
   res.type("html").send(readmeHtml);
+});
+// the About page in Chinese: a translation of README.md, which stays as it is
+app.get(/^\/readme\/zh\/?$/, (_req, res) => {
+  res.type("html").send(readmeZhHtml);
 });
 const docs = resolve(root, "docs");
 if (existsSync(docs)) app.use("/readme/docs", express.static(docs));

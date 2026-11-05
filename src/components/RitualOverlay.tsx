@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { RitualLayout } from "./PaperField.tsx";
+import { useT, type Key, type Msg } from "../lib/i18n.ts";
 
 // The furnace ritual's words and controls (B01–B03, B05). The paper and the
 // furnace are in the scene; everything readable or pressable is here, in
@@ -17,7 +18,7 @@ type Props = {
   stage: RitualStage;
   after: RitualAfter;
   outcome: RitualOutcome;
-  error: string | null;
+  error: Msg | null;
   canPlace: boolean;
   fallback: boolean;
   layout: RitualLayout | null;
@@ -28,13 +29,13 @@ type Props = {
 
 const PRECOMMIT: RitualStage[] = ["preparing", "ready"];
 
-const AFTER: Record<RitualAfter, string> = {
+const AFTER: Record<RitualAfter, Key> = {
   record: "What it carried is becoming a record in the Gallery.",
   none: "A kept paper leaves no record behind.",
   paused: "New Gallery records aren't being made right now.",
 };
 
-function words(stage: RitualStage, outcome: RitualOutcome, fallback: boolean, after: RitualAfter): { lead: string; note: string | null } {
+function words(stage: RitualStage, outcome: RitualOutcome, fallback: boolean, after: RitualAfter): { lead: Key; note: Key | null } {
   if (outcome === "removed") return { lead: "This paper is no longer available.", note: null };
   if (outcome === "other") {
     return stage === "ashes"
@@ -60,6 +61,7 @@ function words(stage: RitualStage, outcome: RitualOutcome, fallback: boolean, af
 export function RitualOverlay({ stage, after, outcome, error, canPlace, fallback, layout, onCancel, onPlace, onBack }: Props) {
   const title = useRef<HTMLHeadingElement>(null);
   const [ashReady, setAshReady] = useState(false);
+  const t = useT();
   const precommit = PRECOMMIT.includes(stage) && outcome === "own";
   const { lead, note } = words(stage, outcome, fallback, after);
   const ended = stage === "ashes" || outcome !== "own";
@@ -87,7 +89,7 @@ export function RitualOverlay({ stage, after, outcome, error, canPlace, fallback
   return (
     <section className={`ritual is-${stage}${fallback ? " is-fallback" : ""}`} aria-labelledby="ritual-title">
       <h2 id="ritual-title" className="visually-hidden" tabIndex={-1} ref={title}>
-        Letting go of this paper
+        {t("Letting go of this paper")}
       </h2>
       {fallback && (
         <div className={`ritual-drawn is-${outcome === "removed" ? "removed" : stage}`} aria-hidden="true">
@@ -96,37 +98,37 @@ export function RitualOverlay({ stage, after, outcome, error, canPlace, fallback
         </div>
       )}
       <div className="ritual-words" style={style}>
-        <p className="ritual-lead">{lead}</p>
-        {note && <p className="ritual-note">{note}</p>}
+        <p className="ritual-lead">{t(lead)}</p>
+        {note && <p className="ritual-note">{t(note)}</p>}
         {error && (
           <p className="form-error" role="alert">
-            {error}
+            {t.msg(error)}
           </p>
         )}
       </div>
       {/* what changed, said once; not the animation */}
       <p className="visually-hidden" role="status">
-        {stage === "ready" && outcome === "own" ? "The paper is ready to place in the furnace." : stage === "preparing" ? "" : lead}
+        {stage === "ready" && outcome === "own" ? t("The paper is ready to place in the furnace.") : stage === "preparing" ? "" : t(lead)}
       </p>
       <div className="ritual-actions">
         {precommit && (
           <>
             <button type="button" className="button button-secondary ritual-cancel" onClick={onCancel}>
-              Cancel
+              {t("Cancel")}
             </button>
             <button type="button" className="text-button ritual-place" onClick={onPlace} disabled={!canPlace}>
-              Place in furnace
+              {t("Place in furnace")}
             </button>
           </>
         )}
         {stage === "ashes" && outcome === "own" && after === "record" && (
           <a className="text-button ritual-gallery" href="/gallery/" aria-disabled={!ashReady || undefined} tabIndex={ashReady ? undefined : -1}>
-            Visit the Gallery
+            {t("Visit the Gallery")}
           </a>
         )}
         {(ended || stage === "checking") && (
           <button type="button" className="button button-secondary ritual-back" onClick={onBack} disabled={stage === "ashes" && !ashReady}>
-            Back to the space
+            {t("Back to the space")}
           </button>
         )}
       </div>

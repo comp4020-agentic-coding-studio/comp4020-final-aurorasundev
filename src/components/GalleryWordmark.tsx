@@ -1,4 +1,5 @@
 import type { KeyboardEvent, MouseEvent, Ref } from "react";
+import { useT } from "../lib/i18n.ts";
 
 // The Gallery's corner wordmark (owner, 2026-10-20). On the entry it reads
 // "Throwaway", as everywhere else on the site; the entry title flies into its
@@ -25,6 +26,8 @@ type Props = {
 };
 
 export function GalleryWordmark({ onHome, nameRef, oldRef, settled = false }: Props) {
+  const t = useT();
+  const name = t(GALLERY_NAME);
   const onClick = (e: MouseEvent<HTMLAnchorElement>) => {
     // a new tab or window keeps the browser's own behaviour
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
@@ -37,14 +40,14 @@ export function GalleryWordmark({ onHome, nameRef, oldRef, settled = false }: Pr
     if (!onHome()) e.currentTarget.click();
   };
   return (
-    <a className={`wordmark gallery-wordmark${settled ? " is-settled" : ""}`} href="/gallery/" aria-label={GALLERY_NAME} onClick={onClick} onKeyDown={onKeyDown}>
+    <a className={`wordmark gallery-wordmark${settled ? " is-settled" : ""}`} href="/gallery/" aria-label={name} onClick={onClick} onKeyDown={onKeyDown}>
       {!settled && (
         <span ref={oldRef} className="wm-old" aria-hidden="true">
           Throwaway
         </span>
       )}
       <span ref={nameRef} className="wm-name" aria-hidden="true">
-        {GALLERY_NAME}
+        {name}
       </span>
     </a>
   );

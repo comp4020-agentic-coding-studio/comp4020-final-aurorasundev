@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { SoundState } from "../lib/gallery-audio.ts";
 import type { GallerySound } from "../lib/useGalleryAudio.ts";
+import { useT, type Key } from "../lib/i18n.ts";
 
 // The opened record's player (G02): one code-native Play/Pause button, the
 // elapsed and total time and a volume slider, only for a record whose score
@@ -8,7 +9,7 @@ import type { GallerySound } from "../lib/useGalleryAudio.ts";
 // time is read from the audio clock and written to the DOM directly, never
 // ticked through React; only state changes are announced.
 
-const NOTE: Record<SoundState["kind"], string> = {
+const NOTE: Record<SoundState["kind"], Key> = {
   none: "There is no sound for this record yet.",
   unsupported: "Sound is not supported in this browser.",
   ready: "AI-directed generative instrumental",
@@ -18,7 +19,7 @@ const NOTE: Record<SoundState["kind"], string> = {
   ended: "AI-directed generative instrumental",
   failed: "Sound could not start. Try again.",
 };
-const ANNOUNCE: Partial<Record<SoundState["kind"], string>> = {
+const ANNOUNCE: Partial<Record<SoundState["kind"], Key>> = {
   rendering: "Preparing sound",
   playing: "Playing",
   paused: "Paused",
@@ -46,8 +47,9 @@ function PauseIcon() {
 export function RecordPlayer({ sound, notHeard = false }: { sound?: GallerySound; notHeard?: boolean }) {
   const state: SoundState = sound?.state ?? { kind: "none" };
   const time = useRef<HTMLSpanElement>(null);
+  const t = useT();
   const kind = state.kind;
-  const note = kind === "failed" && state.reason === "reconnect" ? "Reconnect to listen." : NOTE[kind];
+  const note: Key = kind === "failed" && state.reason === "reconnect" ? "Reconnect to listen." : NOTE[kind];
   const timed = kind === "playing" || kind === "paused" || kind === "ended";
 
   // leaving the player (closing the record, opening its report) stops sound
@@ -66,13 +68,13 @@ export function RecordPlayer({ sound, notHeard = false }: { sound?: GallerySound
     return () => clearInterval(timer);
   }, [timed, kind, sound]);
 
-  const label =
+  const label: Key =
     kind === "playing" ? "Pause" : kind === "paused" ? "Resume" : kind === "ended" ? "Play again" : kind === "failed" && state.reason === "error" ? "Try again" : "Listen";
   const enabled = kind === "ready" || kind === "playing" || kind === "paused" || kind === "ended" || (kind === "failed" && state.reason === "error");
 
   return (
-    <div className="record-player" role="group" aria-label="Sound" data-state={kind}>
-      {notHeard && <p className="record-tag">Not heard yet</p>}
+    <div className="record-player" role="group" aria-label={t("Sound")} data-state={kind}>
+      {notHeard && <p className="record-tag">{t("Not heard yet")}</p>}
       <button
         type="button"
         className="player-button"
@@ -82,11 +84,11 @@ export function RecordPlayer({ sound, notHeard = false }: { sound?: GallerySound
         onClick={() => (kind === "playing" ? sound?.pause() : sound?.play())}
       >
         {kind === "playing" ? <PauseIcon /> : <PlayIcon />}
-        <span className="visually-hidden">{label}</span>
+        <span className="visually-hidden">{t(label)}</span>
       </button>
       <div className="player-body">
         <p className="player-note" id="player-note">
-          {note}
+          {t(note)}
         </p>
         {timed && (
           <div className="player-meta">
@@ -94,7 +96,7 @@ export function RecordPlayer({ sound, notHeard = false }: { sound?: GallerySound
               <span ref={time}>0:00</span> / 0:24
             </span>
             <label className="player-volume">
-              <span className="visually-hidden">Volume</span>
+              <span className="visually-hidden">{t("Volume")}</span>
               <input
                 type="range"
                 min={0}
@@ -108,7 +110,7 @@ export function RecordPlayer({ sound, notHeard = false }: { sound?: GallerySound
         )}
       </div>
       <p className="visually-hidden" role="status">
-        {ANNOUNCE[kind] ?? ""}
+        {ANNOUNCE[kind] ? t(ANNOUNCE[kind]) : ""}
       </p>
     </div>
   );

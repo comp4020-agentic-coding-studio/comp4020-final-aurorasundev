@@ -254,6 +254,8 @@ const TITLE: Record<CreativeBriefV2["metaphor"], Record<CreativeBriefV2["relatio
   stone: { separated: "Stones apart", connected: "Stones at rest", under_pressure: "A pressed stone", opening: "A cracked stone", receding: "Stones drifting" },
 };
 export const artifactTitle = (b: CreativeBriefV2): string => TITLE[b.metaphor][b.relation];
+// read-only, for the client's translation check (spec/i18n-dictionary.test.ts)
+export const ARTIFACT_TITLES: Readonly<typeof TITLE> = TITLE;
 export const artifactAlt = (b: CreativeBriefV2): string =>
   `An abstract artwork: ${METAPHOR_PHRASE[b.metaphor]} ${MATERIAL_PHRASE[b.material]}, ${RELATION_PHRASE[b.relation]}.`;
 

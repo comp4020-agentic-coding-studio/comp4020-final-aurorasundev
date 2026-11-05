@@ -22,7 +22,7 @@ WORKDIR /app
 ENV NODE_ENV=production DATABASE_PATH=/data/throwaway.sqlite
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-COPY package.json README.md ./
+COPY package.json README.md README.zh.md ./
 COPY server ./server
 COPY shared ./shared
 # the private moderation CLI, run over `fly ssh console`

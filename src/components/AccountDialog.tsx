@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ApiError, register, signIn, type SignedIn } from "../lib/api.ts";
+import { register, signIn, type SignedIn } from "../lib/api.ts";
+import { errorMsg, useT, type Msg } from "../lib/i18n.ts";
 
 // Signing in or creating an optional account (ADR 009), on the same paper
 // sheet as the other dialogs. "offer" is the gentle suggestion after a
@@ -21,7 +22,8 @@ export function AccountDialog({ view: initial, available, onClose, onSignedIn }:
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Msg | null>(null);
+  const t = useT();
   const creating = view === "register";
 
   useEffect(() => {
@@ -39,7 +41,7 @@ export function AccountDialog({ view: initial, available, onClose, onSignedIn }:
       const account = await (creating ? register : signIn)(username.trim(), password);
       onSignedIn(account);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "That didn't reach the space. Try again.");
+      setError(errorMsg(err, "That didn't reach the space. Try again."));
       setBusy(false);
     }
   }
@@ -61,32 +63,32 @@ export function AccountDialog({ view: initial, available, onClose, onSignedIn }:
     >
       <form className="paper-sheet account-sheet" onSubmit={submit}>
         <button type="button" className="sheet-close" onClick={onClose} disabled={busy}>
-          Close
+          {t("Close")}
         </button>
         <h2 id="account-title" className="account-title">
-          {creating ? "Keep an account" : "Sign in"}
+          {creating ? t("Keep an account") : t("Sign in")}
         </h2>
         <p className="account-principle">
           {initial === "offer" && creating
-            ? "Want to find your papers again later? An account lets you come back to them from any browser."
-            : "Only you can see your own papers and what they became. Everyone else still meets them anonymously."}
+            ? t("Want to find your papers again later? An account lets you come back to them from any browser.")
+            : t("Only you can see your own papers and what they became. Everyone else still meets them anonymously.")}
         </p>
 
         {!available ? (
           <>
             <p className="account-note" role="status">
-              Accounts aren't available right now. You can keep using Throwaway as a guest.
+              {t("Accounts aren't available right now. You can keep using Throwaway as a guest.")}
             </p>
             <div className="account-done">
               <button type="button" className="button button-primary" onClick={onClose} autoFocus>
-                Back to the space
+                {t("Back to the space")}
               </button>
             </div>
           </>
         ) : (
           <>
             <label className="account-label" htmlFor="account-username">
-              Username
+              {t("Username")}
             </label>
             <input
               id="account-username"
@@ -101,9 +103,9 @@ export function AccountDialog({ view: initial, available, onClose, onSignedIn }:
               required
               autoFocus
             />
-            {creating && <p className="account-note">3–24 letters, numbers, hyphens or underscores. Only you will see it.</p>}
+            {creating && <p className="account-note">{t("3–24 letters, numbers, hyphens or underscores. Only you will see it.")}</p>}
             <label className="account-label" htmlFor="account-password">
-              Password
+              {t("Password")}
             </label>
             <input
               id="account-password"
@@ -119,26 +121,26 @@ export function AccountDialog({ view: initial, available, onClose, onSignedIn }:
             />
             {creating && (
               <p className="account-note">
-                At least 8 characters. There's no password recovery yet, so keep it somewhere safe.
+                {t("At least 8 characters. There's no password recovery yet, so keep it somewhere safe.")}
               </p>
             )}
             {error && (
               <p className="form-error" role="alert">
-                {error}
+                {t.msg(error)}
               </p>
             )}
             <div className="write-actions">
               <button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>
-                {initial === "offer" ? "Not now" : "Cancel"}
+                {initial === "offer" ? t("Not now") : t("Cancel")}
               </button>
               <button type="submit" className="button button-primary" disabled={busy || !username.trim() || !password}>
-                {busy ? (creating ? "Creating…" : "Signing in…") : creating ? "Create account" : "Sign in"}
+                {busy ? (creating ? t("Creating…") : t("Signing in…")) : creating ? t("Create account") : t("Sign in")}
               </button>
             </div>
             <p className="account-switch">
-              {creating ? "Already have an account? " : "New here? "}
+              {creating ? t("Already have an account?") : t("New here?")}{" "}
               <button type="button" className="text-button" onClick={() => switchTo(creating ? "signin" : "register")} disabled={busy}>
-                {creating ? "Sign in" : "Create an account"}
+                {creating ? t("Sign in") : t("Create an account")}
               </button>
             </p>
           </>

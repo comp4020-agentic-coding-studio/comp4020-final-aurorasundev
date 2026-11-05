@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { DrawingPad, type DrawingPadHandle } from "./DrawingPad.tsx";
+import { aboutHref, useT, type Msg } from "../lib/i18n.ts";
 import { ApiError, countCodePoints, createPaper, MAX_CODE_POINTS, type Created, type PaperMode, type SafetyConfig } from "../lib/api.ts";
 
 type Props = {
@@ -13,8 +14,6 @@ type Props = {
   // no live connection: saving waits rather than pretending
   offline: boolean;
 };
-
-const formatCount = (n: number): string => n.toLocaleString("en-AU");
 
 // Server answers that mean nothing was saved, even though they are 5xx.
 const SETTLED = new Set(["moderation_unavailable"]);
@@ -33,7 +32,9 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
   const [confirmed, setConfirmed] = useState(false);
   const [confirmationError, setConfirmationError] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Msg | null>(null);
+  const t = useT();
+  const formatCount = t.num;
   // Set when a save's outcome is unknown (the reply never came). The words and
   // the choice are then held as sent until a retry with the same key tells us
   // what happened; a new key would only guess, and could save it twice.
@@ -80,7 +81,7 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
       // the draft stays editable. Only an unknown outcome locks it.
       if (err instanceof ApiError && (err.status < 500 || SETTLED.has(err.code))) {
         setUnsettled(false);
-        setError(err.message);
+        setError({ code: err.code, message: err.message });
       } else {
         setUnsettled(true);
         setError("We couldn't confirm it was saved. Try again: it won't be left twice.");
@@ -91,8 +92,8 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
   }
 
   // Saving includes the automated safety check, which is most of the wait.
-  const savingLabel = "Checking this paper…";
-  const submitLabel = saving ? savingLabel : offline ? "Reconnecting…" : unsettled ? "Try again" : "Crumple & throw";
+  const savingLabel = t("Checking this paper…");
+  const submitLabel = saving ? savingLabel : offline ? t("Reconnecting…") : unsettled ? t("Try again") : t("Crumple & throw");
 
   return (
     <dialog
@@ -106,28 +107,28 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
     >
       <form className="paper-sheet write-sheet" onSubmit={submit}>
         <button type="button" className="sheet-close" onClick={onCancel} disabled={saving}>
-          Close
+          {t("Close")}
         </button>
         <h2 id="write-title" className="write-title">
-          What are you ready to put down?
+          {t("What are you ready to put down?")}
         </h2>
-        <div className="write-input-switch" role="group" aria-label="How to put it down">
+        <div className="write-input-switch" role="group" aria-label={t("How to put it down")}>
           <button type="button" aria-pressed={input === "type"} onClick={() => setInput("type")}>
-            Type
+            {t("Type")}
           </button>
           <button type="button" aria-pressed={input === "draw"} onClick={() => setInput("draw")}>
-            Draw
+            {t("Draw")}
           </button>
         </div>
         <div className="write-field" hidden={input !== "type"}>
           <label htmlFor="paper-text" className="visually-hidden">
-            Your paper
+            {t("Your paper")}
           </label>
           <textarea
             id="paper-text"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Write something you have been carrying."
+            placeholder={t("Write something you have been carrying.")}
             readOnly={locked}
             aria-describedby="write-count"
             autoFocus
@@ -148,25 +149,22 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
         </div>
 
         <fieldset className="write-modes" disabled={locked}>
-          <legend>Choose how to leave it</legend>
+          <legend>{t("Choose how to leave it")}</legend>
           <label className="choice">
             <input type="radio" name="mode" value="KEEP" checked={mode === "KEEP"} onChange={() => setMode("KEEP")} />
             <span>
-              <span className="choice-label">Keep it</span>
+              <span className="choice-label">{t("Keep it")}</span>
               <span className="choice-hint">
-                It stays in your hands. Only you may destroy it, and when it burns it leaves no record. Sign in to find it again from
-                any browser.
+                {t("It stays in your hands. Only you may destroy it, and when it burns it leaves no record. Sign in to find it again from any browser.")}
               </span>
             </span>
           </label>
           <label className="choice">
             <input type="radio" name="mode" value="RELEASE" checked={mode === "RELEASE"} onChange={() => setMode("RELEASE")} />
             <span>
-              <span className="choice-label">Release it</span>
+              <span className="choice-label">{t("Release it")}</span>
               <span className="choice-hint">
-                When it burns, it becomes a record in the Gallery: an image, and often a short piece of music. Its fate is no longer yours
-                to control. As it burns, its words and drawing are sent to OpenAI once to shape an anonymous AI image for the public
-                Gallery. Your original words and drawing are deleted as it burns.
+                {t("When it burns, it becomes a record in the Gallery: an image, and often a short piece of music. Its fate is no longer yours to control. As it burns, its words and drawing are sent to OpenAI once to shape an anonymous AI image for the public Gallery. Your original words and drawing are deleted as it burns.")}
               </span>
             </span>
           </label>
@@ -174,13 +172,13 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
 
         <p className="write-disclosure" id="write-disclosure" role={!safety?.provider ? "status" : undefined}>
           {safety?.provider === "openai"
-            ? "Before it enters the space, your words and drawing are sent to OpenAI for automated safety checks. Do not include private details. "
+            ? t("Before it enters the space, your words and drawing are sent to OpenAI for automated safety checks. Do not include private details.")
             : safety?.provider === "fixture"
-              ? "Automated safety checks run before this paper enters the space. "
-              : "Safety checks are unavailable. Your words stay here until checks can run. "}
-          <a href="/readme/">How checks work</a>
+              ? t("Automated safety checks run before this paper enters the space.")
+              : t("Safety checks are unavailable. Your words stay here until checks can run.")}{" "}
+          <a href={aboutHref(t.lang)}>{t("How checks work")}</a>
           {!safety?.provider && onRetrySafety && <> {" "}<button type="button" className="text-button" onClick={onRetrySafety} disabled={safetyLoading}>
-            {safetyLoading ? "Connecting to checks…" : "Retry checks"}
+            {safetyLoading ? t("Connecting to checks…") : t("Retry checks")}
           </button></>}
         </p>
 
@@ -197,18 +195,18 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
             aria-invalid={confirmationError || undefined}
             aria-describedby={confirmationError ? "write-confirm-error" : undefined}
           />
-          <span>I understand: once thrown, this paper cannot be edited.</span>
+          <span>{t("I understand: once thrown, this paper cannot be edited.")}</span>
         </label>
 
         {confirmationError && (
           <p id="write-confirm-error" className="form-error write-confirm-error" role="alert">
-            Please tick “I understand” before throwing this paper.
+            {t("Please tick “I understand” before throwing this paper.")}
           </p>
         )}
 
         {error && (
           <p className="form-error" role="alert">
-            {error}
+            {t.msg(error)}
           </p>
         )}
         {saving && (
@@ -218,7 +216,7 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
         )}
         <div className="write-actions">
           <button type="button" className="button button-secondary" onClick={onCancel} disabled={saving}>
-            Cancel
+            {t("Cancel")}
           </button>
           <button type="submit" className="button button-primary" disabled={saving || !ready}>
             {submitLabel}

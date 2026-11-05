@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { createPaperScene } from "../scene/vendor/paper-scene.js";
+import { useT } from "../lib/i18n.ts";
 
 export type SheetRect = { left: number; top: number; width: number; height: number };
 export type ExploreEdge = "left" | "right" | "back" | "front";
@@ -58,6 +59,9 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
   const queuedThrows = useRef<string[]>([]);
   const [status, setStatus] = useState<Status>("loading");
   const [attempt, setAttempt] = useState(0);
+  const t = useT();
+  const openLabel = useRef("");
+  openLabel.current = t("Open paper");
   const latest = useRef({ ids, onOpen, onOpenRect, onExplore, onRitual, onRitualLayout, onAvailable });
   latest.current = { ids, onOpen, onOpenRect, onExplore, onRitual, onRitualLayout, onAvailable };
 
@@ -72,6 +76,7 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
       created = createPaperScene(stage.current!, buttons.current!, {
         vatBase: "/vat/",
         compact: compact(),
+        openLabel: () => openLabel.current,
         onPaperOpen: (id: string) => latest.current.onOpen(id),
         onExplore: (edge: ExploreEdge) => latest.current.onExplore(edge),
         onRitual: (event: RitualEvent) => latest.current.onRitual(event),
@@ -107,6 +112,11 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
   useEffect(() => {
     scene.current?.setPapers(ids);
   }, [ids]);
+
+  // the scene's own paper buttons follow a change of language
+  useEffect(() => {
+    for (const b of buttons.current?.querySelectorAll(".paper-hit") ?? []) b.setAttribute("aria-label", openLabel.current);
+  }, [t]);
 
   const failed = status === "failed";
   useEffect(() => {
@@ -147,18 +157,18 @@ export const PaperField = forwardRef<PaperFieldHandle, Props>(function PaperFiel
     <div className="paper-field" inert={inert}>
       <div ref={stage} className="paper-stage" hidden={failed} aria-hidden="true" />
       <div ref={buttons} className="paper-buttons" hidden={failed} />
-      {status === "loading" && <p className="scene-note">Gathering papers…</p>}
+      {status === "loading" && <p className="scene-note">{t("Gathering papers…")}</p>}
       {failed && (
         <div className="scene-fallback">
           <p className="scene-note" role="status">
-            The papers can't be drawn on this device, but you can still open them.{" "}
+            {t("The papers can't be drawn on this device, but you can still open them.")}{" "}
             <button type="button" className="text-button" onClick={() => setAttempt((n) => n + 1)}>
-              Try drawing again
+              {t("Try drawing again")}
             </button>
           </p>
           <div className="paper-stubs">
             {ids.map((id) => (
-              <button key={id} type="button" className="paper-stub" aria-label="Open paper" onClick={() => onOpen(id)} />
+              <button key={id} type="button" className="paper-stub" aria-label={t("Open paper")} onClick={() => onOpen(id)} />
             ))}
           </div>
         </div>

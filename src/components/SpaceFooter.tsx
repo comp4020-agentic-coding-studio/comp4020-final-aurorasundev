@@ -1,3 +1,5 @@
+import { useT } from "../lib/i18n.ts";
+
 type Props = {
   onWrite: () => void;
   // the keyboard (and no-WebGL) way to do what dragging the floor does
@@ -11,20 +13,21 @@ type Props = {
 };
 
 export function SpaceFooter({ onWrite, onExplore, exploring, canExplore, busy, reconnecting }: Props) {
+  const t = useT();
   return (
     <footer className={`space-footer${busy ? " is-busy" : ""}`}>
       {/* Hidden rather than unmounted, so focus can come back to it. */}
       <button type="button" className="button button-primary space-write" onClick={onWrite} hidden={busy}>
-        Leave something here
+        {t("Leave something here")}
       </button>
       {(!busy || reconnecting) && (
         <p className="space-hint" role="status">
-          {reconnecting ? "Reconnecting…" : "Open a paper. Leave something if you want to."}
+          {reconnecting ? t("Reconnecting…") : t("Open a paper. Leave something if you want to.")}
         </p>
       )}
       {!busy && canExplore && (
         <button type="button" className="text-button space-explore" onClick={onExplore} disabled={exploring}>
-          Explore the space
+          {t("Explore the space")}
         </button>
       )}
     </footer>

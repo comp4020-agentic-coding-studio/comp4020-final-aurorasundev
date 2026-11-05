@@ -1,4 +1,6 @@
+import { aboutHref, useT } from "../lib/i18n.ts";
 import { countLine } from "../lib/space.ts";
+import { LangToggle } from "./LangToggle.tsx";
 
 type Props = {
   // "Sign in" for a guest; the username for an account, opening its papers
@@ -14,6 +16,7 @@ type Props = {
 };
 
 export function Header({ onAccount, username, total, busy = false, canVisitGallery = false }: Props) {
+  const t = useT();
   return (
     <header className="site-header">
       <div className="header-brand">
@@ -21,29 +24,30 @@ export function Header({ onAccount, username, total, busy = false, canVisitGalle
         {total !== null && (
           // Only the number shows; the full sentence is what assistive tech
           // hears, and it is announced when the shared total changes.
-          <span className="space-count" role="status" aria-live="polite" aria-label={countLine(total)}>
-            <span aria-hidden="true">{total.toLocaleString("en-AU")}</span>
+          <span className="space-count" role="status" aria-live="polite" aria-label={countLine(total, t)}>
+            <span aria-hidden="true">{t.num(total)}</span>
           </span>
         )}
       </div>
-      <nav className="header-links" aria-label="Site">
+      <nav className="header-links" aria-label={t("Site")}>
         {canVisitGallery && (
           <a className="header-link" href="/gallery/">
-            Gallery
+            {t("Gallery")}
           </a>
         )}
-        <a className="header-link" href="/readme/">
-          About
+        <a className="header-link header-about" href={aboutHref(t.lang)}>
+          {t("About")}
         </a>
         <button
           type="button"
           className="header-link header-account"
           onClick={onAccount}
           disabled={busy}
-          aria-label={username ? `Your papers (signed in as ${username})` : undefined}
+          aria-label={username ? t("Your papers (signed in as {name})", { name: username }) : undefined}
         >
-          {username ?? "Sign in"}
+          {username ?? t("Sign in")}
         </button>
+        <LangToggle />
       </nav>
     </header>
   );

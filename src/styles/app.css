@@ -104,6 +104,27 @@ textarea {
   text-underline-offset: 4px;
 }
 
+/* "中 / EN": the current language in ink, the other one quieter */
+.lang-toggle {
+  display: inline-flex;
+  gap: 0.3em;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.lang-toggle .is-current {
+  color: var(--ink);
+}
+
+.lang-toggle:hover {
+  text-decoration: none;
+}
+
+.lang-toggle:hover span:not(.is-current):not(.lang-sep) {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
 /* buttons */
 .button {
   display: inline-flex;
@@ -979,7 +1000,7 @@ fieldset:disabled .choice,
     gap: 10px;
   }
 
-  .header-links a[href="/readme/"] {
+  .header-links .header-about {
     order: -1;
   }
 

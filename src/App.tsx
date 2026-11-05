@@ -17,6 +17,7 @@ import { WriteDialog } from "./components/WriteDialog.tsx";
 import { visibleLimit } from "./lib/space-window.ts";
 import { accountState, ApiError, burnPaper, getPaper, getSafetyConfig, samplePapers, type AccountState, type Created, type SafetyConfig, type SignedIn } from "./lib/api.ts";
 import { getGalleryConfig } from "./lib/gallery-api.ts";
+import { useT, type Msg } from "./lib/i18n.ts";
 import { useLiveSpace, type Ending } from "./lib/useLiveSpace.ts";
 
 type Mode =
@@ -31,7 +32,7 @@ type Mode =
       id: string;
       stage: RitualStage;
       outcome: RitualOutcome;
-      error: string | null;
+      error: Msg | null;
       canPlace: boolean;
       // no scene to hold the paper: HTML confirmation and a drawn ending
       fallback: boolean;
@@ -287,7 +288,7 @@ export function App() {
           }
           // a definite no: the paper stays, and its rights are asked again
           field.current?.returnRitual();
-          setRitual({ stage: "ready", error: err.message });
+          setRitual({ stage: "ready", error: { code: err.code, message: err.message } });
           getPaper(r.id)
             .then((paper) => {
               if (ritualRef.current !== r) return;
@@ -613,6 +614,7 @@ export function App() {
     tryFocus();
     return () => cancelAnimationFrame(frame);
   }, [busy]);
+  const t = useT();
   const ready = space.status === "ready";
   const reconnecting = space.connection === "reconnecting";
 
@@ -641,12 +643,12 @@ export function App() {
           inert={busy && mode.kind !== "ritual"}
         />
       )}
-      {space.status === "loading" && <p className="space-status">Finding the space…</p>}
+      {space.status === "loading" && <p className="space-status">{t("Finding the space…")}</p>}
       {space.status === "error" && (
         <div className="space-status" role="alert">
-          <p>The space couldn't be reached.</p>
+          <p>{t("The space couldn't be reached.")}</p>
           <button type="button" className="button button-secondary" onClick={retry}>
-            Try again
+            {t("Try again")}
           </button>
         </div>
       )}

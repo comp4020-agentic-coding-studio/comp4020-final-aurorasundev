@@ -69,6 +69,7 @@ const randomRange = (min, max) => min + Math.random() * (max - min);
  * @param {{
  *   vatBase: string,
  *   compact: boolean,
+ *   openLabel?: () => string,
  *   onPaperOpen: (id: string) => void,
  *   onExplore?: (edge: "left" | "right" | "back" | "front") => void,
  *   onRitual?: (event: { type: "ready" | "dropped" | "burning" | "ashes" | "fallback" }) => void,
@@ -644,7 +645,7 @@ export function createPaperScene(container, buttonLayer, options) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "paper-hit";
-    button.setAttribute("aria-label", "Open paper");
+    button.setAttribute("aria-label", options.openLabel?.() ?? "Open paper");
     button.addEventListener("click", () => options.onPaperOpen(id));
     buttonLayer.appendChild(button);
 

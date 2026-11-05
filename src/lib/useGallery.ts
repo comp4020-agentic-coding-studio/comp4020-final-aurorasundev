@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { ApiError } from "./api.ts";
+import type { Msg } from "./i18n.ts";
 import {
   getArtifact,
   getGalleryConfig,
@@ -19,8 +20,8 @@ import { galleryReducer, initialGallery, openArtifact } from "./gallery-state.ts
 export type ReportState =
   | { kind: "idle" }
   | { kind: "sending" }
-  | { kind: "unsettled"; message: string }
-  | { kind: "refused"; message: string }
+  | { kind: "unsettled"; message: Msg }
+  | { kind: "refused"; message: Msg }
   | { kind: "received" };
 
 export function useGallery() {
@@ -162,7 +163,7 @@ export function useGallery() {
     } catch (err) {
       if (err instanceof ApiError && err.status < 500) {
         reportOps.current.delete(id);
-        settleReport(id, { kind: "refused", message: err.status === 404 ? "This object is no longer here." : err.message });
+        settleReport(id, { kind: "refused", message: err.status === 404 ? "This object is no longer here." : { code: err.code, message: err.message } });
       } else {
         settleReport(id, { kind: "unsettled", message: "We couldn't confirm the report was received. Try again: it won't be sent twice." });
       }

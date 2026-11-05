@@ -4,6 +4,8 @@ import type { ReportState } from "../lib/useGallery.ts";
 import type { GallerySound } from "../lib/useGalleryAudio.ts";
 import { GalleryWordmark } from "./GalleryWordmark.tsx";
 import { RecordPlayer } from "./RecordPlayer.tsx";
+import { LangToggle } from "./LangToggle.tsx";
+import { aboutHref, useT, type Key } from "../lib/i18n.ts";
 
 // One record, opened (G02): the complete square image in its sleeve beside
 // the record, the generic title and a way to report it, in a native modal
@@ -11,7 +13,7 @@ import { RecordPlayer } from "./RecordPlayer.tsx";
 // player slot is honest: records are image-only until sound is generated
 // and checked, so nothing pretends to play.
 
-const REASONS: { value: ArtifactReportReason; label: string }[] = [
+const REASONS: { value: ArtifactReportReason; label: Key }[] = [
   { value: "threats_abuse", label: "Threats or targeted abuse" },
   { value: "private_information", label: "Private information" },
   { value: "sexual_graphic", label: "Sexual or graphic content" },
@@ -44,6 +46,7 @@ export function RecordView({ artifact, report, frozenReason, arriving, canStep, 
   const [view, setView] = useState<"look" | "report">(report.kind === "unsettled" ? "report" : "look");
   const [reason, setReason] = useState<ArtifactReportReason | null>(frozenReason);
   const [failed, setFailed] = useState(false);
+  const t = useT();
 
   useEffect(() => {
     const dialog = dialogRef.current!;
@@ -83,31 +86,32 @@ export function RecordView({ artifact, report, frozenReason, arriving, canStep, 
       <div className="record-frame">
         <div className="records-header record-header-copy">
           <GalleryWordmark settled onHome={onHome ?? (() => false)} />
-          <nav className="records-links" aria-label="Site">
+          <nav className="records-links" aria-label={t("Site")}>
             <a className="header-link" href="/">
-              <span className="wide-only">Back to the space</span>
-              <span className="narrow-only">Space</span>
+              <span className="wide-only">{t("Back to the space")}</span>
+              <span className="narrow-only">{t("Space")}</span>
             </a>
-            <a className="header-link" href="/readme/">
-              About
+            <a className="header-link header-about" href={aboutHref(t.lang)}>
+              {t("About")}
             </a>
+            <LangToggle />
           </nav>
         </div>
         <button type="button" className="record-back" onClick={onClose}>
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
             <path d="M20 12H4M10 6l-6 6 6 6" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Back to the Gallery
+          {t("Back to the Gallery")}
         </button>
 
         <div className="record-art sleeve">
           {failed ? (
-            <p className="record-missing">This image could not be shown.</p>
+            <p className="record-missing">{t("This image could not be shown.")}</p>
           ) : (
             <img
               className="sleeve-image"
               src={artifact.image_url}
-              alt={artifact.alt}
+              alt={t.alt(artifact.alt)}
               width={artifact.width}
               height={artifact.height}
               decoding="async"
@@ -126,22 +130,22 @@ export function RecordView({ artifact, report, frozenReason, arriving, canStep, 
               {/* keyed: the reveal splits and restores this heading's text,
                   so a new record gets a new element rather than an update to
                   a text node React no longer holds */}
-              <h2 key={artifact.id} id="record-title" className="record-title">
-                {artifact.title}
+              <h2 key={`${artifact.id}-${t.lang}`} id="record-title" className="record-title">
+                {t.title(artifact.title)}
               </h2>
-              <p className="record-lede">An image shaped by a released note.</p>
-              <p className="record-lede">The original note is gone.</p>
-              <p className="record-credit">AI-generated image</p>
+              <p className="record-lede">{t("An image shaped by a released note.")}</p>
+              <p className="record-lede">{t("The original note is gone.")}</p>
+              <p className="record-credit">{t("AI-generated image")}</p>
 
               <RecordPlayer sound={sound} notHeard={notHeard} />
 
               {report.kind === "received" ? (
                 <p className="record-note" role="status">
-                  Report received. It will be reviewed.
+                  {t("Report received. It will be reviewed.")}
                 </p>
               ) : (
                 <button type="button" className="record-report-link" onClick={() => setView("report")}>
-                  Report this record
+                  {t("Report this record")}
                 </button>
               )}
             </>
@@ -155,34 +159,34 @@ export function RecordView({ artifact, report, frozenReason, arriving, canStep, 
               }}
             >
               <h2 id="record-report-title" className="record-report-title">
-                Report this record
+                {t("Report this record")}
               </h2>
               <fieldset className="report-reasons" disabled={locked}>
-                <legend>What is wrong with it?</legend>
+                <legend>{t("What is wrong with it?")}</legend>
                 {REASONS.map((r) => (
                   <label key={r.value} className="choice">
                     <input type="radio" name="artifact-reason" value={r.value} checked={chosen === r.value} onChange={() => setReason(r.value)} />
-                    <span className="choice-label">{r.label}</span>
+                    <span className="choice-label">{t(r.label)}</span>
                   </label>
                 ))}
               </fieldset>
               {(report.kind === "unsettled" || report.kind === "refused") && (
                 <p className="form-error" role="alert">
-                  {report.message}
+                  {t.msg(report.message)}
                 </p>
               )}
               {report.kind === "received" && (
                 <p className="record-note" role="status">
-                  Report received. It will be reviewed.
+                  {t("Report received. It will be reviewed.")}
                 </p>
               )}
               <div className="record-report-actions">
                 <button type="button" className="button button-secondary" onClick={() => setView("look")}>
-                  {report.kind === "received" ? "Back" : "Cancel"}
+                  {report.kind === "received" ? t("Back") : t("Cancel")}
                 </button>
                 {report.kind !== "received" && (
                   <button type="submit" className="button button-primary" disabled={!chosen || report.kind === "sending"}>
-                    {report.kind === "sending" ? "Sending…" : report.kind === "unsettled" ? "Try again" : "Send report"}
+                    {report.kind === "sending" ? t("Sending…") : report.kind === "unsettled" ? t("Try again") : t("Send report")}
                   </button>
                 )}
               </div>
@@ -192,12 +196,12 @@ export function RecordView({ artifact, report, frozenReason, arriving, canStep, 
 
         {canStep && (
           <div className="record-steps">
-            <button type="button" className="record-step" aria-label="Previous record" onClick={() => onStep(-1)}>
+            <button type="button" className="record-step" aria-label={t("Previous record")} onClick={() => onStep(-1)}>
               <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
                 <path d="M20 12H4M10 6l-6 6 6 6" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-            <button type="button" className="record-step" aria-label="Next record" onClick={() => onStep(1)}>
+            <button type="button" className="record-step" aria-label={t("Next record")} onClick={() => onStep(1)}>
               <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
                 <path d="M4 12h16M14 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>

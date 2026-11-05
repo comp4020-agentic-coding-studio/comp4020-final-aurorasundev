@@ -1,5 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { DRAWING_HEIGHT, DRAWING_WIDTH } from "../lib/api.ts";
+import { useT } from "../lib/i18n.ts";
 
 // A sheet to draw on: one ink pen, an eraser, undo and clear. Strokes are kept
 // as points in sheet pixels and replayed onto a fixed-size canvas, so the
@@ -31,6 +32,7 @@ export const DrawingPad = forwardRef<DrawingPadHandle, Props>(function DrawingPa
   const current = useRef<{ stroke: Stroke; pointerId: number } | null>(null);
   const [tool, setTool] = useState<Tool>("pen");
   const [count, setCount] = useState(0);
+  const t = useT();
 
   const paint = useCallback(() => {
     const ctx = canvasRef.current?.getContext("2d");
@@ -136,25 +138,25 @@ export const DrawingPad = forwardRef<DrawingPadHandle, Props>(function DrawingPa
         height={DRAWING_HEIGHT}
         className={`drawing-canvas${tool === "eraser" ? " is-erasing" : ""}`}
         role="img"
-        aria-label={count ? "Your drawing" : "Empty sheet. Draw with a mouse, finger or pen."}
+        aria-label={count ? t("Your drawing") : t("Empty sheet. Draw with a mouse, finger or pen.")}
         onPointerDown={down}
         onPointerMove={move}
         onPointerUp={up}
         onPointerCancel={up}
       />
-      <div className="drawing-tools" role="toolbar" aria-label="Drawing tools">
+      <div className="drawing-tools" role="toolbar" aria-label={t("Drawing tools")}>
         <button type="button" className="drawing-tool" aria-pressed={tool === "pen"} onClick={() => setTool("pen")} disabled={disabled}>
-          Pen
+          {t("Pen")}
         </button>
         <button type="button" className="drawing-tool" aria-pressed={tool === "eraser"} onClick={() => setTool("eraser")} disabled={disabled}>
-          Eraser
+          {t("Eraser")}
         </button>
         <span className="drawing-tools-gap" />
         <button type="button" className="drawing-tool" onClick={undo} disabled={disabled || count === 0}>
-          Undo
+          {t("Undo")}
         </button>
         <button type="button" className="drawing-tool" onClick={clear} disabled={disabled || count === 0}>
-          Clear
+          {t("Clear")}
         </button>
       </div>
     </div>
