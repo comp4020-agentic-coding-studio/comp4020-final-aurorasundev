@@ -1,8 +1,8 @@
 # Throwaway — Claude implementation plan
 
-Date: 2026-10-08 · Scope: C9 / Week 10 real-time interaction, followed by completion of the full Final MVP.
+Original plan: 2026-10-08 · C9 / Week 10 real-time interaction and the initial final project scope.
 
-This document gives Claude an implementation plan. The current delivery contains only this file and `reference-images/`; no application implementation, database changes, commits, pushes or deployment have been performed. Follow this plan when the user assigns the implementation work. Reading this document alone does not authorize publishing, modifying production data or changing repository visibility.
+**Status: historical plan and visual reference.** The room, realtime updates, furnace, moderation, Gallery and optional accounts have shipped. The current rules are in [CLAUDE.md](CLAUDE.md) and [spec/](spec/README.md). Use [ADR 004](docs/adr/004-configured-safety-review.md) for live moderation, [ADR 005](docs/adr/005-release-keepsakes.md) for the Gallery, [ADR 006](docs/adr/006-browser-synthesised-record-music.md) for music, [ADR 008](docs/adr/008-rebirth-reversal.md) for the current creative direction and [ADR 009](docs/adr/009-optional-accounts.md) for the optional accounts that replaced return keys. The dated phases below document how the work was originally planned.
 
 ## 1. Starting point, sources and delivery scope
 
@@ -10,7 +10,7 @@ Repository: `comp4020-final-aurorasundev`.
 
 Current local checkout: `/Users/aurora/Desktop/26S2/COMP8020/code/comp4020-final-aurorasundev/`. If this package is moved, use the actual repository root rather than assuming this local path still applies. Source paths in Section 11 are relative to the repository root.
 
-The user has completed the foundation. Extend the existing implementation using the original complete product plan and the reevaluated SSE approach. Do not rebuild the project or treat an earlier week's delivery boundary as the final feature scope.
+The original plan started from the existing room and extended it with SSE and the remaining final project features.
 
 Primary sources:
 
@@ -19,16 +19,14 @@ Primary sources:
 - [Official Final Project requirements](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/assessments/final-project/)
 - Current source code, README, existing course checks and the reference images accompanying this document.
 
-Implementation has two levels of completion. The second remains part of the plan:
+The October plan had two levels of completion:
 
 | Level | Completion criteria |
 | --- | --- |
 | C9 priority increment | Deployed changes appear across sessions within about one second; one decision about multi-user behavior is recorded in an ADR; process records and the week's reflection are grounded in actual work |
-| Complete Final MVP | Keep / Release, immutable submissions, random exploration, intentional witnessing, permission-based destruction, final reading, return keys (optional accounts since ADR 009), automated moderation, reporting and necessary logging work together end to end |
+| Complete Final MVP | Keep / Release, immutable submissions, random exploration, intentional witnessing, permission-based destruction, final reading, return keys (since replaced by optional accounts under ADR 009), automated moderation, reporting and necessary logging work together end to end |
 
-Orphaned Gallery, AI symbolic artifacts and advanced spatial effects remain optional extensions. They are outside the default implementation scope. Do not build empty pages, database frameworks or placeholder entry points for them.
-
-The repository's CLAUDE.md still contains earlier scope restrictions. At the start of implementation, update its scope and relevant rules to match this plan, retaining valid constraints on identity, persistence, immutability, logging and course checks. Do not use outdated restrictions to remove the real-time or permission features in this plan.
+The October plan treated the Gallery and AI-generated works as extensions. They later shipped as a record exhibition, with the original paper cleared on burn and the current visual and musical direction recorded in ADRs 005, 006 and 008.
 
 ## 2. Product principles to preserve
 
@@ -83,7 +81,7 @@ Technical sources: [SSE / EventSource](https://developer.mozilla.org/en-US/docs/
 
 The images are design references, not application screenshots or evidence of completed work. Do not use a whole image as a page background or crop its text, buttons or dialogs to implement the interface. All text, input, selection and actions must remain accessible HTML.
 
-Numbers, body text and the return key shown in the images are examples (the return key itself was later removed, ADR 009). Use the exact English copy in Section 14, actual server values for numbers and genuine random generation for keys. If generated text contains a minor spelling variation, follow the plan's copy.
+Numbers, body text and the return key shown in the images are examples (the return key itself was later removed, ADR 009). Use the exact English copy in Section 14, actual server values for counts. The return-key references only illustrate the earlier layout. If generated text contains a minor spelling variation, follow the plan's copy.
 
 Desktop images are approximately 1672 × 941. Mobile images are approximately 853 × 1844, with the layout proportions of a 390 × 844 viewport. These are image dimensions, not CSS dimensions. Also verify the course's 1920 × 1080 and 390 × 844 viewports and a normal laptop window. Match proportions and responsive behavior rather than hardcoding image pixels.
 
@@ -414,9 +412,7 @@ Disable persistent caching for body and reading-state responses. Destruction res
 
 ## 10. External moderation: an explicit implementation prerequisite
 
-The original plan requires automated moderation but does not settle a provider, model, credentials, actual coverage or response cost. **Image copy and a local fake-pass implementation cannot fulfill this feature.** This document does not assume a service is already connected.
-
-Before implementing this phase, check for a usable existing service. Propose a minimal real integration with its provider, API, configuration and detection scope, then connect it within the user's existing authorization. Do not open paid accounts independently or commit secrets. Continue independent phases while this dependency is unresolved.
+The original plan left the moderation provider open. The shipped implementation uses OpenAI as documented in [ADR 004](docs/adr/004-configured-safety-review.md) and the [moderation runbook](docs/moderation-runbook.md). The requirements below record what the implementation was meant to enforce.
 
 Moderation contract:
 
@@ -428,8 +424,6 @@ Moderation contract:
 - Support automated rechecks and high-confidence quarantine with enough operation state to retry, without introducing a complex workflow service by default.
 - Disclose automated checking and the third-party service before submission. Retain only necessary safety state; do not generate emotional profiles or rewrite content.
 - Use a controlled service substitute for local allow/reject/error tests. Production must use the real service; a test substitute is not the delivered feature.
-
-If no real service is configured, report the phase's specific gap. Completed C9 real-time and multi-user behavior must not be described as a completed Final MVP.
 
 ## 11. Implementation entry points in the current repository
 

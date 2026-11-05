@@ -5,13 +5,14 @@ anonymously: write a thought on paper, crumple it, throw it into the space,
 come across papers other people left. An account is optional (ADR 009).
 This repo is the COMP8020 final project; crits 8, 9 and 10 run in it.
 
-## Current scope: C9 real-time, then the full Final MVP
+## Current scope: final project
 
-The contract is `plan.md` and its references in `reference-images/`
-(D01–D08 desktop, M01–M04 mobile). Read the relevant section and open the
-relevant image before changing behaviour. When an image and the plan disagree,
-the plan wins. Priority order: P1–P3 (real-time, Keep/Release + witnessing,
-destruction + final reading) for C9, then P4–P7.
+Use these rules, the accepted ADRs and the checks in `spec/` for the shipped
+room, furnace, moderation, Gallery and optional accounts. `plan.md` records
+the original C9 implementation plan and remains a guide to the visual
+references in `reference-images/` (D01–D08 desktop, M01–M04 mobile). Read the
+relevant reference before changing the interface. Apply the current rules
+when an older plan or image shows a superseded flow.
 
 For the furnace and material pass, also use B01–B05 and the user's approved
 `01-space-desktop.png` and `02-write-desktop.png`. B01 defines a squat,
@@ -40,10 +41,10 @@ readable centre. Keep phone controls and captions clear of the paper.
   and sign-up rotate the session cookie. A guest's papers move to the
   account they sign into.
 - The Gallery (ADR 005, docs/artifacts-runbook.md) is the one requested
-  exception: a burned **Release** paper automatically leaves one inspected,
-  independent AI image; Keep never does. Release mode is the only
-  eligibility (no opt-in control). The burn transaction reads the note once,
-  in memory, just before clearing it; after the reply one bounded request
+  exception: a burned **Release** paper can leave one inspected, independent
+  AI image if generation succeeds and the image passes inspection. Keep
+  papers are ineligible. The burn transaction reads the note once in
+  memory just before clearing it. After the reply, one bounded request
   (15 s) turns it into a strict creative brief, and only the brief is stored.
   Failure, timeout or restart leaves no record and no fallback. A released
   paper's fire holds until extraction settles (at most 15 s, never under
@@ -77,18 +78,21 @@ readable centre. Keep phone controls and captions clear of the paper.
   never sent (owner, 2026-10-27; ADR 005 revision). Sound is
   **implemented behind `GALLERY_MUSIC_ENABLED`, which the owner turned on
   in production on 2026-10-27** (a Fly secret; unset it to switch off).
-  Records published before then have no score. Its design is
+  A one-time operator backfill scored five older records. Records without a
+  valid score remain image-only. The design is
   `design/gallery-records-2026-10-18/music-design.md` (ADR 006): the
   existing AI musical directions plus a random seed go through the frozen
   composer in `shared/music-score.ts`; the score is saved once, in the
   image's publication transaction (migration 10, `artifacts.music_score`,
-  no backfill), served only by the published-gated
+  no automatic backfill), served only by the published-gated
   `/api/gallery/:id/score`, and performed with native Web Audio
-  (`src/lib/gallery-audio.ts`, one player) only after Play. No second
+  (`src/lib/gallery-audio.ts`, one player) only after Listen. No second
   model request, external music service/key, MP3, audio job or autoplay.
   The flag is independent from image generation; a changed composer or
   renderer is a new version, never a silent change to stored scores.
-  Preserve the current fire/extraction protocol.
+  New ignition briefs give both the image and the music a mood that
+  contrasts with the original note (ADR 008). Existing records keep their
+  stored art and score. Preserve the current fire/extraction protocol.
   `ARTIFACTS_ENABLED` is the owner's switch for image generation (a Fly
   secret, on since the owner enabled it); the fixture provider is refused
   on Fly.
@@ -194,17 +198,10 @@ regenerating it on application startup.
   unit tests over rendered checks. Run one subagent at a time unless the
   owner asks for parallel work.
 
-## Moderation release — 2026-10-10
+## Release verification
 
-The user authorized committing and pushing the configured moderation release.
-Source commit 351439c adds publication checks, durable reports, private operator
-handling, quarantine synchronization and client recovery. The local OpenAI
-key passed real-service smoke checks and was staged separately in Fly secrets;
-never add local credentials to Git or the remote build context.
-
-Production before this release was d324ca2. Every main push runs container
-checks, secret scans and a dependent Fly deploy. Verify the workflow and
-machine image before calling a pushed revision deployed. A consistent
-schema-6 backup exists at /data/backup-pre-moderation-2026-10-10.sqlite.
-The schema-7 migration preserved all eight existing tables in a local copy.
-See docs/moderation-runbook.md for human review duties and future releases.
+Main pushes run container checks and secret scans before Fly deployment.
+Check the workflow and machine image to verify a release. Keep credentials
+out of Git and the remote build context. The 2026-10-10 moderation release
+(`351439c`) is recorded in ADR 004. See `docs/moderation-runbook.md` for
+operator review and release procedures.

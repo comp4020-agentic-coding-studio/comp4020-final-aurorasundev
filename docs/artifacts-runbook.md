@@ -145,8 +145,10 @@ when music is off.
 ### What is stored, and when
 
 - Migration 10 adds the nullable `artifacts.music_score` (JSON text, at most
-  16 KiB). Records published before it, or while music is off, keep `NULL`
-  and stay image-only. There is **no backfill**.
+  16 KiB). Records published while music is off stay image-only unless an
+  operator backfills them. The migration itself does no backfill. The
+  owner ran a one-time backfill for five older records on 2026-10-27
+  ([`710fed9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/710fed9)).
 - In the same transaction that publishes an inspected image, with music on,
   `shared/music-score.ts` composes a `MusicScoreV1` from the job's already
   stored `CreativeBriefV2` (its `music`, `relation`, `motion`, `metaphor` and

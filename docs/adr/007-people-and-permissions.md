@@ -1,21 +1,21 @@
 # 007 — Who a person is, what they may see and change, and how the log names them
 
-Status: accepted. The rules below were already enforced on the server; the
-log names (`who=`) and the `session`, `open` and named `connect` lines were
-added on 2026-10-20 for crit 10. **Revised 2026-11-03:** the return key is
-replaced by optional accounts and a private panel of your own papers
-([ADR 009](009-optional-accounts.md)). The paper permissions below are
-unchanged; the return-key row and consequence are kept here as history.
+Status: accepted for paper permissions and logging. The log names
+(`who=`) and the `session`, `open` and named `connect` lines were added on
+2026-10-20 for Crit 10. [ADR 009](009-optional-accounts.md) superseded
+the original return-key decision and shipped optional accounts on
+2026-11-04.
 
-## Context
+## Context at Crit 10
 
-Throwaway is anonymous by design: no accounts, no names, no profiles. It
-still has to tell people apart, because the rules depend on who is acting
+The original room used anonymous browser identities with an optional
+return key. Visitors saw no names or profiles. The server still had to
+tell people apart, because the rules depend on who is acting
 (only the person who kept a paper may let it go). And the operator has to be
 able to read from the server log who did what, without the log holding
 anyone's words or anything that could sign in as them.
 
-## Options
+## Original identity options at Crit 10
 
 | Option | Benefit | Cost |
 | --- | --- | --- |
@@ -23,17 +23,17 @@ anyone's words or anything that could sign in as them.
 | A pseudonym the visitor types | readable in logs | invites names; one more thing to moderate; people can claim each other's |
 | **An anonymous browser identity, with an optional return key** | no personal data; nothing to type to start | the identity lives in one browser unless its key is saved |
 
-## Decision
+## Current decision
 
-**A person is an anonymous browser identity.** `POST /api/session` creates
-one (a random id) and sets an `HttpOnly`, `SameSite=Lax` cookie holding a
-random token; only the token's SHA-256 is stored. A separate Chrome profile
-or an incognito window is a different person. After keeping a paper, a
-visitor may save a one-time return key that restores the same identity in
-another browser (rights, not history).
+**Guest identities and accounts.** A guest has a random identity linked
+to an `HttpOnly`, `SameSite=Lax` session cookie. The database stores only
+the token's SHA-256. A separate browser profile starts as a new guest.
+An optional account restores the same identity and opens its owner's
+private paper and record lists. The original return key restored only
+rights and was removed by ADR 009.
 
-**What each person may see and change, checked on the server** (`server/papers.ts`
-`viewerState`, `server/reports.ts`, `server/identity.ts`):
+**Permissions checked on the server** (`server/papers.ts`,
+`server/reports.ts`, `server/session.ts` and `server/accounts.ts`):
 
 | Action | Who may | Why |
 | --- | --- | --- |
@@ -45,7 +45,6 @@ another browser (rights, not history).
 | Report a paper | anyone who opened it, with limits per address | reports need context; abuse is bounded |
 | Edit a paper, change its mode | no one | content and mode are immutable once saved |
 | See who wrote or witnessed a paper | no one | no attribution is ever shown; counts appear only inside an opened paper |
-| Restore an identity | whoever holds its return key | the key is the only proof; wrong guesses are slowed per address (removed by ADR 009) |
 | See your own papers and records | the signed-in owner only (ADR 009) | no one else's list exists |
 | Sign in to an account | whoever knows its username and password (ADR 009) | wrong guesses are limited per name and per address |
 

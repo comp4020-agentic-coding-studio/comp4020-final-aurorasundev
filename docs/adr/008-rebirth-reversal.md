@@ -1,7 +1,13 @@
 # 008 — The Gallery answers a note's weight with its opposite, not a mirror of it
 
-Status: accepted, 2026-10-30. Implemented the same day. Not deployed; not
-exercised against the real OpenAI provider.
+Status: accepted and implemented on 2026-10-30 in
+[`74c1291`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/74c1291).
+Deployed on 2026-11-04 with
+[`fa446d8`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/fa446d8)
+in [run 41795798041](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/actions/runs/41795798041).
+Automated checks cover the implementation. A comparison of new images
+and browser-performed scores based on briefs from the real provider
+has yet to be recorded.
 
 ## Context
 
