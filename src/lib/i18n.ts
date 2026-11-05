@@ -34,8 +34,21 @@ function fromUrl(): Lang | null {
 let current: Lang | null = null;
 const listeners = new Set<() => void>();
 
+// The Chinese faces' rules (src/styles/fonts-zh.css) are fetched the first
+// time the interface is in Chinese, so an English visitor never downloads
+// them; the font files themselves load slice by slice as characters appear.
+let zhFonts = false;
+function loadZhFonts() {
+  if (zhFonts) return;
+  zhFonts = true;
+  void import("../styles/fonts-zh.css").catch(() => {
+    zhFonts = false;
+  });
+}
+
 function apply(lang: Lang) {
   if (typeof document !== "undefined") document.documentElement.lang = lang === "zh" ? "zh-CN" : "en-AU";
+  if (lang === "zh" && typeof window !== "undefined") loadZhFonts();
 }
 
 export function getLang(): Lang {

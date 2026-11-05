@@ -90,3 +90,35 @@ The Gallery's display face. Copyright 2022 The Gloock Project Authors
 (https://github.com/duartp/gloock). Licensed under the SIL Open Font License,
 Version 1.1; the full licence is in `public/fonts/OFL-Gloock.txt`. The file is
 the Latin subset served by Google Fonts (v8), self-hosted unmodified.
+
+## ZCOOL XiaoWei (`public/fonts/zcool-xiaowei/`)
+
+The 中文 interface's text face. Copyright 2018 The ZCOOL XiaoWei Project
+Authors (https://www.github.com/googlefonts/xiaowei). Licensed under the SIL
+Open Font License, Version 1.1; the full licence is in
+`public/fonts/OFL-zcool-xiaowei.txt`. The files are the unicode-range WOFF2
+slices from `@fontsource/zcool-xiaowei` 5.3.0, self-hosted unmodified; only
+their `@font-face` ranges are narrowed to leave out Basic Latin and Latin-1
+(`src/styles/fonts-zh.css`), so English keeps the site's own faces.
+
+## Ma Shan Zheng (`public/fonts/ma-shan-zheng/`)
+
+The 中文 interface's brush display face (the write dialog's question, the
+ashes, the Gallery's title and record names). Copyright 2018 The Ma Shan
+Zheng Project Authors (https://github.com/googlefonts/mashanzheng). Licensed
+under the SIL Open Font License, Version 1.1; the full licence is in
+`public/fonts/OFL-ma-shan-zheng.txt`. The files are the unicode-range WOFF2
+slices from `@fontsource/ma-shan-zheng` 5.3.1, self-hosted unmodified, with
+their ranges narrowed as above.
+
+## LXGW WenKai (`public/fonts/lxgw-wenkai-fixes.woff2`)
+
+Copyright 2021-2026 LXGW (https://github.com/lxgw/LxgwWenKai); Copyright 2020
+The Klee Project Authors. Licensed under the SIL Open Font License, Version
+1.1, with the author's additional permission for subsets converted to WOFF2
+solely for web font delivery; the full licence is in
+`public/fonts/OFL-lxgw-wenkai.txt`. The file is a subset of
+`LXGWWenKai-Regular.ttf` from release v1.530, cut with fontTools to 回 and
+the Chinese punctuation marks only, because ZCOOL XiaoWei draws 回 as a solid
+square and sets Western-style stops and commas. It is not an installable
+desktop font.
