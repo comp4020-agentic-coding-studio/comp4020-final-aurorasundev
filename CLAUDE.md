@@ -107,6 +107,10 @@ readable centre. Keep phone controls and captions clear of the paper.
   `ARTIFACTS_ENABLED` is the owner's switch for image generation (a Fly
   secret, on since the owner enabled it); the fixture provider is refused
   on Fly.
+- Abuse limits (ADR 007): new papers 10 an hour per identity and 30 per
+  address (429, draft kept; a same-key retry is not a new paper); live
+  streams 60 per address and 500 in all (503 + `Retry-After`). Keep them
+  and their specs; never lift the address limit outside fixture mode.
 - Real-time is SSE (`GET /api/events`) + HTTP. The database is the source of
   truth; events carry a shared `revision` and are merged by version; every
   reconnect reconciles from a snapshot, never by replaying history.

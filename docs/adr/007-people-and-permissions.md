@@ -38,6 +38,8 @@ rights and was removed by ADR 009.
 | Action | Who may | Why |
 | --- | --- | --- |
 | See papers in the space (ids only) | anyone | the space is shared; ids say nothing about authors |
+| Leave a new paper | anyone, up to 10 an hour per identity and 30 per address (2026-11-09) | a new cookie is free, so the address limit bounds a flood; a retry with the same submission key is not a new paper |
+| Keep a live stream open | anyone, up to 60 streams per address and 500 in all (2026-11-09) | each stream holds memory on a 256 MB machine; 60 leaves room for a class behind one campus address |
 | Open a paper and read its words | anyone, while it is active | encounter is the point; opening records nothing |
 | Witness ("I saw it") | anyone who opened it (needs the read receipt bound to them and that paper) | a witness must have actually read it; counted once per identity |
 | Let a **Keep** paper go | its author only | the writer asked to keep it |
@@ -49,7 +51,12 @@ rights and was removed by ADR 009.
 | Sign in to an account | whoever knows its username and password (ADR 009) | wrong guesses are limited per name and per address |
 
 Every refusal is a 401/403/409/410 from the server, whatever the client
-shows. The spec checks the cross-person rules over HTTP (`spec/burn.test.ts`,
+shows; a save over its limit is a 429 that keeps the draft, and a stream
+over its cap is a 503 with `Retry-After` that the page backs off from and retries.
+The limits are in `server/papers.ts` (`SAVE_LIMITS`) and `server/events.ts`
+(`STREAM_LIMITS`), checked by `spec/save-limits.test.ts` and
+`spec/stream-limits.test.ts`; local tests lift the address limit only under
+the fixture provider, which Fly refuses. The spec checks the cross-person rules over HTTP (`spec/burn.test.ts`,
 `spec/witness.test.ts`, `spec/accounts.test.ts`, `spec/who-did-what.test.ts`).
 
 **How the log names a person.** Every line about a person carries
