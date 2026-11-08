@@ -197,8 +197,9 @@ These replace the earlier text where they differ.
 - **Entry mist:** dense, and drawn as a transparent premultiplied veil
   *above* the title (the canvas takes no pointer; the header sits above it),
   so the title sits half-hidden in the cloud and surfaces as it drifts. Its
-  density breathes on a 7 s cosine that starts thin, so the title reads
-  within a couple of seconds without a pointer. The pointer parts a broad
+  density breathes on a 4.7 s cosine that starts dense (owner, 2026-11-09:
+  the cloud is the first thing seen; first 7 s and starting thin), so the
+  title reads within a couple of seconds without a pointer. The pointer parts a broad
   lane (splat variance 0.012 of the height², the mist thins up to 92 %)
   that closes over about 2.5 s (flow kept at 0.975 per 60 Hz frame).
   Reduced motion: a lighter still veil (level 0.32) behind the plain title.

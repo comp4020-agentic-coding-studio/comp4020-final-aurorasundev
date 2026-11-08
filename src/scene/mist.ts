@@ -5,8 +5,9 @@ import * as THREE from "three";
 // slowly as dense off-white and grey-blue cloud. It is drawn as a transparent
 // veil ABOVE the HTML title (premultiplied alpha; the pale ground is a CSS
 // layer below the title), so the title sits half-hidden in the cloud and
-// surfaces as it drifts. Its density breathes on a slow cycle, so the title
-// reads within a couple of seconds without any pointer. A 128² ping-pong flow
+// surfaces as it drifts. Its density breathes on a cycle that starts dense,
+// so the cloud is the first thing seen, and thins within a couple of seconds
+// so the title reads without any pointer. A 128² ping-pong flow
 // field takes the pointer's velocity (not its position) as wide splats and
 // keeps 0.975 of itself per 60 Hz frame; the mist thins and curls where the
 // flow is, so a passing hand parts it and it closes again over 2–3 s.
@@ -39,9 +40,11 @@ const KEEP = MIST_KEEP;
 // the pointer's splat: a gaussian of this variance (in height²; about 0.11 of
 // the height across), so a hand parts a broad lane rather than a thread
 export const MIST_RADIUS = 0.012;
-// the breath: one slow cycle of density, starting thin so the title surfaces
-// first (seconds)
-export const MIST_BREATH = 7;
+// the breath: one cycle of density (seconds). It starts dense (owner,
+// 2026-11-09: someone who scrolls on at once still meets the cloud, rather
+// than a thin veil that thickens only after a few seconds), and runs a third
+// faster than the first 7 s cycle.
+export const MIST_BREATH = 4.7;
 
 const vert = /* glsl */ `
 varying vec2 vUv;
@@ -144,9 +147,9 @@ void main() {
 }
 `;
 
-// The density's breath at t seconds: 0 at the start (the title surfaces
-// first), up to 1 and back over MIST_BREATH, on a soft cosine.
-export const breath = (t: number) => 0.5 - 0.5 * Math.cos((2 * Math.PI * t) / MIST_BREATH);
+// The density's breath at t seconds: 1 at the start (dense), down to 0 (the
+// title surfaces) and back over MIST_BREATH, on a soft cosine.
+export const breath = (t: number) => 0.5 + 0.5 * Math.cos((2 * Math.PI * t) / MIST_BREATH);
 
 export function canDrawMist(): boolean {
   try {
