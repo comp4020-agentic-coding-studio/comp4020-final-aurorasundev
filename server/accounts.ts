@@ -3,7 +3,7 @@ import { publicArtifact } from "./artifacts/store.ts";
 import type { DB } from "./db.ts";
 import { clientAddress, windowCounter } from "./address.ts";
 import { log, person } from "./log.ts";
-import { burnDecoy, hashPassword, pepperFingerprint, pepperFrom, verifyPassword } from "./password.ts";
+import { burnDecoy, hashPassword, hashRecoveryCode, newRecoveryCode, normalRecoveryCode, pepperFingerprint, pepperFrom, recoveryMatches, verifyPassword } from "./password.ts";
 import { endSession, identityFor, rotateSession } from "./session.ts";
 
 // Optional accounts (ADR 009): a username and password attached to an
@@ -47,6 +47,7 @@ const unauthenticated = { code: "unauthenticated", error: "Your session has expi
 const unconfigured = { code: "accounts_unconfigured", error: "Accounts aren't available right now. You can keep using Throwaway as a guest." };
 const wrong = { code: "invalid_credentials", error: "Username or password is incorrect." };
 const tooMany = { code: "rate_limited", error: "Too many tries. Wait a few minutes and try again." };
+const wrongRecovery = { code: "invalid_recovery", error: "That username and recovery code don't match." };
 
 // The papers a person left that are still here: enough to recognise each
 // one, never a witness count, a reader or any other paper.
@@ -175,6 +176,8 @@ export function accountsRouter(
       return;
     }
     const passwordHash = await hashPassword(req.body.password, pepper);
+    // shown to its owner once, in this reply; only its HMAC is kept
+    const recoveryCode = newRecoveryCode();
     // the session may have changed while the hash ran
     if (identityFor(db, req) !== identityId) {
       res.status(401).json(unauthenticated);
@@ -185,8 +188,8 @@ export function accountsRouter(
       if (db.prepare("SELECT 1 FROM accounts WHERE username_key = ?").get(username.key)) return "taken";
       const now = new Date().toISOString();
       db.prepare(
-        "INSERT INTO accounts (identity_id, username, username_key, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-      ).run(identityId, username.name, username.key, passwordHash, now, now);
+        "INSERT INTO accounts (identity_id, username, username_key, password_hash, recovery_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      ).run(identityId, username.name, username.key, passwordHash, hashRecoveryCode(recoveryCode, pepper), now, now);
       return "created";
     })();
     if (outcome === "created") creations.hit(address);
@@ -201,7 +204,67 @@ export function accountsRouter(
       return;
     }
     rotateSession(db, req, res, identityId);
-    res.status(201).json({ signed_in: true, username: username.name });
+    res.status(201).json({ signed_in: true, username: username.name, recovery_code: recoveryCode });
+  });
+
+  // A forgotten password: the username and the recovery code shown at
+  // sign-up set a new password. The code is used up, a new one is shown in
+  // the reply, every other session of the account ends (whoever else was
+  // signed in), and this browser is signed in as with a login. A wrong code
+  // and an unknown name get the same answer and count against the same
+  // limits as wrong passwords.
+  router.post("/account/recover", async (req, res) => {
+    noStore(res);
+    if (!pepper) {
+      log("recover", { outcome: "unconfigured" });
+      res.status(503).json(unconfigured);
+      return;
+    }
+    const address = clientAddress(req);
+    const username = usernameOf(req.body?.username);
+    if (addressFailures.blocked(address) || (username && nameFailures.blocked(username.key))) {
+      log("recover", { outcome: "rate_limited" });
+      res.status(429).json(tooMany);
+      return;
+    }
+    const row = username
+      ? (db.prepare("SELECT identity_id, username, recovery_hash FROM accounts WHERE username_key = ?").get(username.key) as
+          | { identity_id: string; username: string; recovery_hash: string | null }
+          | undefined)
+      : undefined;
+    if (!row || !recoveryMatches(req.body?.recovery_code, row.recovery_hash, pepper)) {
+      addressFailures.hit(address);
+      if (username) nameFailures.hit(username.key);
+      log("recover", { outcome: normalRecoveryCode(req.body?.recovery_code) ? "invalid" : "malformed" });
+      res.status(401).json(wrongRecovery);
+      return;
+    }
+    const problem = passwordProblem(req.body?.password, row.username);
+    if (problem) {
+      log("recover", { ...person(row.identity_id), outcome: "invalid_password" });
+      res.status(400).json({ code: "invalid_password", error: problem });
+      return;
+    }
+    const passwordHash = await hashPassword(req.body.password, pepper);
+    const recoveryCode = newRecoveryCode();
+    // the code must still be the one checked: two resets racing can't both win
+    const changed = db.transaction(() => {
+      const done = db
+        .prepare("UPDATE accounts SET password_hash = ?, recovery_hash = ?, updated_at = ? WHERE identity_id = ? AND recovery_hash = ?")
+        .run(passwordHash, hashRecoveryCode(recoveryCode, pepper), new Date().toISOString(), row.identity_id, row.recovery_hash).changes;
+      if (done) db.prepare("DELETE FROM sessions WHERE identity_id = ?").run(row.identity_id);
+      return done === 1;
+    })();
+    if (!changed) {
+      log("recover", { ...person(row.identity_id), outcome: "invalid" });
+      res.status(401).json(wrongRecovery);
+      return;
+    }
+    const guestId = identityFor(db, req);
+    const moved = guestId && guestId !== row.identity_id && !accountFor(db, guestId) ? db.transaction(() => adoptGuest(db, guestId, row.identity_id))() : 0;
+    rotateSession(db, req, res, row.identity_id);
+    log("recover", { ...person(row.identity_id), outcome: "reset", moved: moved || undefined });
+    res.json({ signed_in: true, username: row.username, recovery_code: recoveryCode });
   });
 
   router.post("/account/login", async (req, res) => {

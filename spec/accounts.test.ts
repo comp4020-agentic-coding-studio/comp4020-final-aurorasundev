@@ -22,6 +22,8 @@ import { openStream } from "./sse.ts";
 // identities and papers, so never run against the live app.
 
 const PASSWORD = "a long enough passphrase";
+// five groups of four, from an alphabet without 0/O or 1/I/L
+const CODE = /^[A-HJKMNP-Z2-9]{4}(-[A-HJKMNP-Z2-9]{4}){4}$/;
 const name = (): string => `u${randomUUID().slice(0, 8)}`;
 const quiet = <T>(run: () => T): T => {
   const log = console.log;
@@ -74,6 +76,8 @@ async function world(options: { env?: NodeJS.ProcessEnv; limits?: Limits; db?: D
       },
       register: (username = name(), password = PASSWORD) => send("/api/account/register", { username, password }),
       login: (username: string, password = PASSWORD) => send("/api/account/login", { username, password }),
+      recover: (username: string, recovery_code: string, password = "a brand new passphrase") =>
+        send("/api/account/recover", { username, recovery_code, password }),
       logout: () => send("/api/account/logout", {}),
       leave: async (mode: "KEEP" | "RELEASE", content = `paper ${randomUUID()}`) => {
         const res = await send("/api/papers", { content, mode, confirmed: true, submission_key: randomUUID() });
@@ -99,7 +103,7 @@ describe("creating an account", () => {
       const username = name();
       const res = await b.register(username);
       expect(res.status).toBe(201);
-      expect(await res.json()).toEqual({ signed_in: true, username });
+      expect(await res.json()).toEqual({ signed_in: true, username, recovery_code: expect.stringMatching(CODE) });
       expect(await b.json("/api/account")).toEqual({ available: true, signed_in: true, username });
       expect((await b.papers()).map((p) => p.id)).toEqual([kept]);
       expect((await b.burn(kept, (await b.open(kept)).read_receipt)).status).toBe(200);
@@ -239,6 +243,134 @@ describe("signing in", () => {
       expect(statuses[10]).toBe(429);
       // even the right password waits now
       expect((await (await w.browser()).login(username)).status).toBe(429);
+    } finally {
+      await w.close();
+    }
+  });
+});
+
+describe("recovering a forgotten password", () => {
+  const codeFrom = async (res: Response) => ((await res.json()) as { recovery_code: string }).recovery_code;
+
+  it("shows a code once at sign-up and keeps only its HMAC, never the code", async () => {
+    const w = await world();
+    try {
+      const b = await w.browser();
+      const code = await codeFrom(await b.register());
+      expect(code).toMatch(CODE);
+      const stored = (w.db.prepare("SELECT recovery_hash FROM accounts").get() as { recovery_hash: string }).recovery_hash;
+      expect(stored).toBeTruthy();
+      expect(stored).not.toContain(code.replace(/-/g, ""));
+      expect(JSON.stringify(await b.json("/api/account"))).not.toMatch(/recovery/);
+    } finally {
+      await w.close();
+    }
+  });
+
+  it("sets a new password with the username and code, signs this browser in, and ends every other session", async () => {
+    const w = await world();
+    try {
+      const first = await w.browser();
+      const kept = (await first.leave("KEEP")).paper.id;
+      const username = name();
+      const code = await codeFrom(await first.register(username));
+      const lost = await w.browser();
+      // typed loosely: lower case, spaces for dashes
+      const res = await lost.recover(username.toUpperCase(), code.toLowerCase().replace(/-/g, " "));
+      expect(res.status).toBe(200);
+      const reply = (await res.json()) as { signed_in: boolean; username: string; recovery_code: string };
+      expect(reply).toMatchObject({ signed_in: true, username });
+      expect(reply.recovery_code).toMatch(CODE);
+      expect(reply.recovery_code).not.toBe(code);
+      expect((await lost.papers()).map((p) => p.id)).toEqual([kept]);
+      // the browser that was signed in before is signed out
+      expect((await first.send("/api/account/papers")).status).toBe(401);
+      expect((await (await w.browser()).login(username)).status).toBe(401);
+      expect((await (await w.browser()).login(username, "a brand new passphrase")).status).toBe(200);
+    } finally {
+      await w.close();
+    }
+  });
+
+  it("uses a code up: the old one stops working and the new one works once", async () => {
+    const w = await world();
+    try {
+      const username = name();
+      const code = await codeFrom(await (await w.browser()).register(username));
+      const next = await codeFrom(await (await w.browser()).recover(username, code));
+      expect((await (await w.browser()).recover(username, code, "another passphrase")).status).toBe(401);
+      expect((await (await w.browser()).recover(username, next, "another passphrase")).status).toBe(200);
+    } finally {
+      await w.close();
+    }
+  });
+
+  it("answers a wrong code and an unknown name the same way, and changes nothing", async () => {
+    const w = await world();
+    try {
+      const username = name();
+      const code = await codeFrom(await (await w.browser()).register(username));
+      const flipped = (code[0] === "A" ? "B" : "A") + code.slice(1);
+      const wrong = await (await w.browser()).recover(username, flipped);
+      const unknown = await (await w.browser()).recover(name(), code);
+      expect([wrong.status, unknown.status]).toEqual([401, 401]);
+      expect(await wrong.json()).toEqual(await unknown.json());
+      expect(wrong.headers.get("set-cookie")).toBeNull();
+      expect((await (await w.browser()).login(username)).status).toBe(200);
+    } finally {
+      await w.close();
+    }
+  });
+
+  it("checks the new password like a new account's, and keeps the code if it is refused", async () => {
+    const w = await world();
+    try {
+      const username = name();
+      const code = await codeFrom(await (await w.browser()).register(username));
+      const short = await (await w.browser()).recover(username, code, "short");
+      expect(short.status).toBe(400);
+      expect(((await short.json()) as { code: string }).code).toBe("invalid_password");
+      expect((await (await w.browser()).recover(username, code)).status).toBe(200);
+    } finally {
+      await w.close();
+    }
+  });
+
+  it("counts wrong codes against the same per-name limit as wrong passwords", async () => {
+    const w = await world();
+    try {
+      const username = name();
+      const code = await codeFrom(await (await w.browser()).register(username));
+      const statuses: number[] = [];
+      for (let i = 0; i < 11; i++) statuses.push((await (await w.browser()).recover(username, "AAAA-AAAA-AAAA-AAAA-AAAA")).status);
+      expect(statuses.slice(0, 10)).toEqual(Array(10).fill(401));
+      expect(statuses[10]).toBe(429);
+      // even the right code waits now
+      expect((await (await w.browser()).recover(username, code)).status).toBe(429);
+    } finally {
+      await w.close();
+    }
+  });
+
+  it("lets only one of two resets with the same code win", async () => {
+    const w = await world();
+    try {
+      const username = name();
+      const code = await codeFrom(await (await w.browser()).register(username));
+      const [a, b] = await Promise.all([(await w.browser()).recover(username, code, "first new passphrase"), (await w.browser()).recover(username, code, "second new passphrase")]);
+      expect([a.status, b.status].sort()).toEqual([200, 401]);
+    } finally {
+      await w.close();
+    }
+  });
+
+  it("finds no code for an account made before codes existed", async () => {
+    const w = await world();
+    try {
+      const username = name();
+      await (await w.browser()).register(username);
+      w.db.prepare("UPDATE accounts SET recovery_hash = NULL").run();
+      expect((await (await w.browser()).recover(username, "AAAA-AAAA-AAAA-AAAA-AAAA")).status).toBe(401);
     } finally {
       await w.close();
     }

@@ -295,6 +295,11 @@ const MIGRATIONS: ((db: DB) => void)[] = [
         value TEXT NOT NULL
       );
     `),
+
+  // 13: a recovery code per account (ADR 009 revision), shown once at sign-up
+  // and kept only as an HMAC under ACCOUNT_PEPPER. Null for accounts made
+  // before it: they have no code until they reset or sign up again.
+  (db) => db.exec("ALTER TABLE accounts ADD COLUMN recovery_hash TEXT"),
 ];
 
 // the version a database is at once every migration has run

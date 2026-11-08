@@ -74,6 +74,43 @@ export async function verifyPassword(password: string, stored: string, pepper: B
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
+// Recovery codes (ADR 009 revision): 20 random characters from an alphabet
+// without look-alikes (no 0/O, 1/I/L), shown as five groups of four. 100
+// bits of randomness, so unlike a password it needs no slow hash: an HMAC
+// under the pepper is enough, and a copied database alone gives nothing to
+// test guesses against. Typed codes are read loosely: case, spaces and
+// dashes don't matter.
+const RECOVERY_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const RECOVERY_LENGTH = 20;
+
+export function newRecoveryCode(): string {
+  const chars: string[] = [];
+  while (chars.length < RECOVERY_LENGTH) {
+    for (const byte of randomBytes(32)) {
+      // 31 symbols: reject the bytes that would bias the draw
+      if (byte < 248 && chars.length < RECOVERY_LENGTH) chars.push(RECOVERY_ALPHABET[byte % 31]);
+    }
+  }
+  return chars.join("").match(/.{4}/g)!.join("-");
+}
+
+export const normalRecoveryCode = (typed: unknown): string | null => {
+  if (typeof typed !== "string") return null;
+  const code = typed.toUpperCase().replace(/[\s-]/g, "");
+  return code.length === RECOVERY_LENGTH && [...code].every((c) => RECOVERY_ALPHABET.includes(c)) ? code : null;
+};
+
+export const hashRecoveryCode = (code: string, pepper: Buffer): string =>
+  createHmac("sha256", pepper).update("throwaway-recovery-v1:" + code.replace(/-/g, "")).digest("base64url");
+
+export function recoveryMatches(typed: unknown, stored: string | null, pepper: Buffer): boolean {
+  const code = normalRecoveryCode(typed);
+  if (!code || !stored) return false;
+  const given = Buffer.from(hashRecoveryCode(code, pepper));
+  const expected = Buffer.from(stored);
+  return given.length === expected.length && timingSafeEqual(given, expected);
+}
+
 // Spent on a login for a name that has no account, so a wrong name takes as
 // long as a wrong password and the answer can't tell them apart.
 let decoy: string | null = null;
