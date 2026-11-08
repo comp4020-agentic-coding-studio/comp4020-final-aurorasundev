@@ -893,6 +893,39 @@ fieldset:disabled .choice,
   color: var(--ink);
 }
 
+/* the recovery code, shown once after sign-up or a reset: large enough to
+   copy by hand without mistaking one character for another */
+.recovery-code {
+  margin: 0;
+  padding: 18px 16px;
+  border: 1px dashed #8f897d;
+  border-radius: 4px;
+  background: rgb(250 248 244 / 0.6);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 26px;
+  letter-spacing: 0.08em;
+  text-align: center;
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+
+.recovery-warning {
+  color: var(--ink);
+}
+
+.recovery-input {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  letter-spacing: 0.06em;
+}
+
+.recovery-saved {
+  margin-top: 20px;
+}
+
+.account-sheet .recovery-saved + .write-actions {
+  grid-template-columns: 1fr;
+}
+
 /* the header's account entry: a username can be long */
 .header-account {
   max-width: 14ch;
@@ -1182,6 +1215,12 @@ fieldset:disabled .choice,
 
   .account-input {
     font-size: 16px;
+  }
+
+  .recovery-code {
+    padding: 14px 8px;
+    font-size: 19px;
+    letter-spacing: 0.04em;
   }
 
   .mine-records {

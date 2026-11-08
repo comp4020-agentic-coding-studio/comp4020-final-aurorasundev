@@ -12,6 +12,7 @@ import { ApiError } from "../src/lib/api.ts";
 const control = vi.hoisted(() => ({
   account: vi.fn(),
   register: vi.fn(),
+  recover: vi.fn(),
   signIn: vi.fn(),
   signOut: vi.fn(),
   papers: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock("../src/lib/api.ts", async (original) => ({
   getSafetyConfig: async () => ({ provider: "fixture", reports: true }),
   accountState: control.account,
   register: control.register,
+  recoverAccount: control.recover,
   signIn: control.signIn,
   signOut: control.signOut,
   ownPapers: control.papers,
@@ -121,21 +123,54 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 
-it("offers Sign in in the header, and shows the username once an account is created", async () => {
+it("offers Sign in in the header, and shows the username once an account is created and its recovery code saved", async () => {
   expect(button("Sign in")).toBeTruthy();
   await click("Sign in");
   expect(host.querySelector("#account-title")!.textContent).toBe("Sign in");
   await click("Create an account");
   expect(host.querySelector("#account-title")!.textContent).toBe("Keep an account");
-  expect(host.textContent).toContain("There's no password recovery yet");
-  control.register.mockResolvedValueOnce({ signed_in: true, username: "mira" });
+  expect(host.textContent).toContain("you'll get a recovery code for a forgotten password");
+  control.register.mockResolvedValueOnce({ signed_in: true, username: "mira", recovery_code: "ABCD-EFGH-JKMN-PQRS-TUVW" });
   await type("account-username", "mira");
   await type("account-password", "a long passphrase");
   await submit();
   expect(control.register).toHaveBeenCalledWith("mira", "a long passphrase");
+  // the code, once, with what it is for; nothing goes on until it is saved
+  expect(host.querySelector("#account-title")!.textContent).toBe("Your account is ready");
+  expect(host.querySelector(".recovery-code")!.textContent).toBe("ABCD-EFGH-JKMN-PQRS-TUVW");
+  expect(host.textContent).toContain("It is how you get back in if you forget your password.");
+  expect(host.textContent).toContain("It is shown only this once");
+  expect(button("Done")!.disabled).toBe(true);
+  expect(button("mira")).toBeFalsy();
+  await act(async () => host.querySelector<HTMLInputElement>(".recovery-saved input")!.click());
+  await click("Done");
   expect(host.querySelector(".account-dialog")).toBeNull();
   expect(button("mira")).toBeTruthy();
   // a new identity behind the cookie: the space is asked again
+  expect(control.retry).toHaveBeenCalledOnce();
+});
+
+it("resets a forgotten password with the username and recovery code, then shows the new code", async () => {
+  await click("Sign in");
+  await click("Forgot your password?");
+  expect(host.querySelector("#account-title")!.textContent).toBe("Forgot your password?");
+  control.recover.mockRejectedValueOnce(new ApiError(401, "invalid_recovery", "That username and recovery code don't match."));
+  await type("account-username", "mira");
+  await type("account-recovery", "abcd efgh jkmn pqrs tuvx");
+  await type("account-password", "a brand new passphrase");
+  await submit();
+  expect(host.querySelector('[role="alert"]')!.textContent).toBe("That username and recovery code don't match.");
+  control.recover.mockResolvedValueOnce({ signed_in: true, username: "mira", recovery_code: "WXYZ-2345-6789-ABCD-EFGH" });
+  await type("account-recovery", "abcd efgh jkmn pqrs tuvw");
+  await type("account-password", "a brand new passphrase");
+  await submit();
+  expect(control.recover).toHaveBeenLastCalledWith("mira", "abcd efgh jkmn pqrs tuvw", "a brand new passphrase");
+  expect(host.querySelector("#account-title")!.textContent).toBe("Your password is changed");
+  expect(host.querySelector(".recovery-code")!.textContent).toBe("WXYZ-2345-6789-ABCD-EFGH");
+  await act(async () => host.querySelector<HTMLInputElement>(".recovery-saved input")!.click());
+  await click("Done");
+  expect(host.querySelector(".account-dialog")).toBeNull();
+  expect(button("mira")).toBeTruthy();
   expect(control.retry).toHaveBeenCalledOnce();
 });
 

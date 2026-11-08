@@ -139,8 +139,13 @@ export type AccountState = { available: boolean; signed_in: boolean; username?: 
 export const accountState = (): Promise<AccountState> => request("/api/account");
 
 export type SignedIn = { signed_in: true; username: string };
-export const register = (username: string, password: string): Promise<SignedIn> =>
+// creating an account, or resetting a forgotten password, also hands back
+// the recovery code: once, in this reply only
+export type WithRecovery = SignedIn & { recovery_code: string };
+export const register = (username: string, password: string): Promise<WithRecovery> =>
   request("/api/account/register", postJson({ username, password }), 15000);
+export const recoverAccount = (username: string, recoveryCode: string, password: string): Promise<WithRecovery> =>
+  request("/api/account/recover", postJson({ username, recovery_code: recoveryCode, password }), 15000);
 export const signIn = (username: string, password: string): Promise<SignedIn> =>
   request("/api/account/login", postJson({ username, password }), 15000);
 export const signOut = (): Promise<{ signed_in: false }> => request("/api/account/logout", postJson({}));
