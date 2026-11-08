@@ -154,6 +154,25 @@ textarea {
   display: none;
 }
 
+/* The places fold into the Menu below 860 px, not only on a phone (owner,
+   2026-11-08): the row of links stops fitting beside the wordmark at about
+   820 px, so a tablet or a narrow window gets the Menu too. Type sizes and
+   spacing still change at the phone's 600 px. The Gallery's headers and the
+   About page (server/readme.ts) fold at the same width. */
+@media (max-width: 860px) {
+  .header-links {
+    display: none;
+  }
+
+  .header-menu {
+    display: block;
+  }
+
+  .site-header {
+    align-items: center;
+  }
+}
+
 /* looks like the header's links, but it is a control, not a place; its tap
    area reaches 44 px tall without making the header row any taller */
 .site-menu-open {
@@ -1142,16 +1161,6 @@ fieldset:disabled .choice,
     height: 28px;
     padding: 0 8px;
     font-size: 15px;
-  }
-
-  /* the places fold into one Menu (SiteMenu.tsx); the Gallery's headers do
-     the same in gallery.css */
-  .header-links {
-    display: none;
-  }
-
-  .header-menu {
-    display: block;
   }
 
   .site-header {

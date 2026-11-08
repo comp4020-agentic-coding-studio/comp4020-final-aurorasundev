@@ -95,6 +95,22 @@
   gap: 48px;
 }
 
+/* the places fold into one Menu (SiteMenu.tsx, styled in app.css) below
+   860 px, as the space's header does: under that the row crowds the name */
+@media (max-width: 860px) {
+  .records-links {
+    display: none;
+  }
+
+  .records-header .header-menu {
+    display: block;
+  }
+
+  .records-header {
+    align-items: center;
+  }
+}
+
 .records-links .header-link,
 .records-links .lang-toggle {
   font-size: 17px;
@@ -723,15 +739,6 @@
     padding-top: 22px;
   }
 
-  /* the places fold into one Menu (SiteMenu.tsx, styled in app.css) */
-  .records-links {
-    display: none;
-  }
-
-  .records-header .header-menu {
-    display: block;
-  }
-
   .records-header .site-menu-open {
     font-size: 16px;
   }
@@ -984,10 +991,13 @@
      record overlaps the sleeve's top edge (of the sleeve) */
   --disc-of-art: 0.78;
   --overlap: 0.22;
-  /* the record and the sleeve fit above the fold with room for the
-     title; a short screen keeps a sleeve worth looking at, the text below
-     it scrolls instead */
-  --art: min(calc(100vw - 2 * var(--gutter)), 440px, max(calc((100dvh - var(--top) - 150px) / 1.56), 200px));
+  /* the record and the sleeve fit above the fold with the text up to
+     Listen under them (owner, 2026-11-08: every stacked layout, not only a
+     phone); --below is that text, from the title's top to Listen's bottom
+     with a two-line title, plus its margins. A short screen keeps a sleeve
+     worth looking at, and the text below it scrolls instead */
+  --below: 400px;
+  --art: min(calc(100vw - 2 * var(--gutter)), 440px, max(calc((100dvh - var(--top) - var(--below)) / 1.56), 200px));
   --disc: calc(var(--art) * var(--disc-of-art));
   --art-top: calc(var(--top) + var(--drop) + var(--disc) - var(--art) * var(--overlap));
   --text-top: calc(var(--art-top) + var(--art) + 24px);
@@ -1062,17 +1072,14 @@
   transform: none;
 }
 
-/* a phone (owner, 2026-11-08): the record and sleeve shrink together so the
-   title, the lines under it and Listen fit on the first screen of an 844 px
-   phone, and the top spacing scales down with the gutter (desktop: 40 px
-   above the name, 48 px gutter; phone: 22 px, 20 px gutter), so "Back to the
-   Gallery" sits just under the header line and the record under it. 330 px
-   is the text from the title's top to Listen's bottom (a two-line title)
-   plus its margins; a shorter phone keeps a 200 px sleeve and scrolls. */
+/* a phone (owner, 2026-11-08): smaller text needs less room below, and the
+   top spacing scales down with the gutter (desktop: 40 px above the name,
+   48 px gutter; phone: 22 px, 20 px gutter), so "Back to the Gallery" sits
+   just under the header line and the record under it */
 @media (max-width: 600px) {
   .is-vertical .record-frame {
     --top: 84px;
-    --art: min(calc(100vw - 2 * var(--gutter)), 440px, max(calc((100dvh - var(--top) - 330px) / 1.56), 200px));
+    --below: 330px;
   }
 }
 

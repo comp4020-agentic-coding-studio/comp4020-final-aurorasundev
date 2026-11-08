@@ -93,11 +93,15 @@ export function renderReadmePage(readmePath: string, language: keyof typeof PAGE
       .menu-links { display: flex; flex-direction: column; align-self: stretch; margin-top: 6px; border-top: 1px solid #cfcbc2; }
       .menu-links a { display: flex; justify-content: flex-end; align-items: center; min-height: 52px; border-bottom: 1px solid #cfcbc2; color: var(--ink); font-size: 20px; text-decoration: none; }
       .menu-links a:last-child { border-bottom: 0; }
-      @media (max-width: 600px) {
-        body { font-size: 17px; }
-        header { align-items: center; padding: 28px 22px 0; }
+      /* below 860 px, as the space and the Gallery fold theirs */
+      @media (max-width: 860px) {
+        header { align-items: center; }
         header nav { display: none; }
         .menu-open { display: block; }
+      }
+      @media (max-width: 600px) {
+        body { font-size: 17px; }
+        header { padding: 28px 22px 0; }
         .wordmark { font-size: 26px; }
         main { padding: 40px 22px 72px; }
         main h1 { font-size: 46px; }
