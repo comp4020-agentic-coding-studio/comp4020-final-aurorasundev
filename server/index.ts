@@ -48,8 +48,10 @@ const artifactWorker = createArtifactWorker(db, artifactProvider, {
   // the burn's fire may end: the paper's id only, never its record
   onSettled: (paperId) => broadcast("paper:extraction_settled", { id: paperId }),
 });
-const readmeHtml = renderReadmePage(resolve(root, "README.md"));
-const readmeZhHtml = renderReadmePage(resolve(root, "README.zh.md"), "zh");
+// each About page twice: arrived at from the space (or directly), or from the Gallery
+const readmeHtml = { space: renderReadmePage(resolve(root, "README.md")), gallery: renderReadmePage(resolve(root, "README.md"), "en", "gallery") };
+const readmeZhHtml = { space: renderReadmePage(resolve(root, "README.zh.md"), "zh"), gallery: renderReadmePage(resolve(root, "README.zh.md"), "zh", "gallery") };
+const readmeFrom = (q: unknown): "space" | "gallery" => (q === "gallery" ? "gallery" : "space");
 const dist = resolve(root, "dist");
 
 const app = express();
@@ -96,12 +98,12 @@ app.get(/^\/gallery\/?$/, (_req, res, next) => {
   res.set("Cache-Control", "no-cache").type("html").send(galleryHtml);
 });
 
-app.get("/readme/", (_req, res) => {
-  res.type("html").send(readmeHtml);
+app.get("/readme/", (req, res) => {
+  res.type("html").send(readmeHtml[readmeFrom(req.query.from)]);
 });
 // the About page in Chinese: a translation of README.md, which stays as it is
-app.get(/^\/readme\/zh\/?$/, (_req, res) => {
-  res.type("html").send(readmeZhHtml);
+app.get(/^\/readme\/zh\/?$/, (req, res) => {
+  res.type("html").send(readmeZhHtml[readmeFrom(req.query.from)]);
 });
 const docs = resolve(root, "docs");
 if (existsSync(docs)) app.use("/readme/docs", express.static(docs));

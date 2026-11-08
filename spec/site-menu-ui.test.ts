@@ -82,7 +82,7 @@ it("the Gallery's menu holds its own places, with the full way back to the space
   expect(menu()).toBeNull();
   await press(host.querySelector(".site-menu-open"));
   expect(places()).toEqual(["Back to the space", "About", "中/EN"]);
-  expect([...menu()!.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toEqual(["/", "/readme/"]);
+  expect([...menu()!.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toEqual(["/", "/readme/?from=gallery"]);
 });
 
 it("a press on the backdrop closes it, a press on the sheet does not", async () => {

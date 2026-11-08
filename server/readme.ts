@@ -21,9 +21,34 @@ const markdown = new Marked({
 // The About page in each interface language: README.md in English at
 // /readme/, its translation README.zh.md at /readme/zh/. Each links to the other.
 const PAGES = {
-  en: { lang: "en-AU", title: "About Throwaway", back: "Back to the space", menu: "Menu", close: "Close", other: { href: "/readme/zh/", lang: "zh-CN", label: "中文" } },
-  zh: { lang: "zh-CN", title: "关于 Throwaway", back: "回到空间", menu: "菜单", close: "关闭", other: { href: "/readme/", lang: "en", label: "English" } },
+  en: {
+    lang: "en-AU",
+    title: "About Throwaway",
+    back: "Back to the space",
+    backGallery: "Back to the Gallery",
+    toGallery: "Go to the Gallery",
+    menu: "Menu",
+    close: "Close",
+    other: { href: "/readme/zh/", lang: "zh-CN", label: "中文" },
+  },
+  zh: {
+    lang: "zh-CN",
+    title: "关于 Throwaway",
+    back: "回到空间",
+    backGallery: "回到展馆",
+    toGallery: "去展馆看看",
+    menu: "菜单",
+    close: "关闭",
+    other: { href: "/readme/", lang: "en", label: "English" },
+  },
 } as const;
+
+// Where the visitor came from, as the link they followed said (the Gallery's
+// About link adds ?from=gallery). It only chooses which fixed page is sent:
+// arriving from the Gallery, the way back to it comes first; from anywhere
+// else the space comes first and the Gallery is offered as a place to go.
+// Nothing is stored or logged.
+export type ReadmeFrom = "space" | "gallery";
 
 // A line break inside a Chinese paragraph would render as a stray space
 // between two characters; Chinese runs straight on, into and out of a link
@@ -34,8 +59,20 @@ const joinCjkLines = (md: string): string =>
 
 // Rendered server-side so the page carries the full README with no script:
 // spec/invariants.test.ts reads the headings straight from this HTML.
-export function renderReadmePage(readmePath: string, language: keyof typeof PAGES = "en"): string {
+export function renderReadmePage(readmePath: string, language: keyof typeof PAGES = "en", from: ReadmeFrom = "space"): string {
   const page = PAGES[language];
+  const otherHref = from === "gallery" ? `${page.other.href}?from=gallery` : page.other.href;
+  const places =
+    from === "gallery"
+      ? [
+          { href: "/gallery/", label: page.backGallery },
+          { href: "/", label: page.back },
+        ]
+      : [
+          { href: "/", label: page.back },
+          { href: "/gallery/", label: page.toGallery },
+        ];
+  const placeLinks = (cls: string): string => places.map((p) => `<a class="${cls}" href="${p.href}">${p.label}</a>`).join("\n        ");
   const source = readFileSync(readmePath, "utf8");
   const body = markdown.parse(language === "zh" ? joinCjkLines(source) : source, { async: false });
   return `<!doctype html>
@@ -114,16 +151,16 @@ export function renderReadmePage(readmePath: string, language: keyof typeof PAGE
     <header>
       <a class="wordmark" href="/">Throwaway</a>
       <nav>
-        <a class="other-lang" href="${page.other.href}" lang="${page.other.lang}" hreflang="${page.other.lang}">${page.other.label}</a>
-        <a class="back" href="/">${page.back}</a>
+        <a class="other-lang" href="${otherHref}" lang="${page.other.lang}" hreflang="${page.other.lang}">${page.other.label}</a>
+        ${placeLinks("back")}
       </nav>
       <button type="button" class="menu-open" aria-haspopup="dialog" aria-expanded="false">${page.menu}</button>
       <dialog class="menu" aria-label="${page.menu}">
         <div class="menu-sheet">
           <button type="button" class="menu-close">${page.close}</button>
           <div class="menu-links">
-            <a href="/">${page.back}</a>
-            <a href="${page.other.href}" lang="${page.other.lang}" hreflang="${page.other.lang}">${page.other.label}</a>
+            ${placeLinks("place")}
+            <a href="${otherHref}" lang="${page.other.lang}" hreflang="${page.other.lang}">${page.other.label}</a>
           </div>
         </div>
       </dialog>

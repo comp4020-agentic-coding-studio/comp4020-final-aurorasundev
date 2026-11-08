@@ -164,4 +164,6 @@ export function useLangToggle() {
 }
 
 // The About page in the chosen language
-export const aboutHref = (lang: Lang): string => (lang === "zh" ? "/readme/zh/" : "/readme/");
+// (from the Gallery, so the About page offers the way back to it first)
+export const aboutHref = (lang: Lang, from: "space" | "gallery" = "space"): string =>
+  (lang === "zh" ? "/readme/zh/" : "/readme/") + (from === "gallery" ? "?from=gallery" : "");

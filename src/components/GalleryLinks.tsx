@@ -18,7 +18,7 @@ export function GalleryLinks() {
           </>
         )}
       </a>
-      <a className="header-link header-about" href={aboutHref(t.lang)}>
+      <a className="header-link header-about" href={aboutHref(t.lang, "gallery")}>
         {t("About")}
       </a>
       <LangToggle />

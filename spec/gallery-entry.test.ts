@@ -283,7 +283,7 @@ describe("the entry page", () => {
     expect(mark.getAttribute("aria-label")).toBe("The Throwaway Gallery");
     expect(mark.querySelector(".wm-old")!.textContent).toBe("Throwaway");
     expect(mark.querySelector(".wm-name")!.textContent).toBe("The Throwaway Gallery");
-    expect([...host.querySelectorAll(".records-header a")].map((a) => a.getAttribute("href"))).toEqual(["/gallery/", "/", "/readme/"]);
+    expect([...host.querySelectorAll(".records-header a")].map((a) => a.getAttribute("href"))).toEqual(["/gallery/", "/", "/readme/?from=gallery"]);
     // the Enter hint is a real, focusable button
     const enter = host.querySelector<HTMLButtonElement>(".entry-enter")!;
     expect(enter.tagName).toBe("BUTTON");
