@@ -4,25 +4,25 @@ A shared anonymous space for things you are ready to put down.
 
 ## What does good mean here?
 
-Throwaway began with something I recognise: keeping a thought or feeling
-bottled up for too long and wanting somewhere to leave it. I built this room
-for someone carrying an unfinished conversation, regret, anger, or a thought
-they cannot yet explain. They may visit once, or come back to leave another
-paper and read what others have left. They can write without attaching their
-name to the feeling. Good means giving that feeling a way out, and giving
+Throwaway began with something I recognise. Sometimes I keep a thought or
+feeling bottled up for too long and want somewhere to leave it. I built this
+room for someone carrying an unfinished conversation, regret, anger, or a
+thought they cannot yet explain. They may visit once, or come back to read
+and write again. Good means giving that feeling a way out and giving
 someone else a chance to recognise themselves in it.
 
-Robin Sloan's [family messaging app](https://www.robinsloan.com/notes/home-cooked-app/)
-gave me a way to think about scale. Throwaway is open to strangers, but a
-visit can be worthwhile even if all you do is read one paper. I left out
-rankings, comments, public profiles and search so there is room for that
-kind of visit. An optional account lets you find your own papers and see
-what they became in a private view. With no audience, it gives no reason
-to perform.
+For the writer, that starts with a blank sheet. I had read about expressive
+writing and wanted people to put a feeling into their own words without
+attaching their name to it. Lin Guo's review found a small reduction in
+distress symptoms at follow-up. [Guo, 2023](https://doi.org/10.1111/bjc.12408)
 
-I want visitors to understand who can burn their paper before they choose
-how to leave it. The room is available in English and Simplified Chinese,
-and each paper stays in the words its writer chose.
+A reader might stay just long enough to open one paper. Robin Sloan's
+[family messaging app](https://www.robinsloan.com/notes/home-cooked-app/)
+gave me a way to think about why that can be enough, even in a room open
+to strangers. I left out rankings, comments, public profiles and search
+so there is room for that kind of visit. An optional account lets you
+find your own papers and see what they became in a private view. With no
+audience, it gives no reason to perform.
 
 In [Popcannibal's Kind Words](https://popcannibal.itch.io/kindwords),
 strangers answer anonymous requests with letters of comfort or advice.
@@ -45,32 +45,36 @@ Release hands it to someone who has witnessed the paper. The paper hangs
 above the furnace until someone places it inside, then burns from the bottom
 up and collapses into ash.
 
-Burning can also give a Release paper another life in the Gallery. The
-original words are gone, and the new work stands on its own. A paper may
-become an image with a short piece of music. I hope that possibility makes
-people curious enough to write, release a paper and return to see what
-discarded thoughts can become. For me, rebirth means a change in feeling:
-sadness towards brightness, anger towards calm, powerlessness towards energy.
-[Matt Stone's Goodgrowth case study](https://tympanus.net/codrops/2026/08/27/goodgrowth-boot-sequences-spinning-discs-and-the-art-of-the-portfolio/)
-shaped the Gallery's orbit and central spinning disc; I used paper sleeves and
-vinyl to give each work its own moment.
+The fire gives the paper an ending. I built the Gallery to show what
+could come after. When a Release paper burns, its words are cleared and
+it may leave an image, sometimes with music. I wanted sadness to turn
+towards brightness and anger towards calm. Nick Cave describes finding
+his way back to wonder through songwriting. I hope seeing or hearing
+what a discarded thought can become brings a little joy and
+gives someone a reason to write their own paper.
+[Nick Cave, The Red Hand Files](https://www.theredhandfiles.com/writing-challenge-skeleton-tree/)
 
-I can check some of these promises.
+I used paper sleeves and vinyl to give each work its own moment. The orbit
+and central spinning disc came from
+[Matt Stone's Goodgrowth case study](https://tympanus.net/codrops/2026/08/27/goodgrowth-boot-sequences-spinning-discs-and-the-art-of-the-portfolio/).
+
 [CLAUDE.md](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/CLAUDE.md)
-sets out the rules;
+sets the rules. The
 [witness checks](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/spec/witness.test.ts),
 [burn checks](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/spec/burn.test.ts)
-and
-[real-time checks](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/spec/realtime.test.ts)
-protect what happens between visitors. But I have to judge whether it feels
-like release. I compared desktop and phone views with the paper and Gallery
-references, looking for a sheet that stays readable, fire that reaches ash,
-and movement that keeps objects in place. I corrected a burn that ended
-abruptly and a record that moved in front of its sleeve too early. For the
-Gallery, I will judge whether the image and music carry one coherent emotional
-turn.
-[PROCESS.md](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/PROCESS.md)
-records those corrections.
+and [real-time checks](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/spec/realtime.test.ts)
+protect what happens between visitors. The
+[Gallery checks](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/spec/artifact-lifecycle.test.ts#L98)
+cover source deletion and Release-only generation.
+
+To judge how letting go felt, I compared desktop and phone views with
+my references, looking for a readable sheet, fire that reached ash and
+movement that kept objects in place. I fixed a burn that ended abruptly
+and a record that moved in front of its sleeve too early. [PROCESS.md](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/PROCESS.md)
+
+A listener outside the project heard a clear difference between two
+Gallery tracks and liked the music, though the intended moods came
+through less clearly. [Listening notes](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/blob/main/docs/adr/008-rebirth-reversal.md#listening-check)
 
 ## How to use Throwaway
 

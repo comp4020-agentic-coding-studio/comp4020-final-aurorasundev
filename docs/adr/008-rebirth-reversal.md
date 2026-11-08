@@ -5,9 +5,8 @@ Status: accepted and implemented on 2026-10-30 in
 Deployed on 2026-11-04 with
 [`fa446d8`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/fa446d8)
 in [run 41795798041](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/actions/runs/41795798041).
-Automated checks cover the implementation. A comparison of new images
-and browser-performed scores based on briefs from the real provider
-has yet to be recorded.
+Automated checks cover the implementation. A [listening check](#listening-check)
+records one person's response to two Gallery tracks.
 
 ## Context
 
@@ -127,6 +126,13 @@ the new tempo table is an acceptable, scoped cost, not a correctness bug.
   public contract shape.
 - Backfill is not re-run as part of this change, and this ADR does not
   recommend re-running it.
+
+## Listening check
+
+I asked someone outside the project to compare two Gallery tracks, one
+intended to sound bright and the other calm. They heard a clear
+difference between them and liked the music. The moods they heard only
+partly matched what I had in mind.
 
 ## See also
 
