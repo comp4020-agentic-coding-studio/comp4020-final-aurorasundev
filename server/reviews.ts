@@ -16,6 +16,7 @@ export const MAX_ATTEMPTS = 3;
 // automated decisions per paper before further reports go to a person, so a
 // stream of reports can't buy unlimited paid rechecks
 export const MAX_RUNS = 3;
+export const SESSION_PURGE_MS = 60 * 60 * 1000;
 
 export type WorkerOptions = { retryDelaysMs?: number[]; intervalMs?: number; now?: () => number };
 
@@ -32,6 +33,7 @@ export function createReviewWorker(db: DB, provider: Provider | null, options: W
   let running: Promise<void> | null = null;
   let again = false;
   let stopped = false;
+  let sessionsPurgedAt = -Infinity;
 
   const set = (id: string, fields: Record<string, string | number | null>): void => {
     const keys = Object.keys(fields);
@@ -46,6 +48,13 @@ export function createReviewWorker(db: DB, provider: Provider | null, options: W
       .prepare("UPDATE report_reviews SET state = 'retry_wait', lease_until = NULL, next_attempt_at = ? WHERE state = 'running' AND lease_until < ?")
       .run(t, t).changes;
     if (recovered) log("review", { outcome: "lease_recovered", count: recovered });
+    // Expired sessions (a cookie unused for a year) are otherwise only
+    // removed on sign-out. Hourly is plenty; the count is all that's logged.
+    if (now() - sessionsPurgedAt >= SESSION_PURGE_MS) {
+      sessionsPurgedAt = now();
+      const expired = db.prepare("DELETE FROM sessions WHERE expires_at < ?").run(t).changes;
+      if (expired) log("sessions", { outcome: "purged", count: expired });
+    }
   }
 
   // Operator decisions written by the private CLI, applied here so the
