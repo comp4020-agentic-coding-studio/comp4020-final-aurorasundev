@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Router } from "express";
+import { clientAddress, windowCounter } from "./address.ts";
 import { beginReleaseExtraction, extractionStatus, type ReleaseSource } from "./artifacts/store.ts";
 import { activeTotal, bumpRevision, currentRevision, requestDigest, serverSecret, type DB } from "./db.ts";
 import { broadcast } from "./events.ts";
@@ -20,6 +21,35 @@ export const WINDOW_SIZE = 12;
 // the client window reaches 25 on a wide screen (src/lib/space-window.ts)
 const MAX_SAMPLE = 32;
 const MAX_EXCLUDE = 32;
+// Saving costs money: every new paper is one moderation request, and a
+// Release paper another for its brief when it burns. A fresh identity is free
+// to make, so saves are limited per address as well as per identity. Only
+// papers actually saved count; a retry of a saved one and a refusal are free.
+// - per identity, 10 an hour: far more than a person writes by hand (a paper
+//   is a considered act, not a chat line), small enough that a script reusing
+//   one cookie stops quickly.
+// - per address, 30 an hour: generous, because a whole class may share one
+//   campus NAT address during a crit; it only bounds a script that keeps
+//   minting identities from one machine.
+export const SAVE_LIMITS = { perIdentityHour: 10, perAddressHour: 30 };
+export type SaveLimits = typeof SAVE_LIMITS;
+const HOUR_MS = 60 * 60 * 1000;
+const RATE_LIMITED = { code: "rate_limited", error: "Too many papers for now. Try again later." } as const;
+
+// SAVES_PER_IDENTITY_HOUR and SAVES_PER_ADDRESS_HOUR override the defaults.
+// With the fixture provider (local tests and CI only; Fly refuses it) every
+// spec shares one address, so the address limit is lifted unless it is set.
+export function saveLimitsFromEnv(env: NodeJS.ProcessEnv = process.env, fixture = false): SaveLimits {
+  const read = (name: string, fallback: number): number => {
+    const n = Number(env[name]);
+    return Number.isInteger(n) && n > 0 ? n : fallback;
+  };
+  return {
+    perIdentityHour: read("SAVES_PER_IDENTITY_HOUR", SAVE_LIMITS.perIdentityHour),
+    perAddressHour: read("SAVES_PER_ADDRESS_HOUR", fixture ? 1_000_000 : SAVE_LIMITS.perAddressHour),
+  };
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // A comma-separated list of paper ids, or null if it isn't one (too many,
@@ -291,8 +321,10 @@ export function papersRouter(
   // after a fresh Release burn has committed and been answered; null when
   // records are not being made, so the note is never read
   onIgnite: ((ignition: Ignition) => void) | null = null,
+  limits: SaveLimits = SAVE_LIMITS,
 ): Router {
   const router = Router();
+  const savedByAddress = windowCounter(HOUR_MS, limits.perAddressHour);
 
   // A random handful of what is here, for the first view and for exploring.
   // `exclude` (the papers already on screen, and a few just seen) steers it
@@ -415,7 +447,22 @@ export function papersRouter(
   // Checks still running, by identity and submission key, so a double click
   // or a retry during a slow check waits for the same answer instead of
   // paying for a second one. One instance, so memory is enough.
-  const inFlight = new Map<string, { digest: string; verdict: Promise<Verdict> }>();
+  const inFlight = new Map<string, { digest: string; verdict: Promise<Verdict>; ownerId: string; address: string }>();
+
+  // Which limit one more new paper would break, if any. Checks still in
+  // flight count as saves, so a burst of parallel requests can't slip past
+  // while each waits for its check.
+  const overLimit = (ownerId: string, address: string): "identity" | "address" | null => {
+    const pending = [...inFlight.values()];
+    const savedByOwner = (
+      db
+        .prepare("SELECT COUNT(*) AS n FROM papers WHERE owner_identity_id = ? AND created_at > ?")
+        .get(ownerId, new Date(Date.now() - HOUR_MS).toISOString()) as { n: number }
+    ).n;
+    if (savedByOwner + pending.filter((f) => f.ownerId === ownerId).length >= limits.perIdentityHour) return "identity";
+    if (savedByAddress.count(address) + pending.filter((f) => f.address === address).length >= limits.perAddressHour) return "address";
+    return null;
+  };
 
   router.post("/papers", async (req, res) => {
     const ownerId = identityFor(db, req);
@@ -435,6 +482,7 @@ export function papersRouter(
       return;
     }
     const submission = valid.value;
+    const address = clientAddress(req);
 
     // A retry of a saved submission answers with its current state and never
     // reaches the provider, even while the provider is down.
@@ -447,7 +495,16 @@ export function papersRouter(
         return;
       }
       if (!flight) {
+        // before the provider is asked, so a refused request costs nothing
+        const limited = overLimit(ownerId, address);
+        if (limited) {
+          log("create", { ...person(ownerId), outcome: "rate_limited", limit: limited });
+          res.status(429).json(RATE_LIMITED);
+          return;
+        }
         flight = {
+          ownerId,
+          address,
           digest: submission.digest,
           verdict: checkContent({ paper_text: submission.content, paper_image: submission.drawing, report_reason: null, report_note: null }).finally(() =>
             inFlight.delete(flightKey),
@@ -477,7 +534,10 @@ export function papersRouter(
     }
     const { id, version, status, revision, total, fresh } = result.value;
     log("create", { ...person(ownerId), paper: id, mode: submission.mode.toLowerCase(), outcome: fresh ? "created" : "retry", revision });
-    if (fresh) broadcast("paper:created", { id, version, revision, active_total: total, op: key });
+    if (fresh) {
+      savedByAddress.hit(address);
+      broadcast("paper:created", { id, version, revision, active_total: total, op: key });
+    }
     res.status(201).json({
       paper: { id, version, status: status.toLowerCase() },
       total,

@@ -11,7 +11,7 @@ import { accountsRouter } from "./accounts.ts";
 import { broadcast, closeAllStreams, eventsRouter } from "./events.ts";
 import { log, person, setAliasKey } from "./log.ts";
 import { check, providerFromEnv } from "./moderation.ts";
-import { papersRouter } from "./papers.ts";
+import { papersRouter, saveLimitsFromEnv } from "./papers.ts";
 import { renderReadmePage } from "./readme.ts";
 import { reportsRouter } from "./reports.ts";
 import { createReviewWorker } from "./reviews.ts";
@@ -67,7 +67,12 @@ app.get("/api/safety", (_req, res) => {
 });
 app.use(
   "/api",
-  papersRouter(db, (payload) => check(provider, payload), artifactWorker.enabled ? (ignition) => void artifactWorker.extract(ignition) : null),
+  papersRouter(
+    db,
+    (payload) => check(provider, payload),
+    artifactWorker.enabled ? (ignition) => void artifactWorker.extract(ignition) : null,
+    saveLimitsFromEnv(process.env, provider?.name === "fixture"),
+  ),
 );
 app.use("/api", galleryRouter(db, artifactDir, () => artifactWorker.enabled, () => void artifactWorker.wake(), () => musicEnabled));
 app.use("/api", reportsRouter(db, () => void worker.wake()));

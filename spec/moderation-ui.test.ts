@@ -106,6 +106,19 @@ it("keeps a refused publication editable and submits revised words with a new ke
   expect(thrown).toHaveBeenCalledTimes(1);
 });
 
+it("shows a save limit as a plain error and keeps the draft editable", async () => {
+  control.create.mockRejectedValueOnce(new ApiError(429, "rate_limited", "Too many papers for now. Try again later."));
+  const thrown = vi.fn();
+  await act(async () => root.render(createElement(WriteDialog, { safety: { provider: "fixture", reports: true }, offline: false,
+    onCancel: vi.fn(), onThrown: thrown, pendingOps: new Set<string>() })));
+  await readyDraft(); await click("Crumple & throw");
+  expect(host.textContent).toContain("Too many papers for now. Try again later.");
+  const draft = host.querySelector<HTMLTextAreaElement>("textarea")!;
+  expect(draft.value).toBe("My unfinished thought.");
+  expect(draft.readOnly).toBe(false);
+  expect(thrown).not.toHaveBeenCalled();
+});
+
 it("retries an unconfirmed publication with the original draft and key", async () => {
   control.create.mockRejectedValueOnce(new TypeError("reply lost"))
     .mockResolvedValueOnce({ paper: { id: "saved", status: "ACTIVE", version: 1 }, total: 1, revision: 1, offer_account: false });

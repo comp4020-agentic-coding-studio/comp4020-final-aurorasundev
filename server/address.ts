@@ -12,16 +12,18 @@ export function clientAddress(req: Request): string {
   return req.socket.remoteAddress ?? "unknown";
 }
 
-// A fixed-window counter per key that forgets old windows and caps how many
+// A fixed-window counter (`count` reads the current window without adding) per key that forgets old windows and caps how many
 // keys it holds, so an address flood can't grow memory without bound.
 export function windowCounter(windowMs: number, limit: number, maxKeys = 10_000) {
   const hits = new Map<string, { count: number; since: number }>();
+  const count = (key: string, now = Date.now()): number => {
+    const entry = hits.get(key);
+    if (entry && now - entry.since > windowMs) hits.delete(key);
+    return hits.get(key)?.count ?? 0;
+  };
   return {
-    blocked(key: string, now = Date.now()): boolean {
-      const entry = hits.get(key);
-      if (entry && now - entry.since > windowMs) hits.delete(key);
-      return (hits.get(key)?.count ?? 0) >= limit;
-    },
+    count,
+    blocked: (key: string, now = Date.now()): boolean => count(key, now) >= limit,
     hit(key: string, now = Date.now()): void {
       const entry = hits.get(key);
       if (entry) {
