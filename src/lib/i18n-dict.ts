@@ -252,6 +252,7 @@ export const SERVER_ZH: Record<string, string> = {
   "operation_conflict|This report was already sent for something else.": "这份举报已经为别的内容发送过。",
   operation_conflict: "这个请求已经用过了。",
   paper_gone: "这张纸已经不在这里了。",
+  "rate_limited|Too many papers for now. Try again later.": "暂时扔出的纸太多了。请稍后再试。",
   "rate_limited|Too many reports for now. Try again later.": "举报次数暂时过多。请稍后再试。",
   "rate_limited|Too many tries. Wait a few minutes and try again.": "尝试次数过多。请等几分钟再试。",
   rate_limited: "请求过于频繁。请稍后再试。",

@@ -189,4 +189,5 @@ it("shows a known server refusal in Chinese by its code, and an unknown one in t
 
   expect(serverText("zh", "rate_limited", "Too many tries. Wait a few minutes and try again.")).toBe("尝试次数过多。请等几分钟再试。");
   expect(serverText("en", "rate_limited", "Too many tries. Wait a few minutes and try again.")).toBe("Too many tries. Wait a few minutes and try again.");
+  expect(serverText("zh", "rate_limited", "Too many papers for now. Try again later.")).toBe("暂时扔出的纸太多了。请稍后再试。");
 });
