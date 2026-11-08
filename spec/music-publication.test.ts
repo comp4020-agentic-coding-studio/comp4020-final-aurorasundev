@@ -8,7 +8,7 @@ import { fixtureArtifactProvider, newFixtureControl } from "../server/artifacts/
 import { applyArtifactAdminJobs, enqueueAdminJob, galleryPage, publishArtifact, publishedScore } from "../server/artifacts/store.ts";
 import type { CreativeBriefV2, GalleryChange } from "../server/artifacts/types.ts";
 import { createArtifactWorker } from "../server/artifacts/worker.ts";
-import { openDb, type DB } from "../server/db.ts";
+import { openDb, SCHEMA_VERSION, type DB } from "../server/db.ts";
 import { burnPaper, createPaper } from "../server/papers.ts";
 import { composeMusicScore, parseMusicScore } from "../shared/music-score.ts";
 import { CANARY, gallery, type Harness } from "./gallery-harness.ts";
@@ -285,7 +285,7 @@ describe("migration 10 on a shipped version-9 database", () => {
     v9.close();
     expect((before.artifacts as unknown[]).length).toBe(2);
     const db = quiet(() => openDb(path));
-    expect(db.pragma("user_version", { simple: true })).toBe(11);
+    expect(db.pragma("user_version", { simple: true })).toBe(SCHEMA_VERSION);
     const after = dump(db);
     const strip = (rows: unknown[]) => rows.map((r) => (({ music_score, ...rest }) => (expect(music_score).toBeNull(), rest))(r as { music_score: unknown }));
     expect(strip(after.artifacts as unknown[])).toEqual(before.artifacts);
@@ -295,7 +295,7 @@ describe("migration 10 on a shipped version-9 database", () => {
     db.close();
     // opened again, nothing moves
     const again = quiet(() => openDb(path));
-    expect(again.pragma("user_version", { simple: true })).toBe(11);
+    expect(again.pragma("user_version", { simple: true })).toBe(SCHEMA_VERSION);
     expect(dump(again)).toEqual(after);
     again.close();
   });

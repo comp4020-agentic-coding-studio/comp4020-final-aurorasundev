@@ -77,7 +77,14 @@ Following the [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owas
 - **A pepper outside the database**: the scrypt output is sealed with
   HMAC-SHA256 under `ACCOUNT_PEPPER`, a Fly secret. A copied database file
   alone gives an attacker nothing to test guesses against. The pepper must
-  never change, or every stored password stops matching.
+  never change, or every stored password stops matching. So the database
+  keeps a fingerprint of it (migration 12: HMAC-SHA256 of a fixed label
+  under the pepper, never the pepper or anything it can be recovered from),
+  and at startup a changed pepper with accounts present logs
+  `account_pepper outcome=mismatch` and switches accounts off as below,
+  rather than letting every sign-in fail as a "wrong password"; restoring
+  the original pepper switches them back on. With no accounts yet the new
+  fingerprint simply replaces the old.
 - **Fails closed**: on Fly without the pepper, accounts report themselves
   unavailable (503 `accounts_unconfigured`) and guests carry on unaffected.
   Local runs and CI use a fixed development pepper.

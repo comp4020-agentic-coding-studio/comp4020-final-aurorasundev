@@ -284,6 +284,17 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       );
       DROP TABLE return_keys;
     `),
+
+  // 12: a fingerprint of ACCOUNT_PEPPER (ADR 009), an HMAC of a fixed label
+  // under it, so a changed pepper is noticed at startup instead of every
+  // password silently failing. Never the pepper itself.
+  (db) =>
+    db.exec(`
+      CREATE TABLE pepper_fingerprint (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        value TEXT NOT NULL
+      );
+    `),
 ];
 
 // the version a database is at once every migration has run

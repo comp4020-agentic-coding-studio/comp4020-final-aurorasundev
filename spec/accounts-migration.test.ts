@@ -3,7 +3,7 @@ import { copyFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { openDb } from "../server/db.ts";
+import { openDb, SCHEMA_VERSION } from "../server/db.ts";
 
 // Migration 11 on a shipped version-10 database: accounts arrive, return
 // keys go, and every paper, identity, session and record stays put.
@@ -48,7 +48,7 @@ describe("migration 11", () => {
     expect((before.sessions as unknown[]).length).toBe(1);
 
     const db = quiet(() => openDb(path));
-    expect(db.pragma("user_version", { simple: true })).toBe(11);
+    expect(db.pragma("user_version", { simple: true })).toBe(SCHEMA_VERSION);
     expect(tables(db)).toContain("accounts");
     expect(tables(db)).not.toContain("return_keys");
     expect(db.prepare("SELECT COUNT(*) AS n FROM accounts").get()).toEqual({ n: 0 });
@@ -56,7 +56,7 @@ describe("migration 11", () => {
     db.close();
 
     const again = quiet(() => openDb(path));
-    expect(again.pragma("user_version", { simple: true })).toBe(11);
+    expect(again.pragma("user_version", { simple: true })).toBe(SCHEMA_VERSION);
     expect(dump(again)).toEqual(before);
     again.close();
   });

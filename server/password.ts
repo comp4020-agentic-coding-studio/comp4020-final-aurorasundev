@@ -27,6 +27,11 @@ export function pepperFrom(env: NodeJS.ProcessEnv = process.env): Buffer | null 
   return env.FLY_APP_NAME ? null : Buffer.from(DEV_PEPPER, "utf8");
 }
 
+// What the database keeps to notice a changed pepper: an HMAC of a fixed
+// label under it. Not the pepper, and nothing it can be read back from.
+export const pepperFingerprint = (pepper: Buffer): string =>
+  createHmac("sha256", pepper).update("throwaway-account-pepper-fingerprint-v1").digest("base64url");
+
 export const accountsConfigured = (env: NodeJS.ProcessEnv = process.env): boolean => pepperFrom(env) !== null;
 
 let running = 0;
