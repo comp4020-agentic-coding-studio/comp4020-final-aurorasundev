@@ -11,6 +11,7 @@ export const ZH = {
   About: "关于",
   "Sign in": "登录",
   Site: "站点",
+  Menu: "菜单",
   "Your papers (signed in as {name})": "你的纸（已登录为 {name}）",
   "Leave something here": "在这里留下点什么",
   "Reconnecting…": "正在重新连接…",

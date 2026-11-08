@@ -4,8 +4,8 @@ import type { ReportState } from "../lib/useGallery.ts";
 import type { GallerySound } from "../lib/useGalleryAudio.ts";
 import { GalleryWordmark } from "./GalleryWordmark.tsx";
 import { RecordPlayer } from "./RecordPlayer.tsx";
-import { LangToggle } from "./LangToggle.tsx";
-import { aboutHref, useT, type Key } from "../lib/i18n.ts";
+import { GalleryLinks } from "./GalleryLinks.tsx";
+import { useT, type Key } from "../lib/i18n.ts";
 
 // One record, opened (G02): the complete square image in its sleeve beside
 // the record, the generic title and a way to report it, in a native modal
@@ -86,16 +86,7 @@ export function RecordView({ artifact, report, frozenReason, arriving, canStep, 
       <div className="record-frame">
         <div className="records-header record-header-copy">
           <GalleryWordmark settled onHome={onHome ?? (() => false)} />
-          <nav className="records-links" aria-label={t("Site")}>
-            <a className="header-link" href="/">
-              <span className="wide-only">{t("Back to the space")}</span>
-              <span className="narrow-only">{t("Space")}</span>
-            </a>
-            <a className="header-link header-about" href={aboutHref(t.lang)}>
-              {t("About")}
-            </a>
-            <LangToggle />
-          </nav>
+          <GalleryLinks />
         </div>
         <button type="button" className="record-back" onClick={onClose}>
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">

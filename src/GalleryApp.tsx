@@ -4,8 +4,8 @@ import { GalleryOrbit, type OrbitHandle } from "./components/GalleryOrbit.tsx";
 import { GalleryMist } from "./components/GalleryMist.tsx";
 import { GalleryWordmark } from "./components/GalleryWordmark.tsx";
 import { RecordView } from "./components/RecordView.tsx";
-import { LangToggle } from "./components/LangToggle.tsx";
-import { aboutHref, useT } from "./lib/i18n.ts";
+import { GalleryLinks } from "./components/GalleryLinks.tsx";
+import { useT } from "./lib/i18n.ts";
 import { createGate, takesInput } from "./lib/gallery-progress.ts";
 import { recordReveal } from "./lib/record-reveal.ts";
 import { useEntryProgress, type EntryRefs } from "./lib/useEntryProgress.ts";
@@ -275,16 +275,7 @@ export function GalleryApp() {
 
       <header className="records-header">
         <GalleryWordmark onHome={goHome} nameRef={cornerEl} oldRef={cornerOldEl} />
-        <nav className="records-links" aria-label={t("Site")}>
-          <a className="header-link" href="/">
-            <span className="wide-only">{t("Back to the space")}</span>
-            <span className="narrow-only">{t("Space")}</span>
-          </a>
-          <a className="header-link header-about" href={aboutHref(t.lang)}>
-            {t("About")}
-          </a>
-          <LangToggle />
-        </nav>
+        <GalleryLinks />
       </header>
 
       {/* the entry (p = 0); with no motion or no WebGL, a plain title above the grid */}

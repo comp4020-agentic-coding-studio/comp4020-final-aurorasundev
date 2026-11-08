@@ -719,15 +719,20 @@
 /* --- phone (G03) ---------------------------------------------------------- */
 @media (max-width: 600px) {
   .records-header {
+    align-items: center;
     padding-top: 30px;
   }
 
+  /* the places fold into one Menu (SiteMenu.tsx, styled in app.css) */
   .records-links {
-    gap: 28px;
+    display: none;
   }
 
-  .records-links .header-link,
-  .records-links .lang-toggle {
+  .records-header .header-menu {
+    display: block;
+  }
+
+  .records-header .site-menu-open {
     font-size: 16px;
   }
 
@@ -823,23 +828,14 @@
     font-size: 16px;
   }
 
-  /* the phone's opened record is the stacked layout (.is-vertical, below).
-     The title (GalleryWordmark) and the nav (Space/About/lang) no longer
-     fit on one line at phone widths, so the nav wraps to its own row below
-     the title; "Back to the Gallery" moves down to clear both rows. */
+  /* the phone's opened record is the stacked layout (.is-vertical, below);
+     its header is one row again, the places behind the Menu */
   .record-header-copy {
-    flex-wrap: wrap;
-    row-gap: 8px;
-    padding: 24px 0 14px;
-  }
-
-  .record-header-copy .records-links {
-    flex-basis: 100%;
-    justify-content: flex-start;
+    padding: 30px 0 16px;
   }
 
   .record-back {
-    top: 118px;
+    top: 80px;
     z-index: 1;
     font-size: 15px;
   }
@@ -1424,21 +1420,16 @@
   opacity: 0;
 }
 
-/* a phone: the Gallery's name at a smaller size, so it fits beside "Space"
-   and "About" on a 360-390px screen */
+/* a phone: the Gallery's name at a smaller size, so it fits on one line
+   beside the Menu on a 360-390px screen */
 @media (max-width: 600px) {
   .records-header .gallery-wordmark {
     font-size: 19px;
   }
 }
 
-/* the narrowest phones: the links close up a little beside it */
+/* the narrowest phones: the name a touch smaller still at 360 px */
 @media (max-width: 380px) {
-  .records-links {
-    gap: 16px;
-  }
-
-  /* and the name a touch smaller, so "Space" never touches it at 360 px */
   .records-header .gallery-wordmark {
     font-size: 17px;
   }
