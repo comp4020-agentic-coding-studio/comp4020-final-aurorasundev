@@ -7,6 +7,7 @@ import { openDb, SCHEMA_VERSION } from "../server/db.ts";
 
 // Migration 11 on a shipped version-10 database: accounts arrive, return
 // keys go, and every paper, identity, session and record stays put.
+// Migration 13 adds the recovery code column without touching accounts.
 
 const quiet = <T>(run: () => T): T => {
   const log = console.log;
@@ -59,5 +60,33 @@ describe("migration 11", () => {
     expect(again.pragma("user_version", { simple: true })).toBe(SCHEMA_VERSION);
     expect(dump(again)).toEqual(before);
     again.close();
+  });
+});
+
+// Migration 13 on a version-12 database that already holds an account and
+// its session: only the empty recovery_hash column arrives; the account, its
+// password and its session are untouched, and recovery can't use a code
+// nobody was shown.
+describe("migration 13", () => {
+  it("adds an empty recovery code column and leaves accounts and sessions exactly as they were", () => {
+    const path = version10();
+    // take it to 12 with the shipped migrations, then add an account at 12
+    const db12 = quiet(() => openDb(path));
+    db12.pragma("user_version = 12");
+    db12.exec("ALTER TABLE accounts DROP COLUMN recovery_hash");
+    const owner = (db12.prepare("SELECT identity_id AS id FROM sessions LIMIT 1").get() as { id: string }).id;
+    db12
+      .prepare("INSERT INTO accounts (identity_id, username, username_key, password_hash, created_at, updated_at) VALUES (?, 'Mira', 'mira', 'scrypt1$x', 'then', 'then')")
+      .run(owner);
+    const accountsBefore = db12.prepare("SELECT * FROM accounts").all() as Record<string, unknown>[];
+    const before = dump(db12);
+    db12.close();
+
+    const db = quiet(() => openDb(path));
+    expect(db.pragma("user_version", { simple: true })).toBe(SCHEMA_VERSION);
+    expect(db.prepare("SELECT * FROM accounts").all()).toEqual(accountsBefore.map((a) => ({ ...a, recovery_hash: null })));
+    // every other table, sessions included, row for row
+    expect(dump(db)).toEqual(before);
+    db.close();
   });
 });

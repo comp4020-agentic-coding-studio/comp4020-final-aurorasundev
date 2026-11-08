@@ -293,6 +293,14 @@ export function accountsRouter(
       res.status(401).json(wrong);
       return;
     }
+    // a recovery may have replaced the password while this one was being
+    // checked: the old password must not win a session after the reset
+    const current = db.prepare("SELECT password_hash FROM accounts WHERE identity_id = ?").get(row.identity_id) as { password_hash: string } | undefined;
+    if (current?.password_hash !== row.password_hash) {
+      log("login", { outcome: "invalid" });
+      res.status(401).json(wrong);
+      return;
+    }
     const guestId = identityFor(db, req);
     const moved = guestId && guestId !== row.identity_id && !accountFor(db, guestId) ? db.transaction(() => adoptGuest(db, guestId, row.identity_id))() : 0;
     rotateSession(db, req, res, row.identity_id);

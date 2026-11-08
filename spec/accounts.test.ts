@@ -364,6 +364,24 @@ describe("recovering a forgotten password", () => {
     }
   });
 
+  it("doesn't let the old password win a session while a reset replaces it", async () => {
+    const w = await world();
+    try {
+      const username = name();
+      const code = await codeFrom(await (await w.browser()).register(username));
+      // the old-password login starts first; the reset lands while its scrypt runs
+      const [login, reset] = await Promise.all([(await w.browser()).login(username), (await w.browser()).recover(username, code)]);
+      expect(reset.status).toBe(200);
+      if (login.status === 200) {
+        // it finished before the reset, so the reset ended its session
+        const stale = { cookie: login.headers.get("set-cookie")!.split(";")[0] };
+        expect((await fetch(`${w.base}/api/account/papers`, { headers: stale })).status).toBe(401);
+      } else expect(login.status).toBe(401);
+    } finally {
+      await w.close();
+    }
+  });
+
   it("finds no code for an account made before codes existed", async () => {
     const w = await world();
     try {
