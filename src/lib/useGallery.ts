@@ -196,6 +196,8 @@ export function useGallery() {
     focus,
     // the snapshot's recent records and the way the entry's fronts join
     recent: state.recent,
+    // ids hidden during this visit, so a record met earlier is never chosen
+    hidden: state.hidden,
     front,
     retry,
     selected: openArtifact(state),

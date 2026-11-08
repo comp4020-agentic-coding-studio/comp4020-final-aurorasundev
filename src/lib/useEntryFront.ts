@@ -17,11 +17,12 @@ type Gallery = {
   moreAhead: boolean;
   loadingMore: boolean;
   loadMore: () => void;
+  hidden: Record<string, number>;
   front: (artifacts: PublicArtifact[]) => void;
 };
 
 export function useEntryFront(g: Gallery, openedAtLoad: ReadonlySet<string>, enabled: boolean) {
-  const { items, recent, loading, moreAhead, loadingMore, loadMore, front: promote } = g;
+  const { items, recent, hidden, loading, moreAhead, loadingMore, loadMore, front: promote } = g;
   // null until chosen; without the orbit (grid, reduced motion) nothing is arranged
   const [front, setFront] = useState<string[] | null>(enabled ? null : []);
   const [timedOut, setTimedOut] = useState(false);
@@ -32,7 +33,15 @@ export function useEntryFront(g: Gallery, openedAtLoad: ReadonlySet<string>, ena
     return () => clearTimeout(timer);
   }, [front, loading]);
 
-  const pool = useMemo(() => [...recent, ...items], [recent, items]);
+  // every record met while choosing, not only the current window: reading on
+  // past MAX_TILES retires the first page from the window, and an unopened
+  // record there must stay a candidate (a chosen one rejoins through
+  // `front`). A record hidden since it was met is never chosen.
+  const met = useRef(new Map<string, PublicArtifact>());
+  const pool = useMemo(() => {
+    for (const a of [...recent, ...items]) met.current.set(a.id, a);
+    return [...met.current.values()].filter((a) => hidden[a.id] === undefined || hidden[a.id] < a.version);
+  }, [recent, items, hidden]);
   // a failed first load (nothing in yet) is not "nothing more to read": the
   // retry's snapshot still gets a front
   const settled = !loading && items.length > 0 && (timedOut || frontSettled(pool, openedAtLoad, !moreAhead));

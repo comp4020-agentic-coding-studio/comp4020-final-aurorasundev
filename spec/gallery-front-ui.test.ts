@@ -188,3 +188,36 @@ it("a failed first load still gets a front once Try again succeeds", async () =>
   await emit("gallery:snapshot", { ...page([1, 2, 3]), recent: [art(9, true)] });
   expect(front()[0]).toBe(id(9));
 });
+
+it("keeps an unopened first-page record a candidate after reading on retires it from the window", async () => {
+  // 60 records, pages of 12; only record 2 (on the first page) is unopened.
+  // Reading on past 48 tiles retires the first page from the window before
+  // the pages run out; record 2 must still be chosen and rejoin the belt.
+  const all = Array.from({ length: 60 }, (_, i) => i + 1);
+  opened(all.filter((n) => n !== 2));
+  const pages = [1, 2, 3, 4].map((k) => all.slice(k * 12, k * 12 + 12));
+  pages.forEach((p, k) => control.page.mockResolvedValueOnce(page(p, k < 3 ? id(p[p.length - 1]) : null)));
+  await mount();
+  await emit("gallery:snapshot", { ...page(all.slice(0, 12), id(12)), recent: [] });
+  for (let i = 0; i < 20; i++) await act(async () => {});
+  expect(control.page).toHaveBeenCalledTimes(4);
+  expect(front()[0]).toBe(id(2));
+  expect(caption()).toBe("Record 2");
+  expect(shown().filter((x) => x === id(2))).toHaveLength(1);
+});
+
+it("never chooses a record that was hidden while the front was being chosen", async () => {
+  opened([1, 2, 3, 4]);
+  let answer: (p: GalleryPage) => void = () => {};
+  control.page.mockReturnValueOnce(new Promise<GalleryPage>((r) => (answer = r)));
+  await mount();
+  await emit("gallery:snapshot", { ...page([1, 2, 3, 4, 5], id(5)), recent: [] });
+  // record 5 is the only unopened one so far; it is hidden before the next page answers
+  await emit("artifact:hidden", { type: "artifact:hidden", revision: 2, total: 29, id: id(5), version: 2 });
+  await act(async () => answer({ ...page([6, 7, 8, 9]), revision: 2 }));
+  for (let i = 0; i < 5; i++) await act(async () => {});
+  expect(shown()).not.toContain(id(5));
+  // all three places go to records still there (a hidden choice would leave
+  // the third place to whatever ends the window, here record 9)
+  expect(front()).toEqual([id(6), id(7), id(8)]);
+});
