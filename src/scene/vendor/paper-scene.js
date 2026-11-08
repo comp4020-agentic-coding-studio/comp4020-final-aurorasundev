@@ -184,6 +184,31 @@ export function createPaperScene(container, buttonLayer, options) {
     view.lookAt(centre);
     // Keep the hearth below the caption as the camera rises around it.
     view.rotateX(Math.atan((compact ? 0.28 : 0.40) * Math.tan(THREE.MathUtils.degToRad(view.fov / 2))));
+    // Never so close that the furnace runs past the screen's sides (a tall,
+    // narrow phone): step back along the same line until it fits.
+    const maxWidth = compact ? 0.78 : 0.6;
+    const toCamera = view.position.clone().sub(centre);
+    const rim = new THREE.Vector3();
+    for (let i = 0; i < 4; i++) {
+      view.updateProjectionMatrix();
+      view.updateMatrixWorld(true);
+      const r0 = r.place.radius;
+      const top = FLOOR_VISUAL_Y + r0 * FURNACE_HEIGHT;
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2;
+        for (const y of [FLOOR_VISUAL_Y, top]) {
+          rim.set(r.place.anchor.x + Math.cos(a) * r0, y, r.place.anchor.z + Math.sin(a) * r0).project(view);
+          lo = Math.min(lo, rim.x);
+          hi = Math.max(hi, rim.x);
+        }
+      }
+      const width = (hi - lo) / 2;
+      if (width <= maxWidth) break;
+      toCamera.multiplyScalar(width / maxWidth);
+      view.position.copy(centre).add(toCamera);
+    }
     return { position: view.position.clone(), quaternion: view.quaternion.clone(), fov: view.fov };
   }
 
@@ -1315,9 +1340,9 @@ export function createPaperScene(container, buttonLayer, options) {
   const _q = new THREE.Vector3();
   const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -FLOOR_VISUAL_Y);
 
-  function screenPoint(point) {
+  function screenPoint(point, cam = camera) {
     const { w, h } = size();
-    _p.copy(point).project(camera);
+    _p.copy(point).project(cam);
     return { x: ((_p.x + 1) / 2) * w, y: ((1 - _p.y) / 2) * h };
   }
 
@@ -1351,18 +1376,33 @@ export function createPaperScene(container, buttonLayer, options) {
     return { anchor, hover, plane, radius };
   }
 
-  function ritualLayout() {
+  // Where the paper and furnace sit on screen, seen through `cam` (the
+  // current camera, or a view it is moving to).
+  function ritualLayout(cam = camera) {
     const r = ritual;
     const { anchor, hover, radius } = r.place;
-    _camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
-    const paperBottom = screenPoint(_q.copy(hover).addScaledVector(_camUp, -collisionRadius * 1.1 * RITUAL_SCALE / CLOSED_SCALE)).y;
-    const furnaceTop = screenPoint(_q.set(anchor.x, FLOOR_VISUAL_Y + radius * FURNACE_HEIGHT, anchor.z - radius)).y;
-    const furnaceBottom = screenPoint(_q.set(anchor.x, FLOOR_VISUAL_Y, anchor.z + radius)).y;
+    _camUp.set(0, 1, 0).applyQuaternion(cam.quaternion);
+    const paperBottom = screenPoint(_q.copy(hover).addScaledVector(_camUp, -collisionRadius * 1.1 * RITUAL_SCALE / CLOSED_SCALE), cam).y;
+    const furnaceTop = screenPoint(_q.set(anchor.x, FLOOR_VISUAL_Y + radius * FURNACE_HEIGHT, anchor.z - radius), cam).y;
+    const furnaceBottom = screenPoint(_q.set(anchor.x, FLOOR_VISUAL_Y, anchor.z + radius), cam).y;
     return { paperBottom, furnaceTop, furnaceBottom };
   }
 
   function emitRitualLayout() {
     if (ritual) options.onRitualLayout?.(ritualLayout());
+  }
+
+  // Says where things will be once the camera arrives at `view`, as the move
+  // starts, so the words can glide there alongside it (once, not per frame).
+  function emitRitualLayoutAt(view) {
+    if (!ritual) return;
+    const cam = camera.clone();
+    cam.position.copy(view.position);
+    cam.quaternion.copy(view.quaternion);
+    cam.fov = view.fov;
+    cam.updateProjectionMatrix();
+    cam.updateMatrixWorld(true);
+    options.onRitualLayout?.(ritualLayout(cam));
   }
 
   // Sets where the paper's crumpled centre is; the mesh hangs off it.
@@ -1575,7 +1615,11 @@ export function createPaperScene(container, buttonLayer, options) {
       return;
     }
     const f = r.furnace;
-    if (!remote) moveCamera(burnCamera(r), r.reduced ? 0.01 : 1.15);
+    if (!remote) {
+      const view = burnCamera(r);
+      moveCamera(view, r.reduced ? 0.01 : 1.15);
+      emitRitualLayoutAt(view);
+    }
     r.effect = fire.module.createBurnEffect({
       scene,
       camera,
