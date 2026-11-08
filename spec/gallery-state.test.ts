@@ -319,3 +319,15 @@ describe("the entry's recent records and fronts", () => {
     expect(s.recent).toEqual([]);
   });
 });
+
+describe("the entry's fronts in a full window", () => {
+  it("keeps every chosen front when adding one would go over the cap", () => {
+    const full = Array.from({ length: MAX_TILES }, (_, i) => i + 1);
+    const s = run([
+      { type: "snapshot", page: page(full, 5, 99, id(MAX_TILES)), recent: [art(90)] },
+      { type: "front", artifacts: [art(90), art(40), art(MAX_TILES)] },
+    ]);
+    expect(s.items).toHaveLength(MAX_TILES);
+    for (const n of [90, 40, MAX_TILES]) expect(ids(s)).toContain(id(n));
+  });
+});

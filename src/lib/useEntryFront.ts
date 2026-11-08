@@ -33,7 +33,9 @@ export function useEntryFront(g: Gallery, openedAtLoad: ReadonlySet<string>, ena
   }, [front, loading]);
 
   const pool = useMemo(() => [...recent, ...items], [recent, items]);
-  const settled = !loading && (timedOut || frontSettled(pool, openedAtLoad, !moreAhead));
+  // a failed first load (nothing in yet) is not "nothing more to read": the
+  // retry's snapshot still gets a front
+  const settled = !loading && items.length > 0 && (timedOut || frontSettled(pool, openedAtLoad, !moreAhead));
 
   // read the next page while the front still lacks unopened records; once per
   // window size, so a repeated effect can't abort the request it just made
@@ -55,10 +57,11 @@ export function useEntryFront(g: Gallery, openedAtLoad: ReadonlySet<string>, ena
   const shown = useRef<PublicArtifact[] | null>(null);
   const ordered = useMemo(() => {
     if (!front) return items;
-    const next = shown.current ? keepArrangement(shown.current, items) : withFront(items, front);
-    // the fronts lead from the first window that holds them all
-    if (shown.current || front.every((id) => items.some((a) => a.id === id))) shown.current = next;
-    return next;
+    // the `front` action lands in the same commit as the choice, so the first
+    // window here already holds the fronts; it locks the arrangement at once
+    // (a front hidden later just drops out, nothing is reshuffled)
+    shown.current = shown.current ? keepArrangement(shown.current, items) : withFront(items, front);
+    return shown.current;
   }, [items, front]);
 
   return { ready: front !== null, items: ordered, lead: front?.[0] ?? null };

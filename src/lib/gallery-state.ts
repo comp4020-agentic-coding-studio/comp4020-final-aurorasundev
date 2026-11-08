@@ -255,7 +255,8 @@ export function galleryReducer(state: GalleryState, action: GalleryAction): Gall
       const missing = action.artifacts.filter((a) => !state.items.some((b) => b.id === a.id));
       if (!missing.length) return state;
       const items = upsert(state.items, state.hidden, missing, true);
-      return { ...state, ...bound({ ...state, items }, state, "far", new Set(missing.map((a) => a.id))) };
+      // every chosen front is spared, not only the ones just added
+      return { ...state, ...bound({ ...state, items }, state, "far", new Set(action.artifacts.map((a) => a.id))) };
     }
     case "failed":
       return { ...state, loading: null, pending: [] };

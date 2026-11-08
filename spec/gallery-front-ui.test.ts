@@ -168,3 +168,23 @@ it("after the entry, a live arrival and a later snapshot leave the chosen arrang
   // the record in front is not replaced by the arrival
   expect(caption()).toBe("Record 3");
 });
+
+it("the belt's very first list already leads with a recent front from past the first page", async () => {
+  await mount();
+  await emit("gallery:snapshot", { ...page([1, 2, 3, 4], id(4)), recent: [art(20, true)] });
+  expect(control.scene.items[0][0]).toBe(id(20));
+});
+
+it("a failed first load still gets a front once Try again succeeds", async () => {
+  await mount();
+  await act(async () => {
+    FakeSource.current!.readyState = 2;
+    FakeSource.current!.onerror?.();
+  });
+  await act(async () => vi.advanceTimersByTime(2500));
+  const retry = host.querySelector<HTMLButtonElement>(".records-state button");
+  expect(retry, "the Try again button").toBeTruthy();
+  await act(async () => retry!.click());
+  await emit("gallery:snapshot", { ...page([1, 2, 3]), recent: [art(9, true)] });
+  expect(front()[0]).toBe(id(9));
+});
