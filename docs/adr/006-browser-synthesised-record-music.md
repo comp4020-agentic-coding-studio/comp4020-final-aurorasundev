@@ -118,6 +118,14 @@ are unchanged, so the browser plays every version the same way.
 v1 and v2 are frozen beside v3 (`composeMusicScoreV1`, `composeMusicScoreV2`)
 so a stored score can be reproduced from its brief and seed; tests pin v1's
 first notes and a fingerprint of v2's output for every brief. Stored scores
-are never recomposed: each record keeps the version it was published with.
-The one-time backfill script uses the current composer, and only for a
-record that has no score.
+are not recomposed automatically, and the backfill script only fills a
+record that has no score, using the current composer.
+
+**Revision (owner, 2026-11-09): the live Gallery plays v3 only.** Having
+heard the older pieces beside v3, the owner judged them too alike and
+retired them. After a backup on the machine and an off-machine copy, a
+one-off operator run re-composed the eight published records still on v1
+or v2 with v3 from their stored briefs and fresh seeds, moving the Gallery
+revision once. It was a single explicit decision, not a mode: the script
+was returned to fill-only afterwards. v1 and v2 stay frozen in the code so
+a score held anywhere else still validates and plays.

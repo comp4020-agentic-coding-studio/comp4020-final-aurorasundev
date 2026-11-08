@@ -85,8 +85,10 @@ readable centre. Keep phone controls and captions clear of the paper.
   Pages stay in id order, and there is still no latest view. Sound is
   **implemented behind `GALLERY_MUSIC_ENABLED`, which the owner turned on
   in production on 2026-10-27** (a Fly secret; unset it to switch off).
-  A one-time operator backfill scored five older records. Records without a
-  valid score remain image-only. The design is
+  A one-time operator backfill scored five older records, and on
+  2026-11-09 the owner re-composed the eight records still on v1/v2 with
+  v3, so every live record plays v3 (ADR 006 revision). The backfill script
+  only fills empty scores. Records without a valid score remain image-only. The design is
   `design/gallery/record-exhibition/music-design.md` (ADR 006): the
   existing AI musical directions plus a random seed go through the current
   composer in `shared/music-score.ts` (`throwaway-score-v3`; v1 and v2 are
