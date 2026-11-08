@@ -207,8 +207,9 @@ regenerating it on application startup.
   Push only work that passes `pnpm check` and is safe to run against the live
   database. Startup backs the database up automatically before any migration
   (`VACUUM INTO` a sibling `throwaway.sqlite.pre-v<N>-<time>.bak`, newest 3
-  kept; a failed backup stops startup, nothing migrated). Those copies share
-  the Fly volume, so still take an off-machine copy before a risky migration.
+  kept; a failed backup stops startup, nothing migrated; ADR 010). Those
+  copies share the Fly volume, so still take an off-machine copy before a
+  risky migration or a bulk operator change.
 - Manual deploy: `flyctl deploy --remote-only --ha=false -a comp4020-final-aurorasundev`.
 
 ## Rules for the agent
