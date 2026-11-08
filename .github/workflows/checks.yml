@@ -85,7 +85,28 @@ jobs:
       APP_URL: https://${{ github.event.repository.name }}.fly.dev
     steps:
       - uses: actions/checkout@v7
-      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # 1.6
+      - name: Install flyctl
+        # A pinned flyctl, fetched through the GitHub API's release asset with
+        # retries. setup-flyctl asks api.fly.io for the version and then
+        # downloads github.com/.../releases/download/...; on 2026-11-08 both
+        # answered 504 to runners for hours while the API asset still served.
+        env:
+          FLYCTL_VERSION: "0.5.4"
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          name="flyctl_${FLYCTL_VERSION}_Linux_x86_64.tar.gz"
+          asset=$(curl -fsS --retry 5 --retry-all-errors --retry-delay 5 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/superfly/flyctl/releases/tags/v${FLYCTL_VERSION}" \
+            | jq -r --arg n "$name" '.assets[] | select(.name == $n) | .url')
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" \
+            -o /tmp/flyctl.tar.gz "$asset"
+          mkdir -p "$HOME/.fly/bin"
+          tar -xzf /tmp/flyctl.tar.gz -C "$HOME/.fly/bin" flyctl
+          echo "$HOME/.fly/bin" >> "$GITHUB_PATH"
+          "$HOME/.fly/bin/flyctl" version
       - name: Deploy
         # --remote-only builds the Dockerfile on Fly's builders; --ha=false
         # keeps the app at one machine and one volume.
