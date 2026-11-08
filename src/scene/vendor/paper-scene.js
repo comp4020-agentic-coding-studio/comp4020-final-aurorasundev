@@ -779,7 +779,9 @@ export function createPaperScene(container, buttonLayer, options) {
         // with reduced motion it is simply there, without the drop
         if (ritual && !["ending", "restoring"].includes(ritual.phase)) {
           spawnPaper(id, position, false);
-          clearRitualColumn(ritual);
+          // after a resize mid-burn, the world is seen through the fitted map
+          if (ritual.fitted) fitBurnView();
+          else clearRitualColumn(ritual);
         } else if (reduceMotion()) spawnPaper(id, position, false);
         else if (cluster) {
           const paper = spawnPaper(id, position, true, arrivalDropHeight(position), randomRange(3, 4.5));
@@ -1456,6 +1458,9 @@ export function createPaperScene(container, buttonLayer, options) {
       const centre = new THREE.Vector3();
       const best = new THREE.Vector3();
       let bestRoom = -1;
+      // when every place is in the way, the least bad one
+      const fallback = new THREE.Vector3();
+      let fallbackClash = Infinity;
       for (let attempt = 0; attempt < 18; attempt++) {
         const row = 0.56 + ((depth * 0.16 + Math.floor(attempt / 3) * 0.045) % rows);
         const column = side * byWidth(0.65 + (attempt % 3 - 1) * 0.03, 0.54 + spread * 0.12 + (attempt % 3 - 1) * 0.08);
@@ -1463,12 +1468,23 @@ export function createPaperScene(container, buttonLayer, options) {
         _ray.setFromCamera(_ndc, camera);
         if (!_ray.ray.intersectPlane(plane, centre)) return;
         // Leave the header clear in both the ready and the overhead view.
-        const top = centre.clone().addScaledVector(overheadUp, collisionRadius * (scale / CLOSED_SCALE) * 1.4).project(overhead);
-        if (top.y > 0.76) continue;
+        const lift = collisionRadius * (scale / CLOSED_SCALE) * 1.4;
+        const top = centre.clone().addScaledVector(overheadUp, lift).project(overhead);
+        // ...and the words above the furnace ("It is gone." and the lines
+        // under it), which sit in the middle band below the header
+        const mid = centre.clone().project(overhead);
+        const half = Math.abs(centre.clone().addScaledVector(overheadUp, lift).project(overhead).y - mid.y);
+        const wordsHalf = byWidth(0.97, 0.36) + half * 0.6;
+        const wordsFoot = byWidth(0.2, 0.18);
+        const clash = Math.max(0, top.y - 0.76) * 10 + (Math.abs(mid.x) < wordsHalf ? Math.max(0, top.y - wordsFoot) : 0);
+        if (clash > 0) {
+          if (clash < fallbackClash) { fallbackClash = clash; fallback.copy(centre); }
+          continue;
+        }
         const room = Math.min(Infinity, ...occupied.map((at) => at.distanceToSquared(centre)));
         if (room > bestRoom) { bestRoom = room; best.copy(centre); }
       }
-      centre.copy(best);
+      centre.copy(bestRoom >= 0 ? best : fallback);
       p.parked.centre.copy(centre);
       occupied.push(centre.clone());
       p.explore = null;
@@ -1765,7 +1781,11 @@ export function createPaperScene(container, buttonLayer, options) {
 
   function relayoutRitual() {
     const r = ritual;
-    if (!PRECOMMIT.includes(r.phase)) return;
+    // after the commit only the words follow (the camera was moved above)
+    if (!PRECOMMIT.includes(r.phase)) {
+      emitRitualLayout();
+      return;
+    }
     // a resize mid-drag drops the drag, never the paper into the furnace
     if (r.phase === "dragging") {
       releaseRitualPointer();
@@ -1868,6 +1888,37 @@ export function createPaperScene(container, buttonLayer, options) {
     return { left: minX, top: minY, width: maxX - minX, height: maxY - minY };
   }
 
+  // The furnace can't move once the paper burns in it, so after a resize the
+  // camera comes to it instead: the view this width would have given a
+  // furnace placed now, scaled to the one that is already there. Opened on a
+  // phone and widened (or the reverse), the hearth looks as it would have had
+  // it started at this width. The papers set aside go where this width would
+  // put them, mapped the same way (a scale about points at the same height
+  // off the floor, so a paper resting on the floor still rests on it).
+  // Papers arriving afterwards are placed through the same map.
+  function fitBurnView() {
+    applyCamera();
+    const fresh = ritualPlacement();
+    const natural = burnCamera({ place: fresh, readyView: captureCamera() });
+    const k = ritual.place.radius / fresh.radius;
+    const centreOf = (pl) => pl.anchor.clone().add(new THREE.Vector3(0, pl.radius * FURNACE_HEIGHT * 0.5, 0));
+    const mapPoint = (v) => v.sub(centreOf(fresh)).multiplyScalar(k).add(centreOf(ritual.place));
+    clearRitualColumn({ place: fresh, readyView: captureCamera(), paper: ritual.paper, reduced: true }, true);
+    for (const p of livePapers()) {
+      if (!p.parked || p === ritual.paper) continue;
+      mapPoint(p.mesh.position);
+      mapPoint(p.parked.centre);
+      p.mesh.scale.setScalar(p.mesh.scale.x * k);
+      syncBodyToMesh(p);
+    }
+    camera.position.copy(mapPoint(natural.position.clone()));
+    camera.quaternion.copy(natural.quaternion);
+    camera.fov = natural.fov;
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld(true);
+    ritual.fitted = true;
+  }
+
   function onResize() {
     const { w, h } = size();
     cameraMove = null;
@@ -1875,12 +1926,7 @@ export function createPaperScene(container, buttonLayer, options) {
     composer.setPixelRatio(pixelRatio());
     lastDpr = window.devicePixelRatio;
     applyCamera();
-    if (ritual && ["burning", "ashes"].includes(ritual.phase)) {
-      const view = burnCamera(ritual);
-      camera.position.copy(view.position);
-      camera.quaternion.copy(view.quaternion);
-      camera.updateMatrixWorld(true);
-    }
+    if (ritual && ritual.place && !PRECOMMIT.includes(ritual.phase) && ritual.phase !== "restoring") fitBurnView();
     renderer.setSize(w, h);
     composer.setSize(w, h);
     if (ritual) relayoutRitual();

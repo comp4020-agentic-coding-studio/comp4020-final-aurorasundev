@@ -1395,8 +1395,9 @@ fieldset:disabled .choice,
 .ritual-words {
   /* sizes and gaps scale smoothly from the phone's (600px) to the
      desktop's (1200px), matching the scene's own blend */
-  --ritual-end-min: clamp(152px, calc(124px + 4.667vw), 180px);
-  --ritual-end-offset: clamp(110px, calc(40px + 11.67vw), 180px);
+  /* where the header ends, and about how tall the lines under the lead are */
+  --ritual-head: clamp(72px, calc(52px + 3.333vw), 100px);
+  --ritual-sub-h: clamp(52px, calc(30px + 3.667vw), 74px);
   position: absolute;
   top: 56%;
   left: 50%;
@@ -1427,8 +1428,8 @@ fieldset:disabled .choice,
 /* the ending is the ritual's one large moment: it arrives, rather than
    swapping in for "Letting go…" */
 .ritual.is-ashes .ritual-lead {
-  font-size: clamp(42px, calc(24px + 3vw), 60px);
-  line-height: 1.1;
+  font-size: clamp(44px, min(calc(8px + 6vw), 9.5vh), 100px);
+  line-height: 1.05;
   animation: ritual-arrive 1.1s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -1457,14 +1458,14 @@ fieldset:disabled .choice,
 }
 
 .ritual-note {
-  margin: 10px 0 0;
-  font-size: clamp(15px, calc(11px + 0.6667vw), 19px);
+  margin: 12px 0 0;
+  font-size: clamp(15px, calc(10px + 0.8333vw), 22px);
   color: var(--muted);
 }
 
 .ritual-wait {
   margin: 6px 0 0;
-  font-size: clamp(13px, calc(11px + 0.3333vw), 15px);
+  font-size: clamp(13px, calc(10px + 0.5vw), 17px);
   color: var(--muted);
   opacity: 0.85;
 }

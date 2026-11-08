@@ -82,9 +82,14 @@ export function RitualOverlay({ stage, after, outcome, error, canPlace, fallback
   // them; centred lower down when there is no scene to measure
   // (kept clear of the rim: the two lines take about 90px)
   const between = layout && precommit ? (layout.paperBottom + layout.furnaceTop) / 2 : null;
-  // above the rim and the paper burning in it (B02/B03)
-  const above = layout && !precommit ? `max(var(--ritual-end-min), calc(${layout.furnaceTop}px - var(--ritual-end-offset)))` : null;
-  const style = between !== null ? { top: between } : above !== null ? { top: above, transform: "translate(-50%, -100%)" } : undefined;
+  // above the rim and the paper burning in it (B02/B03): the three lines
+  // together sit a little below the middle of the space between the header
+  // and the furnace's rim (owner, 2026-11-09). The lead is the anchor, raised
+  // by half the hanging lines' height, so nothing moves when they arrive.
+  const above = layout && !precommit
+    ? `max(calc(var(--ritual-head) + 48px), calc(var(--ritual-head) + (${layout.furnaceTop}px - var(--ritual-head)) * 0.56 - var(--ritual-sub-h) / 2))`
+    : null;
+  const style = between !== null ? { top: between } : above !== null ? { top: above } : undefined;
 
   return (
     <section className={`ritual is-${stage}${fallback ? " is-fallback" : ""}`} aria-labelledby="ritual-title">
