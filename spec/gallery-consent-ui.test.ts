@@ -60,16 +60,16 @@ it("release_copy_explains_automatic_public_keepsake", async () => {
   await write();
   const release = host.querySelector('input[value="RELEASE"]')!.closest("label")!;
   expect(release.textContent!.replace(/\s+/g, " ")).toContain(
-    "When it burns, it becomes a record in the Gallery: an image, and often a short piece of music. Its fate is no longer yours to control. As it burns, its words and drawing are sent to OpenAI once to shape an anonymous AI image for the public Gallery. Your original words and drawing are deleted as it burns.",
+    "When it burns, it can become a Gallery record, with an image and sometimes a short piece of music. Its fate is no longer yours to control. As it burns, its words and drawing are sent to OpenAI once to shape an anonymous AI image for the public Gallery. Your original words and drawing are deleted as it burns.",
   );
-  expect(release.textContent).toMatch(/becomes a record in the Gallery/);
+  expect(release.textContent).toMatch(/can become a Gallery record/);
   // Keep makes no keepsake promise
   const keep = host.querySelector('input[value="KEEP"]')!.closest("label")!;
   expect(keep.textContent!.replace(/\s+/g, " ")).toBe(
     "Keep itIt stays in your hands. Only you may destroy it, and when it burns it leaves no record. Sign in to find it again from any browser.",
   );
   expect(keep.textContent).toMatch(/leaves no record/);
-  expect(keep.textContent).not.toMatch(/Gallery|OpenAI|becomes a record/);
+  expect(keep.textContent).not.toMatch(/Gallery|OpenAI|can become a Gallery record/);
 });
 
 it("gallery_does_not_add_another_checkbox", async () => {

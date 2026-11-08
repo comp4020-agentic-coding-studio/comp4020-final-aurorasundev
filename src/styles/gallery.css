@@ -823,13 +823,23 @@
     font-size: 16px;
   }
 
-  /* the phone's opened record is the stacked layout (.is-vertical, below) */
+  /* the phone's opened record is the stacked layout (.is-vertical, below).
+     The title (GalleryWordmark) and the nav (Space/About/lang) no longer
+     fit on one line at phone widths, so the nav wraps to its own row below
+     the title; "Back to the Gallery" moves down to clear both rows. */
   .record-header-copy {
-    padding: 30px 0 16px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 24px 0 14px;
+  }
+
+  .record-header-copy .records-links {
+    flex-basis: 100%;
+    justify-content: flex-start;
   }
 
   .record-back {
-    top: 80px;
+    top: 118px;
     z-index: 1;
     font-size: 15px;
   }

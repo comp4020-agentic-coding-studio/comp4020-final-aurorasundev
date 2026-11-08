@@ -41,8 +41,8 @@ export const ZH = {
   "It stays in your hands. Only you may destroy it, and when it burns it leaves no record. Sign in to find it again from any browser.":
     "它留在你手里。只有你可以销毁它，它燃尽时不会留下任何记录。登录后，可以在任何浏览器里再找到它。",
   "Release it": "放手",
-  "When it burns, it becomes a record in the Gallery: an image, and often a short piece of music. Its fate is no longer yours to control. As it burns, its words and drawing are sent to OpenAI once to shape an anonymous AI image for the public Gallery. Your original words and drawing are deleted as it burns.":
-    "它燃尽时，会成为展馆里的一张唱片：一幅图像，常常还有一段短短的音乐。它的去向从此不再由你掌控。燃烧时，它的文字和图画会被发送给 OpenAI 一次，用来生成一幅匿名的 AI 图像，展出在公共展馆里。你原本的文字和图画会在燃烧时被删除。",
+  "When it burns, it can become a Gallery record, with an image and sometimes a short piece of music. Its fate is no longer yours to control. As it burns, its words and drawing are sent to OpenAI once to shape an anonymous AI image for the public Gallery. Your original words and drawing are deleted as it burns.":
+    "它燃尽时，可能会成为展馆里的一张唱片：一幅图像，有时还有一段短短的音乐。它的去向从此不再由你掌控。燃烧时，它的文字和图画会被发送给 OpenAI 一次，用来生成一幅匿名的 AI 图像，展出在公共展馆里。你原本的文字和图画会在燃烧时被删除。",
   "Before it enters the space, your words and drawing are sent to OpenAI for automated safety checks. Do not include private details.":
     "进入空间之前，你的文字和图画会被发送给 OpenAI 做自动安全检查。请不要写入私人信息。",
   "Automated safety checks run before this paper enters the space.": "这张纸进入空间之前，会先经过自动安全检查。",

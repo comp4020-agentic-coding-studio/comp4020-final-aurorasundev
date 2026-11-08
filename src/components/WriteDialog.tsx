@@ -164,7 +164,7 @@ export function WriteDialog({ onCancel, onThrown, pendingOps, offline, safety, s
             <span>
               <span className="choice-label">{t("Release it")}</span>
               <span className="choice-hint">
-                {t("When it burns, it becomes a record in the Gallery: an image, and often a short piece of music. Its fate is no longer yours to control. As it burns, its words and drawing are sent to OpenAI once to shape an anonymous AI image for the public Gallery. Your original words and drawing are deleted as it burns.")}
+                {t("When it burns, it can become a Gallery record, with an image and sometimes a short piece of music. Its fate is no longer yours to control. As it burns, its words and drawing are sent to OpenAI once to shape an anonymous AI image for the public Gallery. Your original words and drawing are deleted as it burns.")}
               </span>
             </span>
           </label>
