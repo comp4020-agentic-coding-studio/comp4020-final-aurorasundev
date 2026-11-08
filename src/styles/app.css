@@ -1393,8 +1393,10 @@ fieldset:disabled .choice,
 }
 
 .ritual-words {
-  --ritual-end-min: 180px;
-  --ritual-end-offset: 180px;
+  /* sizes and gaps scale smoothly from the phone's (600px) to the
+     desktop's (1200px), matching the scene's own blend */
+  --ritual-end-min: clamp(152px, calc(124px + 4.667vw), 180px);
+  --ritual-end-offset: clamp(110px, calc(40px + 11.67vw), 180px);
   position: absolute;
   top: 56%;
   left: 50%;
@@ -1417,10 +1419,15 @@ fieldset:disabled .choice,
   line-height: 1.2;
 }
 
+.ritual.is-committing .ritual-lead,
+.ritual.is-burning .ritual-lead {
+  font-size: clamp(26px, calc(18px + 1.333vw), 34px);
+}
+
 /* the ending is the ritual's one large moment: it arrives, rather than
    swapping in for "Letting go…" */
 .ritual.is-ashes .ritual-lead {
-  font-size: 60px;
+  font-size: clamp(42px, calc(24px + 3vw), 60px);
   line-height: 1.1;
   animation: ritual-arrive 1.1s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -1451,13 +1458,13 @@ fieldset:disabled .choice,
 
 .ritual-note {
   margin: 10px 0 0;
-  font-size: 19px;
+  font-size: clamp(15px, calc(11px + 0.6667vw), 19px);
   color: var(--muted);
 }
 
 .ritual-wait {
   margin: 6px 0 0;
-  font-size: 15px;
+  font-size: clamp(13px, calc(11px + 0.3333vw), 15px);
   color: var(--muted);
   opacity: 0.85;
 }
@@ -1612,35 +1619,25 @@ fieldset:disabled .choice,
 @media (max-width: 600px) {
   /* B05: sans-serif words between paper and furnace; the two controls on a
      row above the count */
-  .ritual-words {
-    --ritual-end-min: 152px;
-    --ritual-end-offset: 110px;
-  }
   .ritual-lead {
     font-family: var(--sans);
     font-size: 19px;
   }
 
-  /* once it is placed, the words are the moment's, not an instruction */
+  /* once it is placed, the words are the moment's, not an instruction
+     (their sizes are the fluid ones above) */
   .ritual.is-committing .ritual-lead,
-  .ritual.is-burning .ritual-lead {
-    font-family: var(--serif);
-    font-size: 26px;
-  }
-
+  .ritual.is-burning .ritual-lead,
   .ritual.is-ashes .ritual-lead {
     font-family: var(--serif);
-    font-size: 42px;
   }
 
   .ritual-note {
     margin-top: 6px;
-    font-size: 15px;
   }
 
   .ritual-wait {
     margin-top: 4px;
-    font-size: 13px;
   }
 
   .ritual-actions {

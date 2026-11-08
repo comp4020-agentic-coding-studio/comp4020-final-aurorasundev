@@ -79,7 +79,23 @@ const randomRange = (min, max) => min + Math.random() * (max - min);
  * }} options
  */
 export function createPaperScene(container, buttonLayer, options) {
-  const { compact } = options;
+  // Render quality (shadow map size, SSAO, depth of field, pixel ratio) is
+  // chosen once, from the screen the page opened on. Layout (camera, the
+  // ritual's furnace and paper) follows the window as it is now: the same
+  // 600px breakpoint as the CSS, re-read on every resize, so a window opened
+  // narrow and then widened gets the desktop composition, and back.
+  const lowPower = options.compact;
+  const narrow = () => size().w <= 600;
+  // 0 at a phone's width (600px and below), 1 from 1200px up, and a smooth
+  // blend between, so the ritual's proportions never jump at a breakpoint.
+  const PHONE_W = 600;
+  const DESKTOP_W = 1200;
+  const wide = () => {
+    const t = clamp01((size().w - PHONE_W) / (DESKTOP_W - PHONE_W));
+    return t * t * (3 - 2 * t);
+  };
+  // the phone's value at 0, the desktop's at 1
+  const byWidth = (phone, desktop) => lerp(phone, desktop, wide());
   let disposed = false;
   const timeouts = new Set();
   const later = (fn, ms) => {
@@ -139,9 +155,9 @@ export function createPaperScene(container, buttonLayer, options) {
     // B01/B05 show the side of an iron cylinder, with a shallow elliptical
     // opening. Lower the lens for the ritual rather than distorting the iron.
     if (ritualView) {
-      camera.fov = compact ? 46 : 30;
-      camera.position.set(0, compact ? 1.05 : 0.65, compact ? 3 : 4);
-      camera.lookAt(0, compact ? 0.15 : 0.2, -0.15);
+      camera.fov = byWidth(46, 30);
+      camera.position.set(0, byWidth(1.05, 0.65), byWidth(3, 4));
+      camera.lookAt(0, byWidth(0.15, 0.2), -0.15);
     }
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld(true);
@@ -183,30 +199,34 @@ export function createPaperScene(container, buttonLayer, options) {
     view.fov = r.readyView.fov;
     view.lookAt(centre);
     // Keep the hearth below the caption as the camera rises around it.
-    view.rotateX(Math.atan((compact ? 0.28 : 0.40) * Math.tan(THREE.MathUtils.degToRad(view.fov / 2))));
+    view.rotateX(Math.atan(byWidth(0.28, 0.40) * Math.tan(THREE.MathUtils.degToRad(view.fov / 2))));
     // Never so close that the furnace runs past the screen's sides (a tall,
-    // narrow phone): step back along the same line until it fits.
-    const maxWidth = compact ? 0.78 : 0.6;
+    // narrow phone) or down into the buttons at the foot (a short, wide
+    // window): step back along the same line until it fits.
+    const maxWidth = byWidth(0.78, 0.6);
+    const maxDrop = 0.86;
     const toCamera = view.position.clone().sub(centre);
     const rim = new THREE.Vector3();
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 6; i++) {
       view.updateProjectionMatrix();
       view.updateMatrixWorld(true);
       const r0 = r.place.radius;
       const top = FLOOR_VISUAL_Y + r0 * FURNACE_HEIGHT;
       let lo = Infinity;
       let hi = -Infinity;
+      let foot = Infinity;
       for (let k = 0; k < 16; k++) {
         const a = (k / 16) * Math.PI * 2;
         for (const y of [FLOOR_VISUAL_Y, top]) {
           rim.set(r.place.anchor.x + Math.cos(a) * r0, y, r.place.anchor.z + Math.sin(a) * r0).project(view);
           lo = Math.min(lo, rim.x);
           hi = Math.max(hi, rim.x);
+          foot = Math.min(foot, rim.y);
         }
       }
-      const width = (hi - lo) / 2;
-      if (width <= maxWidth) break;
-      toCamera.multiplyScalar(width / maxWidth);
+      const over = Math.max((hi - lo) / 2 / maxWidth, -foot / maxDrop);
+      if (over <= 1.001) break;
+      toCamera.multiplyScalar(Math.min(over, 1.5));
       view.position.copy(centre).add(toCamera);
     }
     return { position: view.position.clone(), quaternion: view.quaternion.clone(), fov: view.fov };
@@ -249,7 +269,7 @@ export function createPaperScene(container, buttonLayer, options) {
   applyCamera();
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  const pixelRatio = () => Math.min(window.devicePixelRatio || 1, compact ? 1.25 : 1.5);
+  const pixelRatio = () => Math.min(window.devicePixelRatio || 1, lowPower ? 1.25 : 1.5);
   renderer.setPixelRatio(pixelRatio());
   renderer.setSize(size().w, size().h);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -344,7 +364,7 @@ export function createPaperScene(container, buttonLayer, options) {
   const dirLight = new THREE.DirectionalLight(0xfff1de, 1.65);
   dirLight.position.set(-2.2, 3.1, 1.8);
   dirLight.castShadow = true;
-  dirLight.shadow.mapSize.set(compact ? 1024 : 2048, compact ? 1024 : 2048);
+  dirLight.shadow.mapSize.set(lowPower ? 1024 : 2048, lowPower ? 1024 : 2048);
   dirLight.shadow.camera.left = -4;
   dirLight.shadow.camera.right = 4;
   dirLight.shadow.camera.top = 4;
@@ -362,9 +382,9 @@ export function createPaperScene(container, buttonLayer, options) {
   ssaoPass.kernelRadius = 0.045;
   ssaoPass.minDistance = 0.0003;
   ssaoPass.maxDistance = 0.12;
-  ssaoPass.enabled = !compact;
+  ssaoPass.enabled = !lowPower;
   composer.addPass(ssaoPass);
-  const bokeh = compact ? null : new BokehPass(scene, camera, { focus: 2.5, aperture: 0.002, maxblur: 0.008 });
+  const bokeh = lowPower ? null : new BokehPass(scene, camera, { focus: 2.5, aperture: 0.002, maxblur: 0.008 });
   if (bokeh) {
     bokeh.enabled = false;
     composer.addPass(bokeh);
@@ -1324,13 +1344,11 @@ export function createPaperScene(container, buttonLayer, options) {
   // the viewport: the furnace's width and the screen heights of its front
   // foot and of the hovering paper's centre. The world placement is solved
   // from these for the current camera, so the composition holds at any size.
-  const RITUAL_FRAME = compact
-    ? { furnaceWidth: 0.56, furnaceFoot: 0.76, paperY: 0.33 }
-    : { furnaceWidth: 0.30, furnaceFoot: 0.91, paperY: 0.32 };
+  const ritualFrame = () => ({ furnaceWidth: byWidth(0.56, 0.30), furnaceFoot: byWidth(0.76, 0.91), paperY: byWidth(0.33, 0.32) });
   // The furnace's height (FURNACE_HEIGHT) and opening come from furnace-drop.ts.
   const CRUMPLE_SECONDS = 0.75;
   // the phone's camera is close: the held paper is drawn smaller (B05)
-  const RITUAL_SCALE = compact ? CLOSED_SCALE * 0.66 : CLOSED_SCALE;
+  const ritualScale = () => CLOSED_SCALE * byWidth(0.66, 1);
   const PRECOMMIT = ["crumpling", "hovering", "dragging", "returning", "holding"];
   let ritual = null;
 
@@ -1351,8 +1369,8 @@ export function createPaperScene(container, buttonLayer, options) {
   // hover point straight above it at the target height.
   function ritualPlacement() {
     const { w, h } = size();
-    const frame = compact && h < 600 ? { furnaceWidth: 0.43, furnaceFoot: 0.76, paperY: 0.29 } : RITUAL_FRAME;
-    let radius = compact ? 0.32 : 0.4;
+    const frame = narrow() && h < 600 ? { furnaceWidth: 0.43, furnaceFoot: 0.76, paperY: 0.29 } : ritualFrame();
+    let radius = byWidth(0.32, 0.4);
     const anchor = new THREE.Vector3(0, FLOOR_VISUAL_Y, 0.4);
     for (let i = 0; i < 6; i++) {
       // the floor point under the target foot height, minus one radius
@@ -1382,7 +1400,7 @@ export function createPaperScene(container, buttonLayer, options) {
     const r = ritual;
     const { anchor, hover, radius } = r.place;
     _camUp.set(0, 1, 0).applyQuaternion(cam.quaternion);
-    const paperBottom = screenPoint(_q.copy(hover).addScaledVector(_camUp, -collisionRadius * 1.1 * RITUAL_SCALE / CLOSED_SCALE), cam).y;
+    const paperBottom = screenPoint(_q.copy(hover).addScaledVector(_camUp, -collisionRadius * 1.1 * ritualScale() / CLOSED_SCALE), cam).y;
     const furnaceTop = screenPoint(_q.set(anchor.x, FLOOR_VISUAL_Y + radius * FURNACE_HEIGHT, anchor.z - radius), cam).y;
     const furnaceBottom = screenPoint(_q.set(anchor.x, FLOOR_VISUAL_Y, anchor.z + radius), cam).y;
     return { paperBottom, furnaceTop, furnaceBottom };
@@ -1432,15 +1450,15 @@ export function createPaperScene(container, buttonLayer, options) {
       if (occupied.filter((at) => Math.sign(at.x) === side).length >= Math.ceil(background.length / 2)) side *= -1;
       const depth = clamp01((origin.position.z - stageBounds.minZ) / (stageBounds.maxZ - stageBounds.minZ));
       const spread = Math.sin(origin.position.x * 7 + origin.position.z * 11) * 0.5 + 0.5;
-      const scale = origin.scale * (compact ? 0.42 : 0.66);
+      const scale = origin.scale * byWidth(0.42, 0.66);
       plane.constant = -(FLOOR_VISUAL_Y + collisionRadius * (scale / CLOSED_SCALE) * 1.08);
-      const rows = compact && size().h < 600 ? 0.13 : 0.18;
+      const rows = narrow() && size().h < 600 ? 0.13 : 0.18;
       const centre = new THREE.Vector3();
       const best = new THREE.Vector3();
       let bestRoom = -1;
       for (let attempt = 0; attempt < 18; attempt++) {
         const row = 0.56 + ((depth * 0.16 + Math.floor(attempt / 3) * 0.045) % rows);
-        const column = side * (compact ? 0.65 + (attempt % 3 - 1) * 0.03 : 0.54 + spread * 0.12 + (attempt % 3 - 1) * 0.08);
+        const column = side * byWidth(0.65 + (attempt % 3 - 1) * 0.03, 0.54 + spread * 0.12 + (attempt % 3 - 1) * 0.08);
         _ndc.set(column, 1 - row * 2);
         _ray.setFromCamera(_ndc, camera);
         if (!_ray.ray.intersectPlane(plane, centre)) return;
@@ -1530,10 +1548,10 @@ export function createPaperScene(container, buttonLayer, options) {
         const t = clamp01(r.time / (r.reduced ? 0.15 : CRUMPLE_SECONDS));
         const e = easeOutCubic(t);
         paper.mesh.quaternion.slerpQuaternions(r.start.quaternion, r.quaternion, e);
-        paper.mesh.scale.setScalar(lerp(r.start.scale, RITUAL_SCALE, e));
+        paper.mesh.scale.setScalar(lerp(r.start.scale, ritualScale(), e));
         paper.frameIdx = lerp(r.start.frameIdx, animData.frameCount - 1, e);
         updatePaperFrame(paper, animData, paper.frameIdx);
-        const target = _p.copy(r.place.hover).sub(crumpleWorldOffset(RITUAL_SCALE, r.quaternion));
+        const target = _p.copy(r.place.hover).sub(crumpleWorldOffset(ritualScale(), r.quaternion));
         paper.mesh.position.lerpVectors(r.start.position, target, e);
         if (t >= 1) {
           r.phase = "hovering";
@@ -1687,7 +1705,7 @@ export function createPaperScene(container, buttonLayer, options) {
     raycaster.setFromCamera(pointer, camera);
     if (!raycaster.ray.intersectPlane(r.place.plane, grabHitPoint)) return;
     const { anchor, radius } = r.place;
-    const ball = collisionRadius * (RITUAL_SCALE / CLOSED_SCALE);
+    const ball = collisionRadius * (ritualScale() / CLOSED_SCALE);
     const t = clampDropTarget(
       grabHitPoint,
       { anchorX: anchor.x, anchorZ: anchor.z, rimY: FLOOR_VISUAL_Y + radius * FURNACE_HEIGHT, radius },
@@ -1759,6 +1777,8 @@ export function createPaperScene(container, buttonLayer, options) {
       r.furnace.group.position.copy(place.anchor);
       r.furnace.group.scale.setScalar(place.radius / r.furnace.radius);
     }
+    // the held paper takes this width's size (phone or desktop) at once
+    if (r.paper && r.phase !== "crumpling") r.paper.mesh.scale.setScalar(ritualScale());
     clearRitualColumn(r, true);
     r.readyView = captureCamera();
     emitRitualLayout();
@@ -1771,7 +1791,7 @@ export function createPaperScene(container, buttonLayer, options) {
   // releases that arrived before their fire had started
   const releasedEarly = new Set();
   const ritualHoldKey = "\u0000ritual";
-  const MAX_GHOST_BURNS = compact ? 2 : 3;
+  const MAX_GHOST_BURNS = lowPower ? 2 : 3;
 
   function updateGhosts(dt) {
     for (const ghost of ghosts) {
@@ -2054,7 +2074,7 @@ export function createPaperScene(container, buttonLayer, options) {
         r.paper.frameIdx = animData.frameCount - 1;
         updatePaperFrame(r.paper, animData, r.paper.frameIdx);
         r.paper.mesh.quaternion.copy(r.quaternion);
-        r.paper.mesh.scale.setScalar(RITUAL_SCALE);
+        r.paper.mesh.scale.setScalar(ritualScale());
         r.centre.copy(r.place.hover);
       }
       r.phase = "holding";
