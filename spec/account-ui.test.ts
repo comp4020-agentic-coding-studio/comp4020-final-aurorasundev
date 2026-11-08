@@ -142,6 +142,9 @@ it("offers Sign in in the header, and shows the username once an account is crea
   expect(host.textContent).toContain("It is shown only this once");
   expect(button("Done")!.disabled).toBe(true);
   expect(button("mira")).toBeFalsy();
+  // Escape doesn't dismiss it either: the code is never shown again
+  await act(async () => host.querySelector("dialog")!.dispatchEvent(new Event("cancel", { cancelable: true })));
+  expect(host.querySelector(".recovery-code")).toBeTruthy();
   await act(async () => host.querySelector<HTMLInputElement>(".recovery-saved input")!.click());
   await click("Done");
   expect(host.querySelector(".account-dialog")).toBeNull();

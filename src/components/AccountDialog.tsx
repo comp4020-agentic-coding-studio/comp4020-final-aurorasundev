@@ -81,8 +81,8 @@ export function AccountDialog({ view: initial, available, onClose, onSignedIn }:
   }
 
   // The account exists (or its password is reset) and this browser is
-  // already signed in; the sheet stays until the code is saved. Escape still
-  // finishes signing in, so nothing is lost by leaving.
+  // already signed in; the sheet stays until its owner says the code is
+  // saved. Escape does nothing here: the code is never shown again.
   const finish = () => issued && onSignedIn(issued.account);
 
   const title = creating ? t("Keep an account") : recovering ? t("Forgot your password?") : t("Sign in");
@@ -102,8 +102,7 @@ export function AccountDialog({ view: initial, available, onClose, onSignedIn }:
       aria-labelledby="account-title"
       onCancel={(e) => {
         e.preventDefault();
-        if (issued) finish();
-        else if (!busy) onClose();
+        if (!issued && !busy) onClose();
       }}
     >
       {issued ? (
