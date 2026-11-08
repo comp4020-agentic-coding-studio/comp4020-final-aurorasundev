@@ -115,6 +115,26 @@ readable centre. Keep phone controls and captions clear of the paper.
   original key in the background, without pretending cancellation undid it.
 - Paper text never goes into a WebGL texture. Closed papers are a neutral
   material; text appears only in the HTML reading layer after an explicit open.
+- The interface (`src/lib/i18n.ts`, `i18n-dict.ts`) offers English and
+  Simplified Chinese; the choice lives only in this browser's
+  `localStorage` and is never sent. A paper's own words and drawing are
+  never translated and never carry a language: the page around an open
+  paper switches, the paper itself does not. This isn't a hard technical
+  wall for typed text — a drawing has no text to translate, but typed
+  words could be — it's a cost and a judgement call not revisited here:
+  translating would need a model call per paper and would risk changing
+  what someone meant to say. Record titles and alt text, server-chosen
+  from a fixed table, do switch with the interface (`i18n-dict.ts`).
+  Keep `spec/i18n-ui.test.ts` and `i18n-dictionary.test.ts` green for any
+  change here.
+- Below 600 px the space and Gallery headers fold their places into one
+  Menu (`src/components/SiteMenu.tsx`, `GalleryLinks.tsx`) rather than
+  stacking them; desktop is unchanged. Its links only exist while it is
+  open, so nothing is ever duplicated in the page; its own Escape must
+  never also close a dialog it happens to sit inside; a release in
+  progress disables it rather than letting the header move. Keep
+  `spec/site-menu-ui.test.ts` green for any change to the header's places
+  or to this pattern.
 - Never hardcode the references' sample text or counts as data.
   The plan's sample body is for local fixtures only, never the live pool.
 - Moderation must be a real configured service; never a fake pass. If it is
