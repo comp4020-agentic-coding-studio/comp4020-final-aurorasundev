@@ -1413,7 +1413,16 @@ fieldset:disabled .choice,
 }
 
 .ritual.is-ashes .ritual-lead {
-  font-size: 44px;
+  font-size: 56px;
+}
+
+/* above the furnace the lead is the anchor: its bottom sits at the offset
+   above the rim, and the smaller lines hang beneath it */
+.ritual-words.is-above .ritual-sub {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
 }
 
 .ritual-note {
@@ -1590,7 +1599,7 @@ fieldset:disabled .choice,
 
   .ritual.is-ashes .ritual-lead {
     font-family: var(--serif);
-    font-size: 30px;
+    font-size: 38px;
   }
 
   .ritual-note {

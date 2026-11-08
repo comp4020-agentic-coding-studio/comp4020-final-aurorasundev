@@ -97,16 +97,20 @@ export function RitualOverlay({ stage, after, outcome, error, canPlace, fallback
           <span className="ritual-drawn-furnace" />
         </div>
       )}
-      <div className="ritual-words" style={style}>
+      <div className={`ritual-words${above !== null ? " is-above" : ""}`} style={style}>
         <p className="ritual-lead">{t(lead)}</p>
-        {note && <p className="ritual-note">{t(note)}</p>}
-        {/* making a record takes a while: don't hurry back looking for it */}
-        {stage === "ashes" && outcome === "own" && after === "record" && <p className="ritual-wait">{t("It may take a few minutes.")}</p>}
-        {error && (
-          <p className="form-error" role="alert">
-            {t.msg(error)}
-          </p>
-        )}
+        {/* hangs below the lead, so the lead keeps its place however many
+            lines there are */}
+        <div className="ritual-sub">
+          {note && <p className="ritual-note">{t(note)}</p>}
+          {/* making a record takes a while: don't hurry back looking for it */}
+          {stage === "ashes" && outcome === "own" && after === "record" && <p className="ritual-wait">{t("It may take a few minutes.")}</p>}
+          {error && (
+            <p className="form-error" role="alert">
+              {t.msg(error)}
+            </p>
+          )}
+        </div>
       </div>
       {/* what changed, said once; not the animation */}
       <p className="visually-hidden" role="status">
