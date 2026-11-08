@@ -748,6 +748,16 @@
     padding-top: 88px;
   }
 
+  /* the paused notice sits just under the header (as "Back to the Gallery"
+     does in an opened record), with clear room before the orbit's top card */
+  .has-orbit .records-main:has(.records-paused) {
+    padding-top: 54px;
+  }
+
+  .has-orbit .records-paused {
+    margin-bottom: 18px;
+  }
+
   .orbit-foot {
     grid-template-columns: 1fr;
     justify-items: center;
