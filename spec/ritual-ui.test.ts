@@ -212,6 +212,7 @@ it("tells the writer a released paper is becoming a record, and where to find it
   await remount();
   await burnToAshes();
   expect(host.querySelector(".ritual-note")!.textContent).toBe("What it carried is becoming a record in the Gallery.");
+  expect(host.querySelector(".ritual-wait")!.textContent).toBe("It may take a few minutes.");
   const link = host.querySelector<HTMLAnchorElement>(".ritual-gallery")!;
   expect(link.getAttribute("href")).toBe("/gallery/");
   expect(link.getAttribute("aria-disabled")).toBe("true");
@@ -222,6 +223,7 @@ it("tells the writer a released paper is becoming a record, and where to find it
 it("says a kept paper leaves no record, and offers no Gallery link", async () => {
   await burnToAshes();
   expect(host.querySelector(".ritual-note")!.textContent).toBe("A kept paper leaves no record behind.");
+  expect(host.querySelector(".ritual-wait")).toBeNull();
   expect(host.querySelector(".ritual-gallery")).toBeNull();
 });
 

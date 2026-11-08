@@ -1422,6 +1422,13 @@ fieldset:disabled .choice,
   color: var(--muted);
 }
 
+.ritual-wait {
+  margin: 6px 0 0;
+  font-size: 15px;
+  color: var(--muted);
+  opacity: 0.85;
+}
+
 .ritual-words .form-error {
   margin-top: 14px;
   pointer-events: auto;
@@ -1589,6 +1596,11 @@ fieldset:disabled .choice,
   .ritual-note {
     margin-top: 6px;
     font-size: 15px;
+  }
+
+  .ritual-wait {
+    margin-top: 4px;
+    font-size: 13px;
   }
 
   .ritual-actions {

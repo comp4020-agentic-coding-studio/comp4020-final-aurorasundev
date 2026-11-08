@@ -100,6 +100,8 @@ export function RitualOverlay({ stage, after, outcome, error, canPlace, fallback
       <div className="ritual-words" style={style}>
         <p className="ritual-lead">{t(lead)}</p>
         {note && <p className="ritual-note">{t(note)}</p>}
+        {/* making a record takes a while: don't hurry back looking for it */}
+        {stage === "ashes" && outcome === "own" && after === "record" && <p className="ritual-wait">{t("It may take a few minutes.")}</p>}
         {error && (
           <p className="form-error" role="alert">
             {t.msg(error)}

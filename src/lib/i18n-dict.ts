@@ -102,6 +102,7 @@ export const ZH = {
 
   // the furnace
   "What it carried is becoming a record in the Gallery.": "它承载的东西，正在展馆里化作一张唱片。",
+  "It may take a few minutes.": "这可能需要几分钟。",
   "A kept paper leaves no record behind.": "留给自己的纸，不会留下任何记录。",
   "New Gallery records aren't being made right now.": "展馆暂时不再制作新的唱片。",
   "It is gone.": "它已经不在了。",
