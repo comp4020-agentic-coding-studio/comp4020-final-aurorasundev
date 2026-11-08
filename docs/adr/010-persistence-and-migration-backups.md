@@ -67,3 +67,7 @@ papers, accounts and records the moment the new machine starts.
   [stress test](../evidence/stress-2026-11/README.md) checked the
   transactions under concurrent saves, witnesses and burns, a slow and a
   dropped connection, and the save and stream limits (ADR 007).
+- Migration 13 (recovery codes, [ADR 009](009-optional-accounts.md)) only
+  adds the nullable `accounts.recovery_hash`;
+  `spec/accounts-migration.test.ts` runs it on an older database and checks
+  that an existing account and its session come through unchanged.

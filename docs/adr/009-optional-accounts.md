@@ -130,24 +130,46 @@ regard to case. Passwords are 8–128 characters and can't equal the username.
 Without email, a forgotten password used to lose the account. Now, right
 after an account is created, the owner is shown a recovery code once, on
 the same paper sheet, with what it is for and that it won't be shown again;
-they confirm they have saved it before the sheet closes. Under Sign in,
-**Forgot your password?** takes the username, that code and a new password.
+they confirm they have saved it before the sheet closes (Escape doesn't
+close it). Under Sign in, **Forgot your password?** takes the username,
+that code and a new password.
 
 - The code is 20 characters (about 100 bits) from an alphabet without
   look-alikes, in five groups of four; case, spaces and dashes are ignored
   when typed. Being random rather than chosen, it is kept as an HMAC under
-  `ACCOUNT_PEPPER` (migration 13, `accounts.recovery_hash`), not with scrypt.
-- A reset uses the code up and issues a new one in its reply, ends every
-  other session of the account, and signs this browser in. Two resets with
-  the same code can't both succeed.
+  `ACCOUNT_PEPPER`, not with scrypt.
+
+**What the database holds.** Migration 13 adds one nullable column,
+`accounts.recovery_hash`: base64url HMAC-SHA256 under the pepper of a
+labelled, normalised code. It never holds the code, and the code is never
+logged. A copied database alone gives nothing to test guesses against, and
+because the pepper is the same one passwords use, a changed pepper switches
+recovery off with the rest of accounts. The account row is inserted with
+its password hash and recovery hash in one statement, so an account never
+exists without its code.
+
+**One reset, one transaction.** A reset checks the code, then in a single
+transaction replaces `password_hash` and `recovery_hash` only if the stored
+hash is still the one it checked, and deletes every row in `sessions` for
+that identity. Two resets racing with the same code can't both succeed,
+and nobody stays signed in on the old password. A sign-in that was already
+checking the old password when a reset landed re-reads the hash before
+it gets a session, so it can't win one either. This browser then gets a
+fresh session, and a guest's papers move to the account as at sign-in.
 - A wrong code and an unknown name get the same answer, and count against
   the same per-name and per-address limits as wrong passwords.
 - Accounts made before this have no code (`recovery_hash` is null) and
   can't use recovery. There is no backfill: a code nobody was shown is no
   use. Giving them one (say, once after their next sign-in) is future work.
+- A new code exists only in the reply that issued it. If that reply is lost
+  on the network, the account works with its new password but its code is
+  unknown, and with no email nothing can resend it; that cost is accepted.
 - Logs carry `recover` with the person and the outcome (`reset`, `invalid`,
   `malformed`, `invalid_password`, `rate_limited`, `unconfigured`), never the
-  username or the code. Checked over HTTP in `spec/accounts.test.ts`.
+  username or the code. Checked over HTTP in `spec/accounts.test.ts`, the
+  migration in `spec/accounts-migration.test.ts` (an existing account and
+  its session come through unchanged, with an empty code), and the sheet in
+  `spec/account-ui.test.ts`.
 
 ## Verification
 
