@@ -35,8 +35,8 @@ const quiet = <T>(run: () => T): T => {
 
 type Limits = Parameters<typeof accountsRouter>[3];
 
-async function world(options: { env?: NodeJS.ProcessEnv; limits?: Limits } = {}) {
-  const db = quiet(() => openDb(":memory:"));
+async function world(options: { env?: NodeJS.ProcessEnv; limits?: Limits; db?: DB } = {}) {
+  const db = options.db ?? quiet(() => openDb(":memory:"));
   const server = express()
     .use(express.json({ limit: "512kb" }))
     .post("/api/session", (req, res) => {
@@ -44,7 +44,7 @@ async function world(options: { env?: NodeJS.ProcessEnv; limits?: Limits } = {})
       res.json({ ok: true });
     })
     .use("/api", papersRouter(db, async () => ({ kind: "allow" })))
-    .use("/api", accountsRouter(db, () => false, options.env ?? {}, options.limits))
+    .use("/api", quiet(() => accountsRouter(db, () => false, options.env ?? {}, options.limits)))
     .listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -403,6 +403,64 @@ describe("when no pepper is configured on Fly", () => {
       expect((await b.leave("KEEP")).paper.id).toBeTruthy();
     } finally {
       await w.close();
+    }
+  });
+});
+
+describe("when ACCOUNT_PEPPER changes", () => {
+  const fly = (pepper: string) => ({ FLY_APP_NAME: "app", ACCOUNT_PEPPER: pepper });
+  const first = fly("the first pepper, long enough");
+  const second = fly("a different pepper, also long");
+
+  it("keeps only a fingerprint of the pepper, never the pepper", async () => {
+    const w = await world({ env: first });
+    try {
+      const rows = w.db.prepare("SELECT value FROM pepper_fingerprint").all() as { value: string }[];
+      expect(rows).toHaveLength(1);
+      expect(rows[0].value).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(rows[0].value).not.toContain("pepper");
+    } finally {
+      await w.close();
+    }
+  });
+
+  it("switches accounts off rather than letting every password silently fail, and back on with the original", async () => {
+    const before = await world({ env: first });
+    const username = name();
+    try {
+      expect((await (await before.browser()).register(username)).status).toBe(201);
+    } finally {
+      await before.close();
+    }
+    const changed = await world({ env: second, db: before.db });
+    try {
+      const b = await changed.browser();
+      expect(await b.json("/api/account")).toEqual({ available: false, signed_in: false });
+      const res = await b.login(username);
+      expect(res.status).toBe(503);
+      expect(((await res.json()) as { code: string }).code).toBe("accounts_unconfigured");
+      expect((await b.leave("KEEP")).paper.id).toBeTruthy();
+    } finally {
+      await changed.close();
+    }
+    const restored = await world({ env: first, db: before.db });
+    try {
+      expect((await (await restored.browser()).login(username)).status).toBe(200);
+    } finally {
+      await restored.close();
+    }
+  });
+
+  it("takes a new pepper when no account depends on the old one", async () => {
+    const before = await world({ env: first });
+    await before.close();
+    const changed = await world({ env: second, db: before.db });
+    try {
+      const b = await changed.browser();
+      expect(await b.json("/api/account")).toEqual({ available: true, signed_in: false });
+      expect((await b.register()).status).toBe(201);
+    } finally {
+      await changed.close();
     }
   });
 });

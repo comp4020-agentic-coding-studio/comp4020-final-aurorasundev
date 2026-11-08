@@ -388,4 +388,21 @@ describe("the review worker", () => {
     expect(db.prepare("SELECT state, outcome FROM maintenance_jobs").get()).toEqual({ state: "done", outcome: "quarantined" });
     expect(db.prepare("SELECT note FROM reports WHERE id = ?").get(r.reportId)).toEqual({ note: null });
   });
+
+  it("deletes expired sessions in its housekeeping, keeping live ones, at most hourly", async () => {
+    const session = (token: string, expires: number) =>
+      db.prepare("INSERT INTO sessions (token_hash, identity_id, expires_at) VALUES (?, ?, ?)").run(token, identity(), new Date(expires).toISOString());
+    session("expired", clock - 1);
+    session("live", clock + 60_000);
+    const w = worker(null);
+    await w.wake();
+    const tokens = () => (db.prepare("SELECT token_hash FROM sessions ORDER BY token_hash").all() as { token_hash: string }[]).map((r) => r.token_hash);
+    expect(tokens()).toEqual(["live"]);
+    session("expired-later", clock - 1);
+    await w.wake();
+    expect(tokens()).toEqual(["expired-later", "live"]);
+    clock += 60 * 60 * 1000;
+    await w.wake();
+    expect(tokens()).toEqual([]);
+  });
 });

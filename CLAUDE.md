@@ -199,7 +199,10 @@ regenerating it on application startup.
   creates and destroys papers. **Never point `APP_URL` at the live Fly app.**
 - The repo is public, so **every push to `main` deploys to production via CI**.
   Push only work that passes `pnpm check` and is safe to run against the live
-  database. Back up the live database before the first push that migrates it.
+  database. Startup backs the database up automatically before any migration
+  (`VACUUM INTO` a sibling `throwaway.sqlite.pre-v<N>-<time>.bak`, newest 3
+  kept; a failed backup stops startup, nothing migrated). Those copies share
+  the Fly volume, so still take an off-machine copy before a risky migration.
 - Manual deploy: `flyctl deploy --remote-only --ha=false -a comp4020-final-aurorasundev`.
 
 ## Rules for the agent

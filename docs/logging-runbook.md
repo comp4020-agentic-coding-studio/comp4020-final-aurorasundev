@@ -44,6 +44,8 @@ usernames, passwords or other credentials.
 | `login` | `signed_in`, `merged` (`moved=` papers a guest left), `invalid`, `rate_limited`, `unconfigured` | they signed in; a failed attempt has no `who` (nobody was proven) |
 | `logout` | `signed_out` | they signed out; this browser's next visit is a new guest |
 | `quarantine`, `review`, `operator_decision` | — | the safety worker or an operator acted (no `who`) |
+| `account_pepper` | `recorded`, `replaced`, `mismatch` | at startup: the pepper's fingerprint was stored, replaced (no accounts yet), or no longer matches, so accounts are off until the original `ACCOUNT_PEPPER` is restored (no `who`, no secret) |
+| `sessions` | `purged` (`count=`) | housekeeping deleted expired sessions (no `who`) |
 
 ## Narrating a two-person session (crit 10)
 

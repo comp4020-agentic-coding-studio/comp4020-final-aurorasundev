@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { createHash, randomBytes } from "node:crypto";
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 
 export type DB = Database.Database;
 
@@ -284,6 +284,17 @@ const MIGRATIONS: ((db: DB) => void)[] = [
       );
       DROP TABLE return_keys;
     `),
+
+  // 12: a fingerprint of ACCOUNT_PEPPER (ADR 009), an HMAC of a fixed label
+  // under it, so a changed pepper is noticed at startup instead of every
+  // password silently failing. Never the pepper itself.
+  (db) =>
+    db.exec(`
+      CREATE TABLE pepper_fingerprint (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        value TEXT NOT NULL
+      );
+    `),
 ];
 
 // the version a database is at once every migration has run
@@ -297,8 +308,52 @@ export function openDb(path: string): DB {
   const db = new Database(path);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
+  try {
+    backUpBeforeMigrating(db, path);
+  } catch (err) {
+    db.close();
+    throw err;
+  }
   migrate(db);
   return db;
+}
+
+// Pre-migration backups kept beside the database; older ones are deleted.
+export const BACKUPS_KEPT = 3;
+const BACKUP_NAME = /\.pre-v\d+-(\d{8}T\d{9}Z)\.bak$/;
+
+// Before a migration touches a database that already holds data, a
+// consistent copy is written next to it with VACUUM INTO, named
+// `<db>.pre-v<version it was at>-<UTC time>.bak`, e.g.
+// `throwaway.sqlite.pre-v10-20261109T021500123Z.bak`. If the copy fails nothing is migrated: startup stops, because the
+// owner prefers a stopped deploy to an unbacked migration. A new, empty
+// database (version 0) needs none.
+//
+// The copy briefly doubles the database's footprint on the volume (Fly's
+// `data` volume, 1 GB in fly.toml, also holds /data/artifacts), and up to
+// BACKUPS_KEPT copies stay. This is a local safety net, not an off-machine
+// backup: it lives and dies with the same volume.
+function backUpBeforeMigrating(db: DB, path: string): void {
+  const from = db.pragma("user_version", { simple: true }) as number;
+  if (path === ":memory:" || from === 0 || from >= MIGRATIONS.length) return;
+  const stamp = new Date().toISOString().replace(/[-:.]/g, "");
+  const target = `${path}.pre-v${from}-${stamp}.bak`;
+  try {
+    db.prepare("VACUUM INTO ?").run(target);
+  } catch (err) {
+    if (existsSync(target)) rmSync(target, { force: true });
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(`database backup before migrating from version ${from} failed, so nothing was migrated: ${reason}`);
+  }
+  console.log(`backed up database at version ${from} to ${target}`);
+  const stampOf = (name: string): string => name.match(BACKUP_NAME)?.[1] ?? "";
+  const backups = readdirSync(dirname(path))
+    .filter((name) => name.startsWith(`${basename(path)}.pre-v`) && stampOf(name))
+    .sort((a, b) => stampOf(a).localeCompare(stampOf(b)));
+  for (const old of backups.slice(0, -BACKUPS_KEPT)) {
+    rmSync(join(dirname(path), old), { force: true });
+    console.log(`removed old database backup ${old}`);
+  }
 }
 
 function migrate(db: DB): void {

@@ -3,7 +3,7 @@ import { publicArtifact } from "./artifacts/store.ts";
 import type { DB } from "./db.ts";
 import { clientAddress, windowCounter } from "./address.ts";
 import { log, person } from "./log.ts";
-import { burnDecoy, hashPassword, pepperFrom, verifyPassword } from "./password.ts";
+import { burnDecoy, hashPassword, pepperFingerprint, pepperFrom, verifyPassword } from "./password.ts";
 import { endSession, identityFor, rotateSession } from "./session.ts";
 
 // Optional accounts (ADR 009): a username and password attached to an
@@ -93,6 +93,28 @@ function adoptGuest(db: DB, guestId: string, accountId: string): number {
   return moved;
 }
 
+// A changed ACCOUNT_PEPPER would make every stored password stop matching,
+// and each sign-in would just look like a wrong password. So the pepper's
+// fingerprint is kept, and if it no longer matches while accounts exist,
+// accounts switch off (as with no pepper at all) and guests carry on until
+// the original pepper is restored. With no accounts yet, nothing depends on
+// the old pepper and the new fingerprint simply replaces it.
+export function checkedPepper(db: DB, pepper: Buffer | null): Buffer | null {
+  if (!pepper) return null;
+  const fingerprint = pepperFingerprint(pepper);
+  const stored = db.prepare("SELECT value FROM pepper_fingerprint WHERE id = 1").get() as { value: string } | undefined;
+  if (stored?.value === fingerprint) return pepper;
+  const accounts = db.prepare("SELECT 1 FROM accounts LIMIT 1").get();
+  if (stored && accounts) {
+    log("account_pepper", { outcome: "mismatch" });
+    console.error("ACCOUNT_PEPPER differs from the one existing passwords were sealed with: accounts are unavailable until it is restored");
+    return null;
+  }
+  db.prepare("INSERT INTO pepper_fingerprint (id, value) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET value = excluded.value").run(fingerprint);
+  log("account_pepper", { outcome: stored ? "replaced" : "recorded" });
+  return pepper;
+}
+
 export function accountsRouter(
   db: DB,
   musicEnabled: () => boolean,
@@ -100,7 +122,7 @@ export function accountsRouter(
   limits: { nameFailures: number; addressFailures: number; creations: number } = LIMITS,
 ): Router {
   const router = Router();
-  const pepper = pepperFrom(env);
+  const pepper = checkedPepper(db, pepperFrom(env));
   const nameFailures = windowCounter(15 * 60 * 1000, limits.nameFailures);
   const addressFailures = windowCounter(15 * 60 * 1000, limits.addressFailures);
   const creations = windowCounter(60 * 60 * 1000, limits.creations);
