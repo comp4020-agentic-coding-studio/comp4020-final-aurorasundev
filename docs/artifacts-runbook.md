@@ -125,11 +125,12 @@ stop and new burns read nothing, everything else continues, and jobs that
 already have a brief wait. Hiding objects works
 while paused.
 
-## Record music (Web Audio) — implemented, off by default
+## Record music (Web Audio) — on in production since 2026-10-27
 
 The [music design](../design/gallery/record-exhibition/music-design.md) and
 [ADR 006](adr/006-browser-synthesised-record-music.md) are implemented behind
-`GALLERY_MUSIC_ENABLED`, which is **off** unless set to `1`. There is no
+`GALLERY_MUSIC_ENABLED`. The code treats it as **off** unless it is set to
+`1`; the owner set it to `1` in production on 2026-10-27. There is no
 music-service key, audio endpoint, audio file, music quota or extra model
 request: the score is composed locally on the server, and the sound is
 synthesized in the visitor's browser only after they press Play.
@@ -164,8 +165,9 @@ when music is off.
   `NULL`; the image still publishes, and no substitute sound is made.
 - New scores are composed by the current composer, `throwaway-score-v3`.
   Each stored score keeps the `composer_version` it was made with (v1, v2 or
-  v3) and is never recomposed; the browser validates and plays all three
-  with the same renderer. A changed composer is always a new version
+  v3) and is never recomposed automatically; the browser validates and plays
+  all three with the same renderer. The one deliberate exception is the
+  owner's 2026-11-09 re-composition of the v1/v2 records with v3 (above). A changed composer is always a new version
   ([ADR 006](adr/006-browser-synthesised-record-music.md)).
 - The stored score holds only versions, the seed, tempo, timbre, ending,
   reverb mix and up to 96 note events (time, length, MIDI pitch, velocity).
@@ -208,7 +210,11 @@ own. No audio is cached beyond the one in-memory buffer.
    volume, so an off-machine copy is still worth taking.
 2. Listen first: in a real desktop browser and a real phone (including iOS
    Safari), check all four timbres and endings for clicks, harshness and
-   level, and time the first render. None of this has been verified yet.
+   level, and time the first render. The owner has listened on desktop and
+   an outside listener compared two tracks
+   ([ADR 008](adr/008-rebirth-reversal.md#listening-check)); iOS Safari's
+   audio unlock and first-render time on a physical phone are still
+   unverified (ADR 006).
 3. Set `GALLERY_MUSIC_ENABLED=1` as a Fly secret and restart. Only images
    published from then on get scores.
 

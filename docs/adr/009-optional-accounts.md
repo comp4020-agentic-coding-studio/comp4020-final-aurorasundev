@@ -28,7 +28,7 @@ thing: how do I see my own papers again? The return key never answered it.
 | --- | --- | --- |
 | Keep return keys | no personal data | a Keep stays findable only by chance; a released paper's record is never yours to find |
 | Return keys plus a private list | finds papers without a password | a lost or leaked key is the whole account; a 32-character key is hard to keep |
-| **Optional username and password, no email; a private panel** | familiar; a guest can still start without signing up | a password to store well; no recovery without email; a private owner link is read |
+| **Optional username and password, no email; a private panel** | familiar; a guest can still start without signing up | a password to store well; no recovery without email (later met by a recovery code, see the revision below); a private owner link is read |
 | Accounts with email | password recovery | personal data to hold and protect; needs a sending domain the project doesn't have |
 
 ## Decision

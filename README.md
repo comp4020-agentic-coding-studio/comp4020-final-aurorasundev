@@ -84,7 +84,8 @@ through less clearly. [Listening notes](https://github.com/comp4020-agentic-codi
 without signing up. This browser remembers you as an anonymous visitor.
 If you have an account, use **Sign in** at the top right to pick up your
 papers on another browser. Choose **中 / EN** in the header to change the
-interface language.
+interface language. On a phone, these links sit behind **Menu** at the
+top right.
 
 ### Leave a paper
 
