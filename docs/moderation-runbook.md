@@ -109,7 +109,9 @@ mise exec -- flyctl secrets import --stage -a comp4020-final-aurorasundev < .env
 ```
 
 `--stage` avoids restarting the current release. Back up the live SQLite
-database consistently before the schema-7 deployment. Inspect the final diff,
+database consistently before the schema-7 deployment (startup now also
+writes a `.pre-v<N>-<time>.bak` copy beside the database before any
+migration and refuses to migrate if it can't; that copy shares the volume). Inspect the final diff,
 run checks and the container build, then deploy only after the owner's
 instruction. Verify provider configuration without displaying secrets,
 publication/report behavior, SSE quarantine, and preservation of existing

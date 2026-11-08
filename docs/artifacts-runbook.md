@@ -199,7 +199,11 @@ own. No audio is cached beyond the one in-memory buffer.
 ### Enabling and rolling back (an owner decision)
 
 1. Back up the live database consistently before the first deploy that runs
-   migration 10 (it only adds a nullable column).
+   migration 10 (it only adds a nullable column). Startup now does this
+   itself before any migration (`openDb` in `server/db.ts`: a
+   `throwaway.sqlite.pre-v<N>-<time>.bak` beside the database, the newest
+   three kept, and no migration if the copy fails); it sits on the same
+   volume, so an off-machine copy is still worth taking.
 2. Listen first: in a real desktop browser and a real phone (including iOS
    Safari), check all four timbres and endings for clicks, harshness and
    level, and time the first render. None of this has been verified yet.
