@@ -2,6 +2,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { GalleryLinks } from "../src/components/GalleryLinks.tsx";
 import { Header } from "../src/components/Header.tsx";
 import { SiteMenu } from "../src/components/SiteMenu.tsx";
 
@@ -74,4 +75,30 @@ it("its Escape closes only the menu, never a record it sits inside", async () =>
   await act(async () => menu()!.dispatchEvent(new Event("cancel", { bubbles: false, cancelable: true })));
   expect(menu()).toBeNull();
   expect(onCancel).not.toHaveBeenCalled();
+});
+
+it("the Gallery's menu holds its own places, with the full way back to the space", async () => {
+  await act(async () => root.render(createElement(GalleryLinks)));
+  expect(menu()).toBeNull();
+  await press(host.querySelector(".site-menu-open"));
+  expect(places()).toEqual(["Back to the space", "About", "中/EN"]);
+  expect([...menu()!.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toEqual(["/", "/readme/"]);
+});
+
+it("a press on the backdrop closes it, a press on the sheet does not", async () => {
+  await header();
+  await press(host.querySelector(".site-menu-open"));
+  await press(menu()!.querySelector(".site-menu-sheet"));
+  expect(menu()).not.toBeNull();
+  await press(menu());
+  expect(menu()).toBeNull();
+});
+
+it("gives focus back to Menu when it closes with nothing else chosen", async () => {
+  await header();
+  const opener = host.querySelector<HTMLButtonElement>(".site-menu-open")!;
+  await press(opener);
+  await act(async () => (document.activeElement as HTMLElement | null)?.blur());
+  await press(menu()!.querySelector(".site-menu-close"));
+  expect(document.activeElement).toBe(opener);
 });

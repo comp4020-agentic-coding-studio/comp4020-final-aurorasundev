@@ -154,15 +154,24 @@ textarea {
   display: none;
 }
 
-/* looks like the header's links, but it is a control, not a place */
+/* looks like the header's links, but it is a control, not a place; its tap
+   area reaches 44 px tall without making the header row any taller */
 .site-menu-open {
-  min-height: 44px;
+  position: relative;
   padding: 0;
   border: 0;
   background: none;
   color: var(--ink);
   font-size: 18px;
   cursor: pointer;
+}
+
+.site-menu-open::after {
+  content: "";
+  position: absolute;
+  inset: 50% -8px auto;
+  height: 44px;
+  transform: translateY(-50%);
 }
 
 .site-menu-open:disabled {
