@@ -1,0 +1,170 @@
+// @vitest-environment jsdom
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import type { GalleryPage, PublicArtifact } from "../src/lib/gallery-api.ts";
+import { MARKS_KEY } from "../src/lib/record-marks.ts";
+import type { OrbitCallbacks } from "../src/scene/gallery-belt.ts";
+
+// The Gallery's entry (owner, 2026-11-08): the belt's front three places go to
+// records this browser has not opened, recent ones first, even when a recent
+// one lies past the first page; after that, the belt's arrangement holds.
+// The scene is replaced by a recorder of what it is handed.
+
+const control = vi.hoisted(() => ({
+  page: vi.fn(),
+  config: vi.fn(),
+  scene: { cb: null as OrbitCallbacks | null, items: [] as string[][] },
+}));
+vi.mock("../src/lib/gallery-api.ts", async (original) => ({
+  ...(await original<typeof import("../src/lib/gallery-api.ts")>()),
+  getGalleryPage: control.page,
+  getGalleryConfig: control.config,
+}));
+vi.mock("../src/scene/gallery-belt.ts", () => ({
+  canDrawOrbit: () => true,
+  createGalleryBelt: (_host: HTMLElement, _frames: unknown, cb: OrbitCallbacks) => {
+    control.scene.cb = cb;
+    return {
+      setItems: (items: { id: string }[]) => control.scene.items.push(items.map((i) => i.id)),
+      setOpen: () => {},
+      focus: () => {},
+      step: () => {},
+      dispose: () => {},
+    };
+  },
+}));
+
+class FakeSource {
+  static current: FakeSource | null = null;
+  readyState = 1;
+  onerror: (() => void) | null = null;
+  listeners = new Map<string, ((e: MessageEvent) => void)[]>();
+  constructor() {
+    FakeSource.current = this;
+  }
+  addEventListener(type: string, fn: (e: MessageEvent) => void) {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]);
+  }
+  close() {
+    this.readyState = 2;
+  }
+  emit(type: string, data: unknown) {
+    for (const fn of this.listeners.get(type) ?? []) fn(new MessageEvent(type, { data: JSON.stringify(data) }));
+  }
+  static CLOSED = 2;
+}
+
+const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+const art = (n: number, recent = false): PublicArtifact => ({
+  id: id(n),
+  version: 1,
+  image_url: `/api/gallery/${id(n)}/image`,
+  width: 1024,
+  height: 1024,
+  title: `Record ${n}`,
+  alt: "An abstract object.",
+  ...(recent ? { recent: true as const } : {}),
+});
+const page = (ns: number[], next: string | null = null): GalleryPage => ({ revision: 1, items: ns.map((n) => art(n)), next_cursor: next, total: 30 });
+const opened = (ns: number[]) =>
+  window.localStorage.setItem(MARKS_KEY, JSON.stringify({ known: ns.map(id), opened: ns.map(id), heard: [] }));
+
+let host: HTMLDivElement;
+let root: Root;
+const caption = () => host.querySelector(".orbit-title")?.textContent ?? null;
+const shown = () => control.scene.items.at(-1) ?? [];
+const front = () => {
+  const s = shown();
+  return [s[0], s[1], s[s.length - 1]];
+};
+async function emit(type: string, data: unknown) {
+  await act(async () => FakeSource.current!.emit(type, data));
+}
+async function mount() {
+  const { GalleryApp } = await import("../src/GalleryApp.tsx");
+  await act(async () => root.render(createElement(GalleryApp)));
+}
+
+beforeEach(() => {
+  window.localStorage.clear();
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+  control.config.mockResolvedValue({ generation_enabled: true });
+  control.page.mockReset();
+  // a page asked for and never answered, unless a test says otherwise
+  control.page.mockReturnValue(new Promise(() => {}));
+  control.scene.cb = null;
+  control.scene.items = [];
+  Object.assign(globalThis, {
+    IS_REACT_ACT_ENVIRONMENT: true,
+    EventSource: FakeSource,
+    ResizeObserver: class {
+      observe() {}
+      disconnect() {}
+    },
+  });
+  window.matchMedia = ((q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+  globalThis.requestAnimationFrame = ((fn: () => void) => setTimeout(fn, 0)) as unknown as typeof requestAnimationFrame;
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+});
+afterEach(async () => {
+  await act(async () => root.unmount());
+  host.remove();
+  vi.useRealTimers();
+});
+
+it("puts unopened records in the front three places, in a fixed order", async () => {
+  opened([1, 2, 3]);
+  await mount();
+  await emit("gallery:snapshot", { ...page([1, 2, 3, 4, 5, 6]), recent: [] });
+  expect(front()).toEqual([id(4), id(5), id(6)]);
+  expect(caption()).toBe("Record 4");
+});
+
+it("brings a recent record from past the first page to the very front", async () => {
+  await mount();
+  await emit("gallery:snapshot", { ...page([1, 2, 3, 4], id(4)), recent: [art(20, true)] });
+  expect(front()[0]).toBe(id(20));
+  expect(caption()).toBe("Record 20");
+  // it is in the belt once, and the rest of the window is all there
+  expect(shown().filter((x) => x === id(20))).toHaveLength(1);
+  expect([...shown()].sort()).toEqual([1, 2, 3, 4, 20].map(id).sort());
+});
+
+it("reads on for unopened records before choosing, then shows them in front", async () => {
+  opened([1, 2, 3, 4]);
+  control.page.mockResolvedValueOnce(page([5, 6, 7, 8]));
+  await mount();
+  await emit("gallery:snapshot", { ...page([1, 2, 3, 4], id(4)), recent: [] });
+  for (let i = 0; i < 5; i++) await act(async () => {});
+  // one request continues from the snapshot's cursor (a second would abort it)
+  expect(control.page.mock.calls.filter((c) => c[0] === id(4))).toHaveLength(1);
+  expect(front()).toEqual([id(5), id(6), id(7)]);
+  // the belt's very first list already had them in front
+  expect(control.scene.items[0].slice(0, 2)).toEqual([id(5), id(6)]);
+});
+
+it("does not wait forever for a page that never answers", async () => {
+  opened([1, 2]);
+  control.page.mockReturnValue(new Promise(() => {}));
+  await mount();
+  await emit("gallery:snapshot", { ...page([1, 2], id(2)), recent: [] });
+  expect(shown()).toEqual([]);
+  await act(async () => vi.advanceTimersByTime(2000));
+  expect(shown().length).toBe(2);
+});
+
+it("after the entry, a live arrival and a later snapshot leave the chosen arrangement in place", async () => {
+  opened([1, 2]);
+  await mount();
+  await emit("gallery:snapshot", { ...page([1, 2, 3, 4, 5]), recent: [] });
+  const first = shown();
+  expect(front()).toEqual([id(3), id(4), id(5)]);
+  await emit("artifact:published", { revision: 2, total: 6, artifact: art(9, true) });
+  const after = shown().filter((x) => x !== id(9));
+  expect(after).toEqual(first);
+  // the record in front is not replaced by the arrival
+  expect(caption()).toBe("Record 3");
+});

@@ -13,6 +13,7 @@ import { useGallery } from "./lib/useGallery.ts";
 import { useGalleryAudio } from "./lib/useGalleryAudio.ts";
 import { useCaptionFade } from "./lib/useCaptionFade.ts";
 import { useRecordMarks } from "./lib/useRecordMarks.ts";
+import { useEntryFront } from "./lib/useEntryFront.ts";
 import { beltVertical } from "./scene/belt-layout.ts";
 import { canDrawOrbit } from "./scene/gallery-belt.ts";
 import type { Mist } from "./scene/mist.ts";
@@ -89,14 +90,23 @@ export function GalleryApp() {
   // the grid's tile that opened a record gets focus back
   const opener = useRef<HTMLElement | null>(null);
 
-  const focused = useMemo(() => g.items.find((a) => a.id === focusedId) ?? g.items[0] ?? null, [g.items, focusedId]);
+  // the entry's front three: unopened here, recent first (owner, 2026-11-08)
+  const entryFront = useEntryFront(g, marks.openedAtLoad, orbit);
+  const shown = entryFront.items;
+  // until the belt reports a focus, the front record is the first front (an
+  // arrival placed before it must not take its caption)
+  const focused = useMemo(
+    () => shown.find((a) => a.id === focusedId) ?? shown.find((a) => a.id === entryFront.lead) ?? shown[0] ?? null,
+    [shown, focusedId, entryFront.lead],
+  );
   const isOpen = g.selected !== null;
   const vertical = useVertical();
   // the caption fades out as the belt turns and back in when it rests
   const caption = useRef<HTMLDivElement>(null);
   const onTurning = useCaptionFade(caption, focused?.id ?? null, still);
 
-  const showOrbit = orbit && g.items.length > 0;
+  // the orbit waits for the front to be chosen, so its first frame is right
+  const showOrbit = orbit && g.items.length > 0 && entryFront.ready;
 
   // --- the entry and its virtual progress p (design 2026-10-19 §1–§3) -------
   const gate = useMemo(createGate, []);
@@ -118,9 +128,11 @@ export function GalleryApp() {
   });
   const live = takesInput(stage);
   // with no scene to wait for (empty, failed), the exhibition is ready
+  // (an orbit still choosing its front is not "no scene")
+  const choosingFront = orbit && g.items.length > 0 && !entryFront.ready;
   useEffect(() => {
-    if (!g.loading && !showOrbit) gate.set(true);
-  }, [g.loading, showOrbit, gate]);
+    if (!g.loading && !showOrbit && !choosingFront) gate.set(true);
+  }, [g.loading, showOrbit, choosingFront, gate]);
   // the exhibition takes input only at p = 1
   useEffect(() => {
     orbitRef.current?.setInput(live);
@@ -222,15 +234,17 @@ export function GalleryApp() {
   // records from its start, so the end keeps moving forward and turning on
   // reaches every record; after the last one it wraps to the first page.
   // One request per focused record, so an empty page cannot chain requests.
+  // Measured on the belt's own order (the entry may have moved three fronts).
   const askedAt = useRef<string | null>(null);
   useEffect(() => {
-    if (!orbit || !hasMore || loadingMore || !focused || askedAt.current === focused.id) return;
-    const at = g.items.findIndex((a) => a.id === focused.id);
-    if (at >= g.items.length - 4) {
+    // while the entry chooses its front, the front reader owns the paging
+    if (!showOrbit || !hasMore || loadingMore || !focused || askedAt.current === focused.id) return;
+    const at = shown.findIndex((a) => a.id === focused.id);
+    if (at >= shown.length - 4) {
       askedAt.current = focused.id;
       loadMore();
     }
-  }, [orbit, hasMore, loadingMore, loadMore, focused, g.items]);
+  }, [showOrbit, hasMore, loadingMore, loadMore, focused, shown]);
 
   const frames = useCallback(
     () => (band.current && ghostArt.current && ghostDisc.current ? { band: band.current, art: ghostArt.current, disc: ghostDisc.current, backdrop: backdrop.current } : null),
@@ -254,7 +268,7 @@ export function GalleryApp() {
           ref={orbitRef}
           held={stage === "entry" || stage === "returning"}
           onReady={() => gate.set(true)}
-          items={g.items}
+          items={shown}
           open={isOpen}
           frames={frames}
           onFocus={onFocus}
@@ -322,7 +336,7 @@ export function GalleryApp() {
               {t("Try again")}
             </button>
           </div>
-        ) : g.loading ? (
+        ) : g.loading || choosingFront ? (
           <p className="records-state" role="status">
             {t("Opening the Gallery…")}
           </p>
