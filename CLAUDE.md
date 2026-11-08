@@ -202,6 +202,16 @@ regenerating it on application startup.
   assert the contract over HTTP, not implementation details.
 - Run `pnpm check` (and `docker build` when touching the Dockerfile) before
   saying a phase is done; say plainly what was not verified.
+- **Any visual or interaction change is tried by a person on a local
+  deployment, and pushed only after the owner approves it** (owner,
+  2026-11-08). Render-check it yourself first (desktop and phone, and the
+  widths between when layout moves), then run the production build locally
+  (`pnpm build`, then `node server/index.ts` with a throwaway
+  `DATABASE_PATH`), give the owner the URL (localhost and the LAN address for
+  a phone) and what to look at, and wait. Commit locally meanwhile; never push
+  a visual or interaction change, even a passing one, before that approval.
+  Every push to `main` deploys, so CI is not the place to find out how it
+  looks.
 - Small commits that grow with the work; PROCESS.md cites them.
 - Don't write the user's reflections or claim experiences they didn't report.
 - Never move a `crit-<n>` tag after its cutoff.
