@@ -1,0 +1,11 @@
+const base = process.argv[2];
+const sess = async () => (await fetch(base + "/api/session", { method: "POST" })).headers.get("set-cookie").split(";")[0];
+const save = (c) => fetch(base + "/api/papers", { method: "POST", headers: { "Content-Type": "application/json", Cookie: c }, body: JSON.stringify({ content: "x", mode: "KEEP", confirmed: true, submission_key: crypto.randomUUID() }) });
+const tally = (a) => a.reduce((m, s) => (m[s] = (m[s] || 0) + 1, m), {});
+const one = await sess();
+let r = await Promise.all(Array.from({ length: 15 }, () => save(one)));
+console.log("one person, 15 saves at once:", tally(r.map((x) => x.status)));
+const body = await (await save(one)).json(); console.log("  16th:", body.code, "|", body.error);
+const many = await Promise.all(Array.from({ length: 10 }, sess));
+r = await Promise.all(many.flatMap((c) => [save(c), save(c), save(c)]));
+console.log("10 more people (same address), 3 each:", tally(r.map((x) => x.status)));

@@ -63,4 +63,7 @@ papers, accounts and records the moment the new machine starts.
   database needs none.
 - On 2026-11-09 a local production build was stopped and started again on
   the same file: the space's papers, its revision and the Gallery's records
-  were all unchanged.
+  were all unchanged. The same day's
+  [stress test](../evidence/stress-2026-11/README.md) checked the
+  transactions under concurrent saves, witnesses and burns, a slow and a
+  dropped connection, and the save and stream limits (ADR 007).
