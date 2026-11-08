@@ -37,7 +37,8 @@ thing: how do I see my own papers again? The return key never answered it.
 and nothing to type. An account is a username and a password attached to
 that same identity (`accounts.identity_id → identities.id`), so creating one
 keeps every paper, witness and right the guest already had. There is no
-email and no password recovery yet; the sign-up form says so.
+email; a forgotten password is recovered with a one-time recovery code
+(revision below).
 
 **Sign in sits in the header beside About.** A guest is also invited, once,
 after their first Keep and once more at their third paper. "Not now" closes
@@ -111,8 +112,9 @@ regard to case. Passwords are 8–128 characters and can't equal the username.
 
 - A Keep can be found again from any browser; a released paper's record is
   visible to its author. That was the point.
-- A forgotten password can't be recovered. The cost is accepted for now;
-  email recovery needs a sending domain and is future work.
+- A forgotten password is recovered with the recovery code (revision
+  below). Someone who loses both the password and the code can't get the
+  account back; there is no email to fall back on.
 - The database now holds usernames and password hashes. A leaked database
   reveals which username wrote which paper: the private owner link existed
   before, but was attached only to random ids. No email or other personal
@@ -122,6 +124,30 @@ regard to case. Passwords are 8–128 characters and can't equal the username.
   account there carries everything with it.
 - Logs name the person (`who=`), never the username or password; see
   `docs/logging-runbook.md`.
+
+## Revision (2026-11-09): recovery codes
+
+Without email, a forgotten password used to lose the account. Now, right
+after an account is created, the owner is shown a recovery code once, on
+the same paper sheet, with what it is for and that it won't be shown again;
+they confirm they have saved it before the sheet closes. Under Sign in,
+**Forgot your password?** takes the username, that code and a new password.
+
+- The code is 20 characters (about 100 bits) from an alphabet without
+  look-alikes, in five groups of four; case, spaces and dashes are ignored
+  when typed. Being random rather than chosen, it is kept as an HMAC under
+  `ACCOUNT_PEPPER` (migration 13, `accounts.recovery_hash`), not with scrypt.
+- A reset uses the code up and issues a new one in its reply, ends every
+  other session of the account, and signs this browser in. Two resets with
+  the same code can't both succeed.
+- A wrong code and an unknown name get the same answer, and count against
+  the same per-name and per-address limits as wrong passwords.
+- Accounts made before this have no code (`recovery_hash` is null) and
+  can't use recovery. There is no backfill: a code nobody was shown is no
+  use. Giving them one (say, once after their next sign-in) is future work.
+- Logs carry `recover` with the person and the outcome (`reset`, `invalid`,
+  `malformed`, `invalid_password`, `rate_limited`, `unconfigured`), never the
+  username or the code. Checked over HTTP in `spec/accounts.test.ts`.
 
 ## Verification
 

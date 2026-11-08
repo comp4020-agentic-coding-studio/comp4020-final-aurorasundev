@@ -16,7 +16,7 @@ boot lines, then `throwaway listening on 0.0.0.0:8080`. Only the app's own
 lines follow the shape below; to see just those:
 
 ```sh
-mise exec -- flyctl logs -a comp4020-final-aurorasundev | grep --line-buffered -E ' (session|connect|disconnect|open|create|witness|burn|report|gallery_report|register|login|logout|quarantine|review|operator_decision) '
+mise exec -- flyctl logs -a comp4020-final-aurorasundev | grep --line-buffered -E ' (session|connect|disconnect|open|create|witness|burn|report|gallery_report|register|login|recover|logout|quarantine|review|operator_decision) '
 ```
 
 ## Line shape
@@ -42,6 +42,7 @@ usernames, passwords or other credentials.
 | `gallery_report` | `created`, `existing`, `rate_limited`, `missing`, `conflict` | they reported a Gallery record (`artifact=` its public id; never a paper) |
 | `register` | `created`, `taken`, `invalid`, `already`, `rate_limited`, `unconfigured` | they turned their guest identity into an account (same `who=` before and after) |
 | `login` | `signed_in`, `merged` (`moved=` papers a guest left), `invalid`, `rate_limited`, `unconfigured` | they signed in; a failed attempt has no `who` (nobody was proven) |
+| `recover` | `reset` (`moved=` as for login), `invalid`, `malformed`, `invalid_password`, `rate_limited`, `unconfigured` | they set a new password with their recovery code; their other sessions ended. A failed code has no `who` |
 | `logout` | `signed_out` | they signed out; this browser's next visit is a new guest |
 | `quarantine`, `review`, `operator_decision` | — | the safety worker or an operator acted (no `who`) |
 | `account_pepper` | `recorded`, `replaced`, `mismatch` | at startup: the pepper's fingerprint was stored, replaced (no accounts yet), or no longer matches, so accounts are off until the original `ACCOUNT_PEPPER` is restored (no `who`, no secret) |

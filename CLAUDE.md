@@ -38,8 +38,11 @@ readable centre. Keep phone controls and captions clear of the paper.
   Accounts are a username and password, no email. Passwords are scrypt
   (N=2^14, r=8, p=5, sized for the 256 MB machine, two at a time) sealed
   with `ACCOUNT_PEPPER`, a Fly secret that must never change; on Fly without
-  it, accounts report themselves unavailable and guests carry on. Sign-in
-  and sign-up rotate the session cookie. A guest's papers move to the
+  it, accounts report themselves unavailable and guests carry on. A
+  forgotten password is recovered with a one-time recovery code shown once
+  after sign-up (HMAC under the pepper; a reset uses it up, issues a new
+  one and ends the account's other sessions; ADR 009 revision). Sign-in,
+  sign-up and recovery rotate the session cookie. A guest's papers move to the
   account they sign into.
 - The Gallery (ADR 005, docs/artifacts-runbook.md) is the one requested
   exception: a burned **Release** paper can leave one inspected, independent

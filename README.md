@@ -180,8 +180,11 @@ through restarts and deployments until they are burned or removed.
 Choose **Sign in** at the top right, then **Create an account** with a
 username and a password. You are also invited after your first Keep and
 your third paper; **Not now** closes it. Creating an account keeps
-everything you have already left and your rights to it. There is no email
-and no password recovery yet, so keep your password somewhere safe.
+everything you have already left and your rights to it. There is no email:
+right after you create your account you get a recovery code, shown only
+once. Save it somewhere safe. If you forget your password, choose
+**Forgot your password?** under Sign in and enter your username and that
+code to set a new password; you then get a new code.
 
 Once signed in, your username replaces **Sign in**. Choose it to see your
 papers still in the space, in two groups: **Kept by you**, which only you
