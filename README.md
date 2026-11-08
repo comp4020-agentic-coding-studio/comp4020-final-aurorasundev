@@ -20,6 +20,10 @@ kind of visit. An optional account lets you find your own papers and see
 what they became in a private view. With no audience, it gives no reason
 to perform.
 
+I want visitors to understand who can burn their paper before they choose
+how to leave it. The room is available in English and Simplified Chinese,
+and each paper stays in the words its writer chose.
+
 In [Popcannibal's Kind Words](https://popcannibal.itch.io/kindwords),
 strangers answer anonymous requests with letters of comfort or advice.
 I wanted a reader to be able to show they paid attention without asking
@@ -73,9 +77,10 @@ records those corrections.
 ### Enter the space
 
 [Open the room](https://comp4020-final-aurorasundev.fly.dev/). You can start
-without signing up. A cookie gives this browser an anonymous identity.
-A separate browser profile or private window is another visitor. To find
-your papers again from another browser, use **Sign in** at the top right.
+without signing up. This browser remembers you as an anonymous visitor.
+If you have an account, use **Sign in** at the top right to pick up your
+papers on another browser. Choose **中 / EN** in the header to change the
+interface language.
 
 ### Leave a paper
 
@@ -103,7 +108,8 @@ Tab and open them with the keyboard. Read its words and drawing, then
 choose **I saw it** to witness it. Each other reader adds one witness,
 however many times they return. You can acknowledge your own paper without
 adding to its witness count. Close the sheet with the cross or Escape to
-return to the room.
+return to the room. If **Explore the space** is available, use it to bring
+another selection of papers into view.
 
 ### Let a paper go
 
@@ -113,11 +119,57 @@ open it and choose **I saw it**, including when you wrote it yourself.
 In the reading sheet, **Release it** brings up the furnace. Drag the
 floating paper into its opening, or choose **Place in furnace**. You can
 cancel before placement. Once the server confirms, the paper is gone from
-the shared collection and the burn plays. Other visitors see it burn where
-it was lying. Someone already reading it can finish their reading.
+the shared collection and the burn plays. In another room, the paper
+burns in place if it is in view. Someone who already has it open can
+finish reading it.
 
 Let the paper burn down to ash, then choose **Back to the space**. The
 return button becomes available after three seconds of ash.
+
+### Share the room
+
+Open the same room on two devices, in two browser profiles, or in a regular
+window and a private window. Leave both sessions as guests so you can try
+it as two different visitors. Two ordinary tabs in the same profile share
+one visitor. Put the two rooms side by side, call them A and B, and keep
+both open without refreshing. The number next to **Throwaway** counts all
+papers still in the room. Each visitor sees their own selection and arrangement.
+
+1. **A leaves a paper.** Choose **Leave something here** and write a short
+   test note, such as “I am letting go of a busy morning.” Select
+   **Release it**, tick **I understand**, then choose **Crumple & throw**.
+   Once the paper passes its check and is saved, B's total goes up by one
+   and the new paper arrives in B's room within about a second. Open it
+   in B and check the words.
+2. **B witnesses it.** With the same paper also open in A, choose **I saw it**
+   in B. B's button changes to **Witnessed**. A's sheet shows
+   “1 person has witnessed this.” without a refresh.
+3. **B burns the paper.** To watch from A, close its reading sheet and
+   check that the same paper is visible in A's room. In B, choose
+   **Release it** on the open sheet and drag the paper into the furnace
+   or choose **Place in furnace**. Once the server confirms the burn,
+   A's paper count drops by one within about a second, without a reload.
+
+   - **The paper is on A's screen.** As it burns in B's furnace, the same
+     paper automatically catches fire where it lies on A's screen. The
+     furnace appears only for B.
+   - **The paper is outside A's view.** A smaller screen or browser window
+     can show fewer papers. If A's room is showing a selection that
+     leaves this paper out, A sees the count drop without seeing it burn.
+   - **A is still reading the paper.** A can finish reading it. Once the
+     sheet closes, the paper is gone.
+
+   In B, wait for the ash to settle and choose **Back to the space**.
+
+If two people try to let go of the same paper at once, the first confirmed
+burn removes it and the shared total drops once.
+
+To check what survives a return visit, refresh A after the paper is saved
+and before B burns it. The total still includes that paper, and the room
+may show a different selection. Refresh again after the burn to see the
+updated total. When a dropped connection returns, the room catches up
+without replaying any burns you missed. Saved papers stay
+through restarts and deployments until they are burned or removed.
 
 ### Keep an account (optional)
 
@@ -153,14 +205,6 @@ yet” describe activity remembered in this browser.
 Images appear after a Release paper burns and processing completes. Some
 released papers leave no record. Keep papers leave no Gallery record.
 The exhibition presents the resulting works without a link to their source.
-
-### Share the room
-
-Open Throwaway in two separate browser profiles to visit as two people.
-Saving or burning a paper changes the other open room within about a
-second, without a reload. Each room shows a selection of the shared
-collection, with its own paper positions. Saved papers remain across
-visits, restarts and redeployments until they are burned or removed.
 
 ## Safety checks and reporting
 
