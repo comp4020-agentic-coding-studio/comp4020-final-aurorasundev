@@ -101,12 +101,12 @@ export const ZH = {
   "You can't let this paper go any more.": "你已经不能再放走这张纸了。",
 
   // the furnace
-  "What it carried is becoming a record in the Gallery.": "它承载的东西，正在展馆里化作一张唱片。",
-  "It may take a few minutes.": "这可能需要几分钟。",
-  "A kept paper leaves no record behind.": "留给自己的纸，不会留下任何记录。",
-  "New Gallery records aren't being made right now.": "展馆暂时不再制作新的唱片。",
-  "It is gone.": "它已经不在了。",
-  "Someone else let it go first.": "有人先一步放走了它。",
+  "What it carried is becoming a record in the Gallery.": "它承载的东西，正在展馆里化作一张唱片",
+  "It may take a few minutes.": "这可能需要几分钟",
+  "A kept paper leaves no record behind.": "留给自己的纸，不会留下任何记录",
+  "New Gallery records aren't being made right now.": "展馆暂时不再制作新的唱片",
+  "It is gone.": "它已经不在了",
+  "Someone else let it go first.": "有人先一步放走了它",
   "Place the paper in the furnace.": "把纸放进火炉。",
   "It is gone only when you place it inside.": "只有放进去，它才会真正离开。",
   "Drag the paper into the furnace.": "把纸拖进火炉。",
