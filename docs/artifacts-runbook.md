@@ -154,10 +154,8 @@ when music is off.
   `/app`, and run it again without `--dry-run`. It only fills empty scores
   and is safe to repeat. On 2026-11-08 every published record (9) already
   reported `music.status: "ready"`, so there was nothing to fill. On
-  2026-11-09 the owner retired the older music: after a backup, a one-off
-  run re-composed the eight records on v1/v2 with v3 (ADR 006 revision).
-  That was not a script option and is not to be repeated without the
-  owner's say.
+  2026-11-09 the eight records on v1/v2 were re-composed once with v3
+  (ADR 006 revision).
 - In the same transaction that publishes an inspected image, with music on,
   `shared/music-score.ts` composes a `MusicScoreV1` from the job's already
   stored `CreativeBriefV2` (its `music`, `relation`, `motion`, `metaphor` and

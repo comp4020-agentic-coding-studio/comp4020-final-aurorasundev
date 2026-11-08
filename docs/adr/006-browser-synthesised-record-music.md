@@ -121,11 +121,6 @@ first notes and a fingerprint of v2's output for every brief. Stored scores
 are not recomposed automatically, and the backfill script only fills a
 record that has no score, using the current composer.
 
-**Revision (owner, 2026-11-09): the live Gallery plays v3 only.** Having
-heard the older pieces beside v3, the owner judged them too alike and
-retired them. After a backup on the machine and an off-machine copy, a
-one-off operator run re-composed the eight published records still on v1
-or v2 with v3 from their stored briefs and fresh seeds, moving the Gallery
-revision once. It was a single explicit decision, not a mode: the script
-was returned to fill-only afterwards. v1 and v2 stay frozen in the code so
-a score held anywhere else still validates and plays.
+**Revision (2026-11-09):** the owner retired the older music. The eight
+records still on v1 or v2 were re-composed once with v3, so every record
+now plays v3.
