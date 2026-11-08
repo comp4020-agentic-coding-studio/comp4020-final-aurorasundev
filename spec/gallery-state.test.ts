@@ -276,3 +276,58 @@ describe("a bounded window that still reaches every record", () => {
     expect(ids(s)).toContain(id(36));
   });
 });
+
+describe("the entry's recent records and fronts", () => {
+  it("keeps the snapshot's recent records out of the window and drops a hidden one", () => {
+    const s = run([
+      { type: "snapshot", page: page([1, 2], 5, 4, id(2)), recent: [art(3), art(4)] },
+      { type: "change", change: hidden(3, 6, 3) },
+    ]);
+    expect(ids(s)).toEqual([id(1), id(2)]);
+    expect(s.recent.map((a) => a.id)).toEqual([id(4)]);
+    expect(s.cursor).toBe(id(2));
+  });
+
+  it("adds a front that is not in the window like an arrival, leaving the cursor and paging exact", () => {
+    const s = run([
+      { type: "snapshot", page: page([1, 2], 5, 4, id(2)), recent: [art(9)] },
+      { type: "front", artifacts: [art(9), art(1)] },
+    ]);
+    expect(ids(s)).toEqual([id(9), id(1), id(2)]);
+    expect(s.cursor).toBe(id(2));
+    expect(s.hasMore).toBe(true);
+    // the page that later lists it adds nothing twice
+    const next = galleryReducer(galleryReducer(s, { type: "load", kind: "page" }), { type: "page", page: page([3, 9], 5, 4), after: id(2) });
+    expect(ids(next).filter((x) => x === id(9))).toHaveLength(1);
+    expect(ids(next)).toEqual([id(9), id(1), id(2), id(3)]);
+  });
+
+  it("does not bring back a front hidden before it joined", () => {
+    const s = run([
+      { type: "snapshot", page: page([1], 5, 2), recent: [art(9)] },
+      { type: "change", change: hidden(9, 6, 1) },
+      { type: "front", artifacts: [art(9)] },
+    ]);
+    expect(ids(s)).toEqual([id(1)]);
+  });
+
+  it("a reconnect's snapshot replaces the recent records", () => {
+    const s = run([
+      { type: "snapshot", page: page([1], 5, 2), recent: [art(9)] },
+      { type: "snapshot", page: page([1], 6, 2), recent: [] },
+    ]);
+    expect(s.recent).toEqual([]);
+  });
+});
+
+describe("the entry's fronts in a full window", () => {
+  it("keeps every chosen front when adding one would go over the cap", () => {
+    const full = Array.from({ length: MAX_TILES }, (_, i) => i + 1);
+    const s = run([
+      { type: "snapshot", page: page(full, 5, 99, id(MAX_TILES)), recent: [art(90)] },
+      { type: "front", artifacts: [art(90), art(40), art(MAX_TILES)] },
+    ]);
+    expect(s.items).toHaveLength(MAX_TILES);
+    for (const n of [90, 40, MAX_TILES]) expect(ids(s)).toContain(id(n));
+  });
+});

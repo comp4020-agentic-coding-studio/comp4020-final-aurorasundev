@@ -73,10 +73,16 @@ readable centre. Keep phone controls and captions clear of the paper.
   `particles-plan.ts`, `record-timeline.ts` and `gallery-motion.ts`, with
   specs; reduced motion or no WebGL gets the grid. A pale paper tag
   above a record's name (HTML only, never on the cards) reads "Arrived
-  recently" (the server's coarse 24 h `recent: true`, never a time or an
-  order) or "New to you", and an opened record reads "Not heard yet". Both
+  recently" (the server's coarse 24 h `recent: true`, never a time) or
+  "New to you", and an opened record reads "Not heard yet". Both
   are held only in this browser's `localStorage` (`record-marks.ts`) and are
-  never sent (owner, 2026-10-27; ADR 005 revision). Sound is
+  never sent (owner, 2026-10-27; ADR 005 revision). The one exception to
+  the unordered exhibition is the entry (owner, 2026-11-08): the belt's
+  front three places go to records this browser has not opened, recent ones
+  first (`entry-front.ts`); the live snapshot also lists up to 12 recent
+  records, in id order, so one past the first page can come forward. The
+  choice is made once; turning, paging and arrivals then keep their rules.
+  Pages stay in id order, and there is still no latest view. Sound is
   **implemented behind `GALLERY_MUSIC_ENABLED`, which the owner turned on
   in production on 2026-10-27** (a Fly secret; unset it to switch off).
   A one-time operator backfill scored five older records. Records without a

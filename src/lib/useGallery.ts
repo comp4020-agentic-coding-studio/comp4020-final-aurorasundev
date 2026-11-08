@@ -9,6 +9,7 @@ import {
   type ArtifactReportReason,
   type GalleryChange,
   type GalleryPage,
+  type PublicArtifact,
 } from "./gallery-api.ts";
 import { galleryReducer, initialGallery, openArtifact } from "./gallery-state.ts";
 
@@ -61,8 +62,8 @@ export function useGallery() {
     // the snapshot arrives as the first event of every connection
     source.addEventListener("gallery:snapshot", (e) => {
       if (!live) return;
-      const page = JSON.parse((e as MessageEvent).data) as GalleryPage;
-      dispatch({ type: "snapshot", page });
+      const { recent, ...page } = JSON.parse((e as MessageEvent).data) as GalleryPage & { recent?: PublicArtifact[] };
+      dispatch({ type: "snapshot", page, recent });
       setError(false);
       setReconnecting(false);
       // after a reconnect, an open object outside the first page is checked by id
@@ -173,6 +174,7 @@ export function useGallery() {
   const frozenReason = useCallback((id: string): ArtifactReportReason | null => reportOps.current.get(id)?.reason ?? null, []);
 
   const open = useCallback((id: string | null) => dispatch({ type: "open", id }), []);
+  const front = useCallback((artifacts: PublicArtifact[]) => dispatch({ type: "front", artifacts }), []);
 
   return {
     items: state.items,
@@ -192,6 +194,11 @@ export function useGallery() {
     loadMore,
     restart,
     focus,
+    // the snapshot's recent records and the way the entry's fronts join
+    recent: state.recent,
+    // ids hidden during this visit, so a record met earlier is never chosen
+    hidden: state.hidden,
+    front,
     retry,
     selected: openArtifact(state),
     openId: state.openId,

@@ -45,6 +45,9 @@ export type GalleryState = {
   openId: string | null;
   // the tile in front, so retiring never takes the one being looked at
   focusId: string | null;
+  // the snapshot's recent records, for the entry's front choice only; kept
+  // apart from the window so its cursor rules stay exact
+  recent: PublicArtifact[];
 };
 
 export const initialGallery: GalleryState = {
@@ -59,11 +62,12 @@ export const initialGallery: GalleryState = {
   loading: "snapshot",
   openId: null,
   focusId: null,
+  recent: [],
 };
 
 export type GalleryAction =
   | { type: "load"; kind: "snapshot" | "page" }
-  | { type: "snapshot"; page: GalleryPage }
+  | { type: "snapshot"; page: GalleryPage; recent?: PublicArtifact[] }
   // `after` is the cursor the page was requested from (null: the first page)
   | { type: "page"; page: GalleryPage; after: string | null }
   // the way back: the first page (fetched by HTTP) replaces the window
@@ -72,6 +76,8 @@ export type GalleryAction =
   | { type: "open"; id: string | null }
   | { type: "focus"; id: string | null }
   | { type: "revalidated"; id: string; artifact: PublicArtifact | null }
+  // the entry's chosen fronts join the window as live arrivals do
+  | { type: "front"; artifacts: PublicArtifact[] }
   | { type: "failed" };
 
 function upsert(items: PublicArtifact[], hidden: Record<string, number>, incoming: PublicArtifact[], front: boolean): PublicArtifact[] {
@@ -154,6 +160,7 @@ function apply(state: GalleryState, change: GalleryChange): GalleryState {
     total: change.total,
     hidden: { ...state.hidden, [change.id]: change.version },
     items: state.items.filter((a) => a.id !== change.id),
+    recent: state.recent.filter((a) => a.id !== change.id),
     openId: state.openId === change.id ? null : state.openId,
   };
 }
@@ -176,6 +183,7 @@ export function galleryReducer(state: GalleryState, action: GalleryAction): Gall
         revision: action.page.revision,
         total: action.page.total,
         pending: [],
+        recent: upsert([], state.hidden, action.recent ?? [], false),
       };
       return state.pending.reduce(apply, base);
     }
@@ -225,6 +233,7 @@ export function galleryReducer(state: GalleryState, action: GalleryAction): Gall
         pending,
         hidden: { ...state.hidden, [id]: version },
         items: state.items.filter((a) => a.id !== id),
+        recent: state.recent.filter((a) => a.id !== id),
         openId: state.openId === id ? null : state.openId,
       };
     }
@@ -242,6 +251,13 @@ export function galleryReducer(state: GalleryState, action: GalleryAction): Gall
         items: state.items.filter((a) => a.id !== action.id),
         openId: state.openId === action.id ? null : state.openId,
       };
+    case "front": {
+      const missing = action.artifacts.filter((a) => !state.items.some((b) => b.id === a.id));
+      if (!missing.length) return state;
+      const items = upsert(state.items, state.hidden, missing, true);
+      // every chosen front is spared, not only the ones just added
+      return { ...state, ...bound({ ...state, items }, state, "far", new Set(action.artifacts.map((a) => a.id))) };
+    }
     case "failed":
       return { ...state, loading: null, pending: [] };
   }

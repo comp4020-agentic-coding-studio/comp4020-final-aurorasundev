@@ -50,5 +50,9 @@ export function useRecordMarks(items: PublicArtifact[], loaded: boolean) {
   const tagFor = useCallback((a: PublicArtifact | null): RecordTag => (a && marks ? recordTag(a, marks) : null), [marks]);
   const notHeard = useCallback((a: PublicArtifact | null, hasSound: boolean) => !!a && !!marks && unheard(a.id, hasSound, marks), [marks]);
 
-  return { tagFor, notHeard, opened, heard };
+  // the records this browser had opened when the page loaded: the entry's
+  // front choice reads this, so opening one during the visit moves nothing
+  const [openedAtLoad] = useState<ReadonlySet<string>>(() => new Set(marks?.opened ?? []));
+
+  return { tagFor, notHeard, opened, heard, openedAtLoad };
 }

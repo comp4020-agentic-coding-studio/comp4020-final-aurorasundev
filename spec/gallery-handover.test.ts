@@ -98,6 +98,8 @@ async function mount(ns: number[]) {
 }
 
 beforeEach(() => {
+  // the opened-record marks would otherwise carry from one test to the next
+  window.localStorage.clear();
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
   control.config.mockResolvedValue({ generation_enabled: true });
   control.scene.cb = null;

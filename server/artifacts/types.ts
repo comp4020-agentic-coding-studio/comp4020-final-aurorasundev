@@ -72,6 +72,12 @@ export type GalleryPage = {
   total: number;
 };
 
+// The live channel's first event: the first page, plus the records that
+// arrived recently wherever they fall in id order, so the entry can bring
+// them to the front (owner, 2026-11-08). `recent` is in id order, never
+// arrival order.
+export type GallerySnapshot = GalleryPage & { recent: PublicArtifact[] };
+
 export type GalleryChange =
   | { type: "artifact:published"; revision: number; total: number; artifact: PublicArtifact }
   | { type: "artifact:hidden"; revision: number; total: number; id: string; version: number };

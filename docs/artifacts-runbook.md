@@ -149,6 +149,11 @@ when music is off.
   operator backfills them. The migration itself does no backfill. The
   owner ran a one-time backfill for five older records on 2026-10-27
   ([`710fed9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-aurorasundev/commit/710fed9)).
+  To score any record that still has none: back up the database, then in
+  `fly ssh console` run `node scripts/backfill-scores.ts --dry-run` in
+  `/app`, and run it again without `--dry-run`. It only fills empty scores
+  and is safe to repeat. On 2026-11-08 every published record (9) already
+  reported `music.status: "ready"`, so there was nothing to fill.
 - In the same transaction that publishes an inspected image, with music on,
   `shared/music-score.ts` composes a `MusicScoreV1` from the job's already
   stored `CreativeBriefV2` (its `music`, `relation`, `motion`, `metaphor` and

@@ -43,6 +43,32 @@ everything already in view as known, so it doesn't tag everything. Tags live
 only in HTML, never on the WebGL cards. There are no counts, no badges and no
 "latest" view.
 
+### Revision 2026-11-08: the entry's front three
+
+The owner asked that the records first in view on entering the Gallery be
+ones this visitor hasn't opened, recent ones first, rather than whatever the
+random id order put there. This narrows the 2026-10-27 line "it changes no
+order" to the entry alone.
+
+- The live channel's snapshot gains `recent`: up to 12 published records
+  from the last 24 hours, read in the same transaction as the first page and
+  listed in id order (a sample when there are more), with the same public
+  shape. It carries no time and no arrival order.
+- The browser chooses three records once, in this priority: recent and
+  unopened here, unopened, recent, the rest, keeping the server's order
+  inside each group (`src/lib/entry-front.ts`). "Opened" is this browser's
+  `localStorage` list as the page loaded. If fewer than three unopened
+  records are loaded, it reads further pages for at most 2 s first.
+- The three take the focused place and its neighbours. A recent front that
+  isn't in the window joins it as a live arrival does, so paging stays exact.
+  After that, the belt keeps its arrangement; pages, arrivals and hides
+  follow their existing rules.
+- Pages and `GET /api/gallery` are unchanged: id order, no latest view.
+
+The cost is a sharper timing hint at the entry: a returning visitor sees
+which records arrived in the last day first. Tags and the opened list still
+never leave the browser.
+
 ## What is stored
 
 New tables (migration 9): `artifact_jobs` (a private job per Release paper:
