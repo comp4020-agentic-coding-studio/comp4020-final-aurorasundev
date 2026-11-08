@@ -720,7 +720,7 @@
 @media (max-width: 600px) {
   .records-header {
     align-items: center;
-    padding-top: 30px;
+    padding-top: 22px;
   }
 
   /* the places fold into one Menu (SiteMenu.tsx, styled in app.css) */
@@ -831,11 +831,12 @@
   /* the phone's opened record is the stacked layout (.is-vertical, below);
      its header is one row again, the places behind the Menu */
   .record-header-copy {
-    padding: 30px 0 16px;
+    padding: 22px 0 12px;
   }
 
+  /* just under the header line, as the desktop's is */
   .record-back {
-    top: 80px;
+    top: 54px;
     z-index: 1;
     font-size: 15px;
   }
@@ -1051,9 +1052,17 @@
   transform: none;
 }
 
+/* a phone (owner, 2026-11-08): the record and sleeve shrink together so the
+   title, the lines under it and Listen fit on the first screen of an 844 px
+   phone, and the top spacing scales down with the gutter (desktop: 40 px
+   above the name, 48 px gutter; phone: 22 px, 20 px gutter), so "Back to the
+   Gallery" sits just under the header line and the record under it. 330 px
+   is the text from the title's top to Listen's bottom (a two-line title)
+   plus its margins; a shorter phone keeps a 200 px sleeve and scrolls. */
 @media (max-width: 600px) {
   .is-vertical .record-frame {
-    --top: 128px;
+    --top: 84px;
+    --art: min(calc(100vw - 2 * var(--gutter)), 440px, max(calc((100dvh - var(--top) - 330px) / 1.56), 200px));
   }
 }
 

@@ -21,8 +21,8 @@ const markdown = new Marked({
 // The About page in each interface language: README.md in English at
 // /readme/, its translation README.zh.md at /readme/zh/. Each links to the other.
 const PAGES = {
-  en: { lang: "en-AU", title: "About Throwaway", back: "Back to the space", other: { href: "/readme/zh/", lang: "zh-CN", label: "中文" } },
-  zh: { lang: "zh-CN", title: "关于 Throwaway", back: "回到空间", other: { href: "/readme/", lang: "en", label: "English" } },
+  en: { lang: "en-AU", title: "About Throwaway", back: "Back to the space", menu: "Menu", close: "Close", other: { href: "/readme/zh/", lang: "zh-CN", label: "中文" } },
+  zh: { lang: "zh-CN", title: "关于 Throwaway", back: "回到空间", menu: "菜单", close: "关闭", other: { href: "/readme/", lang: "en", label: "English" } },
 } as const;
 
 // A line break inside a Chinese paragraph would render as a stray space
@@ -76,10 +76,28 @@ export function renderReadmePage(readmePath: string, language: keyof typeof PAGE
       main img { max-width: 100%; height: auto; }
       main code { font-size: 0.9em; }
       main blockquote { margin: 0; padding-left: 16px; border-left: 3px solid var(--muted); color: var(--muted); }
+      /* the phone's Menu, as in the space and the Gallery (SiteMenu.tsx and
+         app.css): the places stack down a pale sheet over a dimmed page */
+      .menu-open { display: none; position: relative; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: 18px; cursor: pointer; }
+      .menu-open::after { content: ""; position: absolute; inset: 50% -8px auto; height: 44px; transform: translateY(-50%); }
+      .menu-open:focus-visible, .menu-close:focus-visible, .menu-links a:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+      .menu { inset: 0 0 auto auto; width: min(320px, calc(100vw - 40px)); margin: 16px 20px 0 auto; padding: 0; border: 0; border-radius: 6px; background: #f3f0e8; color: var(--ink); box-shadow: 0 18px 40px rgb(40 36 30 / 0.22); }
+      .menu::backdrop { background: rgb(28 28 26 / 0.42); }
+      .menu[open] { animation: menu-in 180ms ease-out; }
+      .menu[open]::backdrop { animation: menu-dim 180ms ease-out; }
+      @keyframes menu-in { from { opacity: 0; transform: translateY(-8px); } }
+      @keyframes menu-dim { from { background: rgb(28 28 26 / 0); } }
+      @media (prefers-reduced-motion: reduce) { .menu[open], .menu[open]::backdrop { animation: none; } }
+      .menu-sheet { display: flex; flex-direction: column; align-items: flex-end; padding: 14px 20px 22px; }
+      .menu-close { min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 16px; cursor: pointer; }
+      .menu-links { display: flex; flex-direction: column; align-self: stretch; margin-top: 6px; border-top: 1px solid #cfcbc2; }
+      .menu-links a { display: flex; justify-content: flex-end; align-items: center; min-height: 52px; border-bottom: 1px solid #cfcbc2; color: var(--ink); font-size: 20px; text-decoration: none; }
+      .menu-links a:last-child { border-bottom: 0; }
       @media (max-width: 600px) {
         body { font-size: 17px; }
-        header { padding: 28px 22px 0; }
-        nav { flex-direction: column; align-items: flex-end; gap: 8px; }
+        header { align-items: center; padding: 28px 22px 0; }
+        header nav { display: none; }
+        .menu-open { display: block; }
         .wordmark { font-size: 26px; }
         main { padding: 40px 22px 72px; }
         main h1 { font-size: 46px; }
@@ -95,7 +113,31 @@ export function renderReadmePage(readmePath: string, language: keyof typeof PAGE
         <a class="other-lang" href="${page.other.href}" lang="${page.other.lang}" hreflang="${page.other.lang}">${page.other.label}</a>
         <a class="back" href="/">${page.back}</a>
       </nav>
+      <button type="button" class="menu-open" aria-haspopup="dialog" aria-expanded="false">${page.menu}</button>
+      <dialog class="menu" aria-label="${page.menu}">
+        <div class="menu-sheet">
+          <button type="button" class="menu-close">${page.close}</button>
+          <div class="menu-links">
+            <a href="/">${page.back}</a>
+            <a href="${page.other.href}" lang="${page.other.lang}" hreflang="${page.other.lang}">${page.other.label}</a>
+          </div>
+        </div>
+      </dialog>
     </header>
+    <script>
+      (() => {
+        const open = document.querySelector(".menu-open");
+        const menu = document.querySelector(".menu");
+        open.addEventListener("click", () => {
+          menu.showModal();
+          open.setAttribute("aria-expanded", "true");
+        });
+        menu.querySelector(".menu-close").addEventListener("click", () => menu.close());
+        // a press on the dimmed page, outside the sheet, closes it
+        menu.addEventListener("click", (e) => { if (e.target === menu) menu.close(); });
+        menu.addEventListener("close", () => open.setAttribute("aria-expanded", "false"));
+      })();
+    </script>
     <main>
 ${body}
     </main>
