@@ -42,9 +42,9 @@ const KEEP = MIST_KEEP;
 export const MIST_RADIUS = 0.012;
 // the breath: one cycle of density (seconds). It starts dense (owner,
 // 2026-11-09: someone who scrolls on at once still meets the cloud, rather
-// than a thin veil that thickens only after a few seconds), and runs a third
-// faster than the first 7 s cycle.
-export const MIST_BREATH = 4.7;
+// than a thin veil that thickens only after a few seconds), and runs a little
+// faster than the first 7 s cycle (4.7 s was tried and felt hurried).
+export const MIST_BREATH = 6;
 
 const vert = /* glsl */ `
 varying vec2 vUv;
