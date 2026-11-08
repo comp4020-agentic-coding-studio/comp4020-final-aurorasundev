@@ -230,6 +230,13 @@
 /* Chinese reads smaller than Latin at the same size, so Chinese labels run
    about 9% larger than their English counterparts: the header links and the
    room's main action and its hint, on desktop and phone. */
+/* the ashes' seven brush characters at their full desktop size are wider
+   than the 600px the words usually take: give them room so "了。" never
+   drops onto a line of its own */
+:lang(zh) .ritual.is-ashes .ritual-words {
+  width: min(780px, calc(100vw - 2 * var(--gutter)));
+}
+
 :lang(zh) .header-link,
 :lang(zh) .lang-toggle {
   font-size: 24px;
