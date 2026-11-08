@@ -18,10 +18,39 @@ describe("the Gallery stream", () => {
     for (let i = 0; i < 14; i++) h.seed();
     const [first] = await sseEvents(`${h.base}/api/gallery/events`, 1);
     expect(first.event).toBe("gallery:snapshot");
-    expect(Object.keys(first.data).sort()).toEqual(["items", "next_cursor", "revision", "total"]);
+    expect(Object.keys(first.data).sort()).toEqual(["items", "next_cursor", "recent", "revision", "total"]);
     expect((first.data.items as unknown[]).length).toBe(12);
     expect(first.data.total).toBe(14);
     expect(JSON.stringify(first)).not.toContain(CANARY.text);
+  });
+
+  it("carries the records that arrived in the last day, wherever they fall, in id order and without a time", async () => {
+    h = await gallery();
+    for (let i = 0; i < 20; i++) h.seed();
+    // the seeds are old; make three of them recent, all past the first page
+    const late = h.db.prepare("SELECT id FROM artifacts ORDER BY id DESC LIMIT 3").all() as { id: string }[];
+    for (const { id } of late) h.db.prepare("UPDATE artifacts SET published_at = ? WHERE id = ?").run(Date.now() - 60_000, id);
+    const hidden = h.seed();
+    h.db.prepare("UPDATE artifacts SET status = 'HIDDEN', published_at = ? WHERE id = ?").run(Date.now(), hidden.id);
+
+    const [first] = await sseEvents(`${h.base}/api/gallery/events`, 1);
+    const page = first.data.items as { id: string }[];
+    const recent = first.data.recent as Record<string, unknown>[];
+    expect(recent.map((a) => a.id)).toEqual(late.map((r) => r.id).sort());
+    expect(recent.every((a) => a.recent === true)).toBe(true);
+    expect(recent.some((a) => page.some((p) => p.id === a.id))).toBe(false);
+    for (const a of recent) expect(Object.keys(a).sort()).toEqual(["alt", "height", "id", "image_url", "recent", "title", "version", "width"]);
+    expect(JSON.stringify(first)).not.toMatch(/published_at|\b17\d{11}\b/);
+  });
+
+  it("keeps the recent list short", async () => {
+    h = await gallery();
+    for (let i = 0; i < 15; i++) {
+      const s = h.seed();
+      h.db.prepare("UPDATE artifacts SET published_at = ? WHERE id = ?").run(Date.now(), s.id);
+    }
+    const [first] = await sseEvents(`${h.base}/api/gallery/events`, 1);
+    expect((first.data.recent as unknown[]).length).toBe(12);
   });
 
   it("sends a hide after it commits, once, to every open Gallery", async () => {

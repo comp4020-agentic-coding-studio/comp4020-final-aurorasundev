@@ -1,6 +1,6 @@
 import type { Response } from "express";
 import type { DB } from "../db.ts";
-import { galleryPage } from "./store.ts";
+import { gallerySnapshot } from "./store.ts";
 import type { GalleryChange } from "./types.ts";
 
 // The Gallery's own live channel, separate from the papers': a snapshot of
@@ -42,7 +42,7 @@ export function subscribeGallery(db: DB, res: Response, musicEnabled = false): (
   res.socket?.setNoDelay(true);
   const sub: Subscriber = { res, heartbeat: setInterval(() => res.write(": ping\n\n"), HEARTBEAT_MS) };
   subscribers.add(sub);
-  write(sub, "gallery:snapshot", galleryPage(db, SNAPSHOT_SIZE, null, musicEnabled));
+  write(sub, "gallery:snapshot", gallerySnapshot(db, SNAPSHOT_SIZE, musicEnabled));
   return () => {
     clearInterval(sub.heartbeat);
     subscribers.delete(sub);

@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { composeMusicScore, parseMusicScore, type MusicScoreV1, type PublicMusic } from "../../shared/music-score.ts";
 import type { DB } from "../db.ts";
-import type { CreativeBriefV2, GalleryChange, GalleryPage, PublicArtifact } from "./types.ts";
+import type { CreativeBriefV2, GalleryChange, GalleryPage, GallerySnapshot, PublicArtifact } from "./types.ts";
 
 // Durable record jobs. Every function here is synchronous and makes no
 // network call, so the paper lifecycle can call it inside its own
@@ -106,8 +106,11 @@ const ROW = "id, version, title, alt, music_score, published_at";
 
 // How long a record counts as arrived recently (owner, 2026-10-27: so someone
 // who just released a note can find what it left). Public only as a yes, never
-// as a time, and it changes no order.
+// as a time. Pages keep id order; only the entry's first three places prefer
+// recent records (owner, 2026-11-08).
 export const RECENT_MS = 24 * 60 * 60 * 1000;
+// at most this many recent records ride along with the snapshot
+export const SNAPSHOT_RECENT = 12;
 
 // A stored score, read strictly; anything unreadable or unsupported is null.
 export function storedScore(raw: string | null): MusicScoreV1 | null {
@@ -162,6 +165,21 @@ export function galleryPage(db: DB, limit: number, after: string | null, musicEn
     };
   });
   return read();
+}
+
+// The live channel's snapshot: the first page and, read in the same
+// transaction, the published records that arrived in the last RECENT_MS, in
+// id order (a random sample when there are more, never the newest first).
+export function gallerySnapshot(db: DB, limit: number, musicEnabled = false, nowMs = Date.now()): GallerySnapshot {
+  return db.transaction((): GallerySnapshot => {
+    const page = galleryPage(db, limit, null, musicEnabled);
+    const recent = (
+      db
+        .prepare(`SELECT ${ROW} FROM artifacts WHERE status = 'PUBLISHED' AND published_at > ? ORDER BY id LIMIT ?`)
+        .all(nowMs - RECENT_MS, SNAPSHOT_RECENT) as ArtifactRow[]
+    ).map((row) => publicArtifact(row, musicEnabled, nowMs));
+    return { ...page, recent };
+  })();
 }
 
 export function publishedArtifact(db: DB, id: string, musicEnabled = false): (PublicArtifact & { file_key: string }) | null {
